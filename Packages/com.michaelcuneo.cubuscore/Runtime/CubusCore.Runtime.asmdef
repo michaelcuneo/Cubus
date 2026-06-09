@@ -1,0 +1,30 @@
+{
+  "name": "CubusCore.Runtime",
+  "rootNamespace": "CubusCore",
+  "references": [
+    "Unity.Burst",
+    "Unity.Jobs",
+    "Unity.Collections",
+    "Unity.Mathematics"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [
+    {
+      "name": "com.unity.burst",
+      "expression": "1.0.0",
+      "define": "UNITY_BURST"
+    },
+    {
+      "name": "com.unity.mathematics",
+      "expression": "1.0.0",
+      "define": "UNITY_MATHEMATICS"
+    }
+  ],
+  "noEngineReferences": false
+}
