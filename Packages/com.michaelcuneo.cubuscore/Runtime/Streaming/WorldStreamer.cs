@@ -28,6 +28,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     private readonly HashSet<Vector3Int> pendingRenderSet = new();
     private readonly HashSet<Vector3Int> knownEmptyChunks = new();
     private readonly HashSet<Vector3Int> forcedDensityRebuildChunks = new();
+    private readonly Dictionary<Vector2Int, int> surfaceChunkYCache = new();
 
     private readonly BlockChunkBuildQueue buildQueue = new();
     private readonly DensityChunkBuildQueue densityBuildQueue = new();
@@ -95,11 +96,28 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
       int chunkX = VoxelMath.FloorDiv(Mathf.FloorToInt(voxel.x), VoxelConstants.ChunkSize);
       int chunkZ = VoxelMath.FloorDiv(Mathf.FloorToInt(voxel.z), VoxelConstants.ChunkSize);
-      int chunkY = generator != null
-          ? generator.GetSurfaceChunkYForChunkColumn(new Vector2Int(chunkX, chunkZ))
-          : VoxelMath.FloorDiv(Mathf.FloorToInt(voxel.y), VoxelConstants.ChunkSize);
+      int chunkY = GetSurfaceChunkYForColumn(chunkX, chunkZ, Mathf.FloorToInt(voxel.y));
 
       return new Vector3Int(chunkX, chunkY, chunkZ);
+    }
+
+    private int GetSurfaceChunkYForColumn(int chunkX, int chunkZ, int fallbackVoxelY)
+    {
+      if (generator == null)
+      {
+        return VoxelMath.FloorDiv(fallbackVoxelY, VoxelConstants.ChunkSize);
+      }
+
+      Vector2Int column = new(chunkX, chunkZ);
+
+      if (surfaceChunkYCache.TryGetValue(column, out int cachedChunkY))
+      {
+        return cachedChunkY;
+      }
+
+      int surfaceChunkY = generator.GetSurfaceChunkYForChunkColumn(column);
+      surfaceChunkYCache[column] = surfaceChunkY;
+      return surfaceChunkY;
     }
 
     private void Awake()
@@ -257,6 +275,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     public void ForceRefreshStreamingSet()
     {
       worldSnapshot = WorldGenerationSnapshot.FromSettings(world.Settings);
+      surfaceChunkYCache.Clear();
 
       buildQueue.IncrementGeneration();
       densityBuildQueue.IncrementGeneration();
@@ -340,10 +359,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       {
         for (int x = viewerChunkCoord.x - safeRadius; x <= viewerChunkCoord.x + safeRadius; x++)
         {
-          Vector2Int column = new(x, z);
-
-          int surfaceChunkY =
-              generator.GetSurfaceChunkYForChunkColumn(column);
+          int surfaceChunkY = GetSurfaceChunkYForColumn(x, z, viewerChunkCoord.y * VoxelConstants.ChunkSize);
 
           int minY = surfaceChunkY - belowSurface;
           int maxY = surfaceChunkY + aboveSurface;

@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Chunks;
+using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World;
 using UnityEngine;
 
@@ -125,10 +126,11 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       BlockChunkData chunkData = BlockChunkBuilder.GenerateChunkData(
           request.ChunkCoord,
           request.WorldSnapshot,
-          request.OverrideSnapshot
+          request.OverrideSnapshot,
+          out bool hasAnySolidVoxel
       );
 
-      if (!chunkData.HasAnySolidVoxel())
+      if (!hasAnySolidVoxel)
       {
         return new BlockChunkBuildResult
         {
@@ -140,28 +142,11 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         };
       }
 
-      // Generate 6 neighbours entirely on the background thread for face-culling.
-      // Overrides are not needed for neighbours — only the centre chunk's overrides
-      // affect its own mesh; neighbour meshes rebuild separately when they are queued.
-      static BlockChunkData GenNeighbour(Vector3Int coord, WorldGenerationSnapshot snap) =>
-          BlockChunkBuilder.GenerateChunkData(coord, snap, null);
-
-      WorldGenerationSnapshot s = request.WorldSnapshot;
-      Meshing.BlockChunkNeighborhood neighborhood = new(
-          chunkData,
-          GenNeighbour(request.ChunkCoord + Vector3Int.right, s),
-          GenNeighbour(request.ChunkCoord + Vector3Int.left, s),
-          GenNeighbour(request.ChunkCoord + Vector3Int.up, s),
-          GenNeighbour(request.ChunkCoord + Vector3Int.down, s),
-          GenNeighbour(request.ChunkCoord + new Vector3Int(0, 0, 1), s),
-          GenNeighbour(request.ChunkCoord + new Vector3Int(0, 0, -1), s)
-      );
-
-      Meshing.MeshData meshData = BlockChunkBuilder.GenerateMesh(
-          chunkData,
-          neighborhood,
-          request.WorldSnapshot.VoxelSize
-      );
+      MeshData meshData = BlockGreedyMesher.GenerateNeighbourAware(
+        chunkData,
+        request.WorldSnapshot,
+        request.WorldSnapshot.VoxelSize
+    );
 
       return new BlockChunkBuildResult
       {

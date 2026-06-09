@@ -16,14 +16,19 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         WorldGenerationSnapshot snapshot,
         IReadOnlyDictionary<int, ushort> overrides)
     {
-      BlockChunkData chunkData = new(chunkCoord);
+      return GenerateChunkData(chunkCoord, snapshot, overrides, out _);
+    }
 
-      TerrainSampler sampler = new(
-          snapshot.TerrainProfile,
-          snapshot.BiomeId
-      );
-
+    public static BlockChunkData GenerateChunkData(
+        Vector3Int chunkCoord,
+        WorldGenerationSnapshot snapshot,
+        IReadOnlyDictionary<int, ushort> overrides,
+        out bool hasAnySolidVoxel)
+    {
       const int size = VoxelConstants.ChunkSize;
+      BlockChunkData chunkData = new(chunkCoord);
+      Voxel[] voxels = chunkData.GetRawVoxelArray();
+      hasAnySolidVoxel = false;
 
       for (int y = 0; y < size; y++)
       {
@@ -33,34 +38,54 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
           {
             Vector3Int worldVoxel = chunkData.LocalToWorldVoxel(x, y, z);
 
-            TerrainSample sample = sampler.Sample(
-                new Vector3(
-                    worldVoxel.x,
-                    worldVoxel.y,
-                    worldVoxel.z
-                )
+            TerrainSamplerBurst.Sample(
+                snapshot.TerrainProfile,
+                worldVoxel.x,
+                worldVoxel.z,
+                worldVoxel.y,
+                out float density,
+                out int solidMaterialId
             );
 
-            ushort materialId = sample.Density > 0.0f
-                ? (ushort)Mathf.Clamp(sample.SolidMaterialId, 1, 65535)
+            ushort materialId = density > 0.0f
+                ? (ushort)Mathf.Clamp(solidMaterialId, 1, 65535)
                 : (ushort)0;
 
-            chunkData.SetVoxel(
-                x,
-                y,
-                z,
-                new Voxel(materialId)
-            );
+            int voxelIndex = VoxelMath.FlattenIndex(x, y, z);
+            voxels[voxelIndex] = new Voxel(materialId);
+
+            if (materialId != 0)
+            {
+              hasAnySolidVoxel = true;
+            }
           }
         }
       }
 
       if (overrides != null)
       {
-        ApplyOverrides(chunkData, overrides);
+        BlockChunkBuilder.ApplyOverrides(chunkData, overrides);
       }
 
       return chunkData;
+    }
+
+    public static ushort SampleMaterialAtWorldVoxel(
+        Vector3Int worldVoxel,
+        WorldGenerationSnapshot snapshot)
+    {
+      TerrainSamplerBurst.Sample(
+          snapshot.TerrainProfile,
+          worldVoxel.x,
+          worldVoxel.z,
+          worldVoxel.y,
+          out float density,
+          out int solidMaterialId
+      );
+
+      return density > 0.0f
+          ? (ushort)Mathf.Clamp(solidMaterialId, 1, 65535)
+          : (ushort)0;
     }
 
     public static void ApplyOverrides(
@@ -105,5 +130,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
           voxelSize
       );
     }
+
   }
 }

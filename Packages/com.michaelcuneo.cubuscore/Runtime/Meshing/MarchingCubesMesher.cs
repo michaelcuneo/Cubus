@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Runtime.InteropServices;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Core;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World;
@@ -21,12 +22,13 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
 {
   public static class MarchingCubesMesher
   {
+    [StructLayout(LayoutKind.Sequential)]
     private struct Vertex
     {
       public Vector3 Position;
       public Vector3 Normal;
-      public Color32 Color;
       public Vector2 UV;
+      public Color32 Color;
     }
 
     private static NativeArray<int> s_CubeCornerOffset;
@@ -328,6 +330,9 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
           // Recompute per-vertex normals from the density gradient for seam-free lighting.
           // Both paths sample density at ±1 world-voxel positions so neighbours across chunk
           // boundaries produce identical normals on both sides — eliminating visible seams.
+          Vector3 boundsMin = Vector3.zero;
+          Vector3 boundsMax = Vector3.zero;
+
           if (totalVerts > 0)
           {
             int csz = VoxelConstants.ChunkSize;
@@ -335,6 +340,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
             double chy = (double)chunkCoord.y * csz;
             double chz = (double)chunkCoord.z * csz;
             double voxSize = (double)snapshot.VoxelSize;
+            boundsMin = finalVertices[0].Position;
+            boundsMax = finalVertices[0].Position;
 
             for (int i = 0; i < totalVerts; i++)
             {
@@ -381,6 +388,13 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
               vert.Normal = normal;
               vert.UV = ProjectUv(vert.Position, normal);
               finalVertices[i] = vert;
+
+              if (vert.Position.x < boundsMin.x) boundsMin.x = vert.Position.x;
+              if (vert.Position.y < boundsMin.y) boundsMin.y = vert.Position.y;
+              if (vert.Position.z < boundsMin.z) boundsMin.z = vert.Position.z;
+              if (vert.Position.x > boundsMax.x) boundsMax.x = vert.Position.x;
+              if (vert.Position.y > boundsMax.y) boundsMax.y = vert.Position.y;
+              if (vert.Position.z > boundsMax.z) boundsMax.z = vert.Position.z;
             }
           }
 
@@ -390,58 +404,55 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
             indexFormat = totalVerts > 65535 ? IndexFormat.UInt32 : IndexFormat.UInt16
           };
 
-          List<Vector3> vertices = new(totalVerts);
-          List<Vector3> normals = new(totalVerts);
-          List<Vector2> uvs = new(totalVerts);
-          List<Color32> colors = new(totalVerts);
-          List<int> indices = new(totalIndices);
+          var meshDataArray = Mesh.AllocateWritableMeshData(1);
+          var meshData = meshDataArray[0];
 
-          for (int i = 0; i < totalVerts; i++)
+          var layout = new VertexAttributeDescriptor[]
           {
-            Vertex v = finalVertices[i];
-            vertices.Add(v.Position);
-            normals.Add(v.Normal);
-            uvs.Add(v.UV);
-            colors.Add(v.Color);
+            new(VertexAttribute.Position, VertexAttributeFormat.Float32, 3),
+            new(VertexAttribute.Normal, VertexAttributeFormat.Float32, 3),
+            new(VertexAttribute.TexCoord0, VertexAttributeFormat.Float32, 2),
+            new(VertexAttribute.Color, VertexAttributeFormat.UNorm8, 4)
+          };
+
+          meshData.SetVertexBufferParams(totalVerts, layout);
+          meshData.SetIndexBufferParams(totalIndices, mesh.indexFormat);
+
+          meshData.GetVertexData<Vertex>().CopyFrom(finalVertices);
+
+          if (mesh.indexFormat == IndexFormat.UInt32)
+          {
+            meshData.GetIndexData<int>().CopyFrom(finalIndices);
+          }
+          else
+          {
+            var indices16 = meshData.GetIndexData<ushort>();
+            for (int i = 0; i < totalIndices; i++)
+            {
+              indices16[i] = (ushort)finalIndices[i];
+            }
           }
 
-          for (int i = 0; i < totalIndices; i++)
-          {
-            indices.Add(finalIndices[i]);
-          }
+          meshData.subMeshCount = 1;
+          meshData.SetSubMesh(
+              0,
+              new SubMeshDescriptor(0, totalIndices)
+              {
+                vertexCount = totalVerts,
+                topology = MeshTopology.Triangles
+              },
+              MeshUpdateFlags.DontRecalculateBounds | MeshUpdateFlags.DontValidateIndices
+          );
 
-          mesh.SetVertices(vertices);
-          mesh.SetNormals(normals);
-          mesh.SetUVs(0, uvs);
-          mesh.SetColors(colors);
-          mesh.SetTriangles(indices, 0, true);
+          Mesh.ApplyAndDisposeWritableMeshData(meshDataArray, mesh);
 
           // Do NOT call RecalculateNormals here — smooth gradient normals are already
           // baked by BuildNormalGridJob. Calling RecalculateNormals overwrites them with
           // flat per-triangle normals, which produces the faceted "diamond" look.
 
-          if (totalVerts > 0)
-          {
-            Vector3 min = finalVertices[0].Position;
-            Vector3 max = finalVertices[0].Position;
-
-            for (int i = 1; i < totalVerts; i++)
-            {
-              Vector3 v = finalVertices[i].Position;
-              if (v.x < min.x) min.x = v.x;
-              if (v.y < min.y) min.y = v.y;
-              if (v.z < min.z) min.z = v.z;
-              if (v.x > max.x) max.x = v.x;
-              if (v.y > max.y) max.y = v.y;
-              if (v.z > max.z) max.z = v.z;
-            }
-
-            mesh.bounds = new Bounds((min + max) * 0.5f, max - min);
-          }
-          else
-          {
-            mesh.bounds = new Bounds(Vector3.zero, Vector3.zero);
-          }
+          mesh.bounds = totalVerts > 0
+              ? new Bounds((boundsMin + boundsMax) * 0.5f, boundsMax - boundsMin)
+              : new Bounds(Vector3.zero, Vector3.zero);
 
           return mesh;
         }
@@ -487,14 +498,14 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
 
       public void Execute(int cz)
       {
-        float[] densities = new float[8];
-        Vector3[] positions = new Vector3[8];
-        Vector3[] normals = new Vector3[8];
-        ushort[] materials = new ushort[8];
-        Vector3[] edgeVertices = new Vector3[12];
-        Vector3[] edgeNormals = new Vector3[12];
-        int[] edgeIndices = new int[12];
-        bool[] hasEdge = new bool[12];
+        Span<float> densities = stackalloc float[8];
+        Span<Vector3> positions = stackalloc Vector3[8];
+        Span<Vector3> normals = stackalloc Vector3[8];
+        Span<ushort> materials = stackalloc ushort[8];
+        Span<Vector3> edgeVertices = stackalloc Vector3[12];
+        Span<Vector3> edgeNormals = stackalloc Vector3[12];
+        Span<int> edgeIndices = stackalloc int[12];
+        Span<bool> hasEdge = stackalloc bool[12];
 
         int vBase = cz * MaxVertsPerStripe;
         int iBase = cz * MaxIndicesPerStripe;
@@ -585,13 +596,13 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
 
       private int BuildEdgeIndex(
           int edgeIndex,
-          Vector3[] positions,
-          float[] densities,
-          Vector3[] normals,
-          Vector3[] edgeVertices,
-          Vector3[] edgeNormals,
-          int[] edgeIndices,
-          bool[] hasEdge,
+          Span<Vector3> positions,
+          Span<float> densities,
+          Span<Vector3> normals,
+          Span<Vector3> edgeVertices,
+          Span<Vector3> edgeNormals,
+          Span<int> edgeIndices,
+          Span<bool> hasEdge,
           Color32 vertexColor,
           int vBase,
           ref int vWrite)
@@ -659,7 +670,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
         int vCount = 0;
         int iCount = 0;
 
-        float[] densities = new float[8];
+        Span<float> densities = stackalloc float[8];
 
         for (int cy = 0; cy < NumCellsAxis; cy++)
         {
@@ -726,14 +737,14 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
 
       public void Execute(int cz)
       {
-        float[] densities = new float[8];
-        Vector3[] positions = new Vector3[8];
-        Vector3[] normals = new Vector3[8];
-        ushort[] materials = new ushort[8];
-        Vector3[] edgeVertices = new Vector3[12];
-        Vector3[] edgeNormals = new Vector3[12];
-        int[] edgeIndices = new int[12];
-        bool[] hasEdge = new bool[12];
+        Span<float> densities = stackalloc float[8];
+        Span<Vector3> positions = stackalloc Vector3[8];
+        Span<Vector3> normals = stackalloc Vector3[8];
+        Span<ushort> materials = stackalloc ushort[8];
+        Span<Vector3> edgeVertices = stackalloc Vector3[12];
+        Span<Vector3> edgeNormals = stackalloc Vector3[12];
+        Span<int> edgeIndices = stackalloc int[12];
+        Span<bool> hasEdge = stackalloc bool[12];
 
         int vWrite = 0;
         int iWrite = 0;
@@ -811,13 +822,13 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
 
       private int BuildEdgeIndex(
       int edgeIndex,
-      Vector3[] positions,
-      float[] densities,
-      Vector3[] normals,
-      Vector3[] edgeVertices,
-      Vector3[] edgeNormals,
-      int[] edgeIndices,
-      bool[] hasEdge,
+      Span<Vector3> positions,
+      Span<float> densities,
+      Span<Vector3> normals,
+      Span<Vector3> edgeVertices,
+      Span<Vector3> edgeNormals,
+      Span<int> edgeIndices,
+      Span<bool> hasEdge,
       Color32 vertexColor,
       int vBase,
         ref int vWrite)
@@ -857,7 +868,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
       public void Execute(int cz)
       {
         int vCount = 0; int iCount = 0;
-        float[] densities = new float[8];
+        Span<float> densities = stackalloc float[8];
 
         for (int cy = 0; cy < NumCellsAxis; cy++)
         {
@@ -878,7 +889,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
             if (cubeIndex == 0 || cubeIndex == 255) continue;
             if (TriangleTable[cubeIndex * 16 + 0] < 0) continue;
 
-            bool[] hasEdge = new bool[12];
+            Span<bool> hasEdge = stackalloc bool[12];
             for (int t = 0; t < 16; t += 3)
             {
               int e0 = TriangleTable[cubeIndex * 16 + t + 0];
@@ -921,14 +932,14 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
 
       public void Execute(int cz)
       {
-        float[] densities = new float[8];
-        Vector3[] positions = new Vector3[8];
-        Vector3[] normals = new Vector3[8];
-        ushort[] materials = new ushort[8];
-        Vector3[] edgeVertices = new Vector3[12];
-        Vector3[] edgeNormals = new Vector3[12];
-        int[] edgeIndices = new int[12];
-        bool[] hasEdge = new bool[12];
+        Span<float> densities = stackalloc float[8];
+        Span<Vector3> positions = stackalloc Vector3[8];
+        Span<Vector3> normals = stackalloc Vector3[8];
+        Span<ushort> materials = stackalloc ushort[8];
+        Span<Vector3> edgeVertices = stackalloc Vector3[12];
+        Span<Vector3> edgeNormals = stackalloc Vector3[12];
+        Span<int> edgeIndices = stackalloc int[12];
+        Span<bool> hasEdge = stackalloc bool[12];
 
         int vWrite = 0; int iWrite = 0;
         int vBase = StripeVertexOffsets[cz];
@@ -1289,7 +1300,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
       return normal.sqrMagnitude > 0.000001f ? normal.normalized : Vector3.up;
     }
 
-    private static ushort ChooseMaterial(float[] densities, ushort[] materials)
+    private static ushort ChooseMaterial(Span<float> densities, Span<ushort> materials)
     {
       ushort bestMaterial = 0;
       float bestDensity = float.MinValue;
@@ -1306,6 +1317,11 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
       }
 
       return bestMaterial != 0 ? bestMaterial : (ushort)1;
+    }
+
+    private static ushort ChooseMaterial(float[] densities, ushort[] materials)
+    {
+      return ChooseMaterial(densities.AsSpan(), materials.AsSpan());
     }
 
     private static Color32 MaterialToColor(ushort materialId)
