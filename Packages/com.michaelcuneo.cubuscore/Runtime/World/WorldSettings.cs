@@ -287,11 +287,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World
       sb.Append(
           $"Biome Debug XZ=({worldX:0.00}, {worldZ:0.00}) " +
           $"WinnerBiomeId={biomeId}, " +
-          $"Temperature={sample.Temperature:0.000}, " +
           $"Elevation={sample.Elevation:0.000}, " +
           $"Rise={sample.Rise:0.000}, " +
-          $"Harshness={sample.Harshness:0.000}, " +
-          $"Erosion={sample.Erosion:0.000}, " +
           $"Scale={BiomeRuleWorldScale:0.000}, " +
           $"BlendCount={blend.Count}"
       );
@@ -399,18 +396,12 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World
       float x = worldX * s;
       float z = worldZ * s;
 
-      float temperature = Noise01(x, z, 0.0019f, 0.0012f, 17.23f);
-      float elevation = Noise01(x, z, 0.0008f, 0.0007f, 29.11f);
       float rise = Noise01(x, z, 0.0035f, 0.0024f, 61.37f);
       float harshness = Noise01(x, z, 0.0058f, 0.0061f, 93.73f);
-      float erosion = Noise01(x, z, 0.0021f, 0.0018f, 47.05f);
 
       return new BiomeClimateSample(
-          temperature,
-          elevation,
           rise,
-          harshness,
-          erosion
+          harshness
       );
     }
 

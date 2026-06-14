@@ -46,20 +46,11 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain
       float safeFeather = Mathf.Max(0.0001f, feather);
       float score = 1.0f;
 
-      if (UseTemperature)
-      {
-        float s = ScoreRange(sample.Temperature, TemperatureRange, safeFeather);
-        if (s <= 0.0f)
-        {
-          return 0.0f;
-        }
-
-        score *= s;
-      }
-
+      // Placement selector: terrain elevation band.
       if (UseElevation)
       {
         float s = ScoreRange(sample.Elevation, ElevationRange, safeFeather);
+
         if (s <= 0.0f)
         {
           return 0.0f;
@@ -68,31 +59,11 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain
         score *= s;
       }
 
+      // Placement selector: terrain rise/slope/mountain band.
       if (UseRise)
       {
         float s = ScoreRange(sample.Rise, RiseRange, safeFeather);
-        if (s <= 0.0f)
-        {
-          return 0.0f;
-        }
 
-        score *= s;
-      }
-
-      if (UseHarshness)
-      {
-        float s = ScoreRange(sample.Harshness, HarshnessRange, safeFeather);
-        if (s <= 0.0f)
-        {
-          return 0.0f;
-        }
-
-        score *= s;
-      }
-
-      if (UseErosion)
-      {
-        float s = ScoreRange(sample.Erosion, ErosionRange, safeFeather);
         if (s <= 0.0f)
         {
           return 0.0f;
@@ -102,13 +73,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain
       }
 
       return Mathf.Clamp01(score);
-    }
-
-    private static bool InRange(float value, Vector2 range)
-    {
-      float min = Mathf.Min(range.x, range.y);
-      float max = Mathf.Max(range.x, range.y);
-      return value >= min && value <= max;
     }
 
     private static float ScoreRange(float value, Vector2 range, float feather)
@@ -116,52 +80,20 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain
       float min = Mathf.Min(range.x, range.y);
       float max = Mathf.Max(range.x, range.y);
 
-      float distance = 0.0f;
-
-      if (value < min)
-      {
-        distance = min - value;
-      }
-      else if (value > max)
-      {
-        distance = value - max;
-      }
-
-      if (distance <= 0.0f)
+      if (value >= min && value <= max)
       {
         return 1.0f;
       }
 
-      // Use a smooth gaussian-like tail outside the rule range so
-      // nearby biomes can still contribute and blend naturally.
-      float sigma = Mathf.Max(0.0001f, feather);
-      float normalized = distance / sigma;
-      float score = Mathf.Exp(-normalized * normalized);
+      float distance = value < min
+          ? min - value
+          : value - max;
 
-      return Mathf.Clamp01(score);
-    }
-  }
+      float t = Mathf.Clamp01(
+          1.0f - distance / Mathf.Max(0.0001f, feather)
+      );
 
-  public readonly struct BiomeClimateSample
-  {
-    public readonly float Temperature;
-    public readonly float Elevation;
-    public readonly float Rise;
-    public readonly float Harshness;
-    public readonly float Erosion;
-
-    public BiomeClimateSample(
-        float temperature,
-        float elevation,
-        float rise,
-        float harshness,
-        float erosion)
-    {
-      Temperature = temperature;
-      Elevation = elevation;
-      Rise = rise;
-      Harshness = harshness;
-      Erosion = erosion;
+      return t * t * (3.0f - 2.0f * t);
     }
   }
 }

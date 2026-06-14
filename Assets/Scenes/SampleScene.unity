@@ -449,7 +449,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: CubusCore.Runtime::CubusCore.World.CubusWorld
   settings:
     TerrainSystem: 0
-    ViewDistanceInChunks: 6
+    ViewDistanceInChunks: 4
     VoxelSize: 1
     BlockMinChunkY: -1
     BlockMaxChunkY: 2
@@ -457,78 +457,78 @@ MonoBehaviour:
     DensityMaxChunkY: 2
     DensityMeshStep: 1
     DensitySampleScale: 1
-    BiomeRuleWorldScale: 10
-    BiomeBlendFeather: 0.05
+    BiomeRuleWorldScale: 0.15
+    BiomeBlendFeather: 0.12
     BiomeWorldRules:
     - RuleName: Brown Valley
       IsFallback: 0
       Priority: 10
       Biome: {fileID: 11400000, guid: 64d47bfdaaa9c9b47825d22d0c8bfd51, type: 2}
-      UseTemperature: 1
+      UseTemperature: 0
       TemperatureRange: {x: 0.32, y: 0.78}
       UseElevation: 1
-      ElevationRange: {x: 0, y: 0.56}
+      ElevationRange: {x: 0, y: 0.45}
       UseRise: 1
-      RiseRange: {x: 0, y: 0.46}
-      UseHarshness: 1
+      RiseRange: {x: 0, y: 0.35}
+      UseHarshness: 0
       HarshnessRange: {x: 0.2, y: 0.82}
-      UseErosion: 1
+      UseErosion: 0
       ErosionRange: {x: 0.4, y: 1}
     - RuleName: Green Plains
       IsFallback: 1
       Priority: 20
       Biome: {fileID: 11400000, guid: eb9104c79263c7647807a477c8928b89, type: 2}
-      UseTemperature: 1
+      UseTemperature: 0
       TemperatureRange: {x: 0.34, y: 0.76}
       UseElevation: 1
-      ElevationRange: {x: 0.22, y: 0.72}
+      ElevationRange: {x: 0.15, y: 0.65}
       UseRise: 1
-      RiseRange: {x: 0, y: 0.64}
-      UseHarshness: 1
+      RiseRange: {x: 0, y: 0.45}
+      UseHarshness: 0
       HarshnessRange: {x: 0, y: 0.56}
-      UseErosion: 1
+      UseErosion: 0
       ErosionRange: {x: 0.24, y: 0.86}
     - RuleName: Rocky Hills
       IsFallback: 0
       Priority: 30
       Biome: {fileID: 11400000, guid: 3c45e08512a9d6243a533dd884141e5c, type: 2}
-      UseTemperature: 1
+      UseTemperature: 0
       TemperatureRange: {x: 0.22, y: 0.72}
       UseElevation: 1
-      ElevationRange: {x: 0.44, y: 1}
+      ElevationRange: {x: 0.35, y: 0.9}
       UseRise: 1
-      RiseRange: {x: 0.36, y: 1}
-      UseHarshness: 1
+      RiseRange: {x: 0.25, y: 0.8}
+      UseHarshness: 0
       HarshnessRange: {x: 0.34, y: 1}
-      UseErosion: 1
+      UseErosion: 0
       ErosionRange: {x: 0, y: 0.66}
     - RuleName: Snowy Mountains
       IsFallback: 0
       Priority: 40
       Biome: {fileID: 11400000, guid: 2761310167d7cef4d9021a1dd571d6e9, type: 2}
-      UseTemperature: 1
+      UseTemperature: 0
       TemperatureRange: {x: 0, y: 0.48}
       UseElevation: 1
-      ElevationRange: {x: 0.68, y: 1}
+      ElevationRange: {x: 0.6, y: 1}
       UseRise: 1
-      RiseRange: {x: 0.72, y: 1}
-      UseHarshness: 1
+      RiseRange: {x: 0.45, y: 1}
+      UseHarshness: 0
       HarshnessRange: {x: 0.55, y: 1}
-      UseErosion: 1
+      UseErosion: 0
       ErosionRange: {x: 0, y: 0.55}
     - RuleName: Desert Basin
       IsFallback: 0
       Priority: 50
       Biome: {fileID: 11400000, guid: 0bcc9a542bd9fbf429a126a10e01ec25, type: 2}
-      UseTemperature: 1
+      UseTemperature: 0
       TemperatureRange: {x: 0.62, y: 1}
       UseElevation: 1
       ElevationRange: {x: 0.08, y: 0.78}
       UseRise: 1
       RiseRange: {x: 0, y: 0.58}
-      UseHarshness: 1
+      UseHarshness: 0
       HarshnessRange: {x: 0.35, y: 1}
-      UseErosion: 1
+      UseErosion: 0
       ErosionRange: {x: 0.42, y: 1}
     UseFixedGenerationBounds: 0
     GenerationMinChunkXZ: {x: -128, y: -128}
@@ -588,9 +588,9 @@ MonoBehaviour:
   maxAutoPreGenerationChunks: 8192
   allowVeryLargePreGeneration: 0
   desiredInitialSpawnLocation: {x: 0, y: 0, z: 0}
-  initialSpawnSearchRadius: 48
-  initialSpawnSearchBelowVoxels: 128
-  initialSpawnSearchAboveVoxels: 96
+  initialSpawnSearchRadius: 128
+  initialSpawnSearchBelowVoxels: 512
+  initialSpawnSearchAboveVoxels: 512
   initialSpawnClearance: 2
 --- !u!114 &1298388483
 MonoBehaviour:

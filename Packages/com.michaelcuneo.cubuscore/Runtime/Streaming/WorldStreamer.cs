@@ -285,9 +285,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       yield return PreGenerateSpawnRegionIfNeededAsync();
       ConfigureBackgroundPreGenerationIfNeeded();
 
-      TryGenerateAndRenderSpawnChunkSync();
-      TryBroadcastInitialTerrainReady();
       ForceRefreshStreamingSet();
+      TryBroadcastInitialTerrainReady();
 
       if (logRegenerateMessage)
       {
@@ -304,73 +303,9 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
     private void TryGenerateAndRenderSpawnChunkSync()
     {
-      Vector3Int coord = spawnTargetChunkCoord;
-      switch (world.Settings.TerrainSystem)
-      {
-        case TerrainSystem.Block:
-          {
-            if (!world.Data.BlockChunks.TryGetValue(coord, out BlockChunkData chunkData))
-            {
-              IReadOnlyDictionary<int, ushort> overrides = null;
-
-              if (world.TryGetBlockOverrides(coord, out var existingOverrides))
-              {
-                overrides = existingOverrides;
-              }
-
-              chunkData = BlockChunkBuilder.GenerateChunkData(
-                  coord,
-                  worldSnapshot,
-                  overrides,
-                  out bool hasAnySolidVoxel
-              );
-
-              if (hasAnySolidVoxel)
-              {
-                world.Data.BlockChunks[coord] = chunkData;
-              }
-            }
-
-            if (world.Data.BlockChunks.TryGetValue(coord, out BlockChunkData renderedChunkData) &&
-                renderedChunkData != null &&
-                renderedChunkData.HasAnySolidVoxel())
-            {
-              worldRenderer.RenderBlockChunk(coord, renderedChunkData);
-            }
-
-            break;
-          }
-        case TerrainSystem.SmoothDensity:
-          {
-            if (!world.Data.DensityChunks.TryGetValue(coord, out DensityChunkData chunkData))
-            {
-              chunkData = DensityChunkBuilder.GenerateChunkData(
-                  coord,
-                  worldSnapshot,
-                  world.CreateDensityOverrideSnapshot(coord)
-              );
-
-              if (chunkData.HasSurfaceCrossing())
-              {
-                world.Data.DensityChunks[coord] = chunkData;
-              }
-            }
-
-            if (world.Data.DensityChunks.TryGetValue(coord, out DensityChunkData renderedChunkData) &&
-                renderedChunkData != null &&
-                renderedChunkData.HasSurfaceCrossing())
-            {
-              RenderDensityChunk(coord, renderedChunkData);
-            }
-            else
-            {
-              knownEmptyChunks.Add(coord);
-              worldRenderer.RemoveChunk(coord);
-            }
-
-            break;
-          }
-      }
+      // Disabled intentionally.
+      // Initial spawn terrain must come from the normal streaming pipeline only.
+      // The old sync path created a single isolated chunk that could disagree with streamed terrain.
     }
 
     private void Update()
@@ -378,12 +313,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       if (bootstrapCoroutine != null)
       {
         return;
-      }
-
-      // Continuously track spawn target to the viewer's current chunk until spawned
-      if (!hasBroadcastInitialTerrainReady)
-      {
-        spawnTargetChunkCoord = WorldToSurfaceChunkCoord(GetSpawnReferencePosition());
       }
 
       if (
@@ -728,7 +657,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         knownEmptyChunks.Remove(chunkCoord);
         world.Data.BlockChunks[chunkCoord] = chunkData;
 
-        QueueRender(chunkCoord);
+        QueueBlockChunkAndNeighboursForRender(chunkCoord);
 
         generatedThisFrame++;
       }
@@ -890,18 +819,12 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         knownEmptyChunks.Remove(result.ChunkCoord);
         world.Data.BlockChunks[result.ChunkCoord] = result.ChunkData;
 
-        if (result.MeshData != null && !result.MeshData.IsEmpty)
+        if (result.MeshData != null)
         {
-          worldRenderer.RenderBlockChunkMesh(
-            result.ChunkCoord,
-            result.MeshData
-        );
-          TryBroadcastInitialTerrainReady();
+          MeshDataPool.Return(result.MeshData);
         }
-        else
-        {
-          QueueRender(result.ChunkCoord);
-        }
+
+        QueueBlockChunkAndNeighboursForRender(result.ChunkCoord);
 
         appliedThisFrame++;
       }
@@ -1138,7 +1061,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         Vector3Int chunkCoord = pendingRenderQueue.Dequeue();
         pendingRenderSet.Remove(chunkCoord);
 
-        if (!desiredChunkCoords.Contains(chunkCoord) || worldRenderer.HasChunkView(chunkCoord))
+        if (!desiredChunkCoords.Contains(chunkCoord))
         {
           continue;
         }
@@ -1159,6 +1082,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
           }
 
           worldRenderer.RenderBlockChunk(chunkCoord, chunkData);
+          TryBroadcastInitialTerrainReady();
           renderedThisFrame++;
           continue;
         }
@@ -1648,11 +1572,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
           desiredChunkCoords.Add(chunkCoord);
         }
 
-        if (!pendingRenderSet.Contains(chunkCoord))
-        {
-          pendingRenderQueue.Enqueue(chunkCoord);
-          pendingRenderSet.Add(chunkCoord);
-        }
+        QueueBlockChunkAndNeighboursForRender(chunkCoord);
       }
     }
 
@@ -1663,79 +1583,33 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         return;
       }
 
-      if (world.Settings.TerrainSystem == TerrainSystem.Block)
+      if (world == null || worldRenderer == null)
       {
-        Vector3 spawnPosition;
-
-        if (!TryFindRenderedSpawnPosition(out spawnPosition))
-        {
-          return;
-        }
-
-        world.BroadcastInitialTerrainReady(spawnPosition);
-        hasBroadcastInitialTerrainReady = true;
-
-        if (world.FindInitialSpawnLocation(
-            GetSpawnReferencePosition(),
-            initialSpawnSearchRadius,
-            initialSpawnSearchBelowVoxels,
-            initialSpawnSearchAboveVoxels,
-            initialSpawnClearance,
-            out Vector3 spawnLocation))
-        {
-          Vector3 supportProbeWorld = spawnLocation - Vector3.up * Mathf.Max(world.Settings.VoxelSize, 0.1f);
-          Vector3Int supportChunkCoord = WorldToChunkCoord(supportProbeWorld);
-
-          if (!worldRenderer.HasChunkView(supportChunkCoord))
-          {
-            return;
-          }
-
-          hasBroadcastInitialTerrainReady = true;
-          world.BroadcastInitialTerrainReady(spawnLocation);
-        }
-
         return;
       }
 
-      // Density mode: only broadcast spawn when the chunk under the spawn point is rendered.
-      // Without this guard the player can spawn over procedural terrain that is not yet meshed,
-      // causing immediate fall-through before colliders are available.
-      if (worldRenderer.ActiveChunkViews.Count > 0)
+      if (!TryFindRenderedSpawnPosition(out Vector3 spawnPosition))
       {
-        if (world.FindInitialSpawnLocation(
-            GetSpawnReferencePosition(),
-            initialSpawnSearchRadius,
-            initialSpawnSearchBelowVoxels,
-            initialSpawnSearchAboveVoxels,
-            initialSpawnClearance,
-            out Vector3 spawnLocation))
-        {
-          Vector3 supportProbeWorld = spawnLocation - Vector3.up * Mathf.Max(world.Settings.VoxelSize, 0.1f);
-          Vector3Int supportChunkCoord = WorldToChunkCoord(supportProbeWorld);
-
-          if (!worldRenderer.HasChunkView(supportChunkCoord))
-          {
-            return;
-          }
-
-          hasBroadcastInitialTerrainReady = true;
-          world.BroadcastInitialTerrainReady(spawnLocation);
-        }
+        return;
       }
+
+      world.BroadcastInitialTerrainReady(spawnPosition);
+      hasBroadcastInitialTerrainReady = true;
     }
 
     private bool TryFindRenderedSpawnPosition(out Vector3 spawnPosition)
     {
       spawnPosition = Vector3.zero;
 
-      Vector3 referenceWorldPosition = GetSpawnReferencePosition();
+      Vector3 referenceWorldPosition = desiredInitialSpawnLocation;
       Vector3 localReference = transform.InverseTransformPoint(referenceWorldPosition);
 
-      int referenceVoxelX = Mathf.FloorToInt(localReference.x / world.Settings.VoxelSize);
-      int referenceVoxelZ = Mathf.FloorToInt(localReference.z / world.Settings.VoxelSize);
+      float voxelSize = Mathf.Max(0.0001f, world.Settings.VoxelSize);
 
-      int searchRadiusVoxels = Mathf.CeilToInt(initialSpawnSearchRadius / world.Settings.VoxelSize);
+      int referenceVoxelX = Mathf.FloorToInt(localReference.x / voxelSize);
+      int referenceVoxelZ = Mathf.FloorToInt(localReference.z / voxelSize);
+
+      int searchRadiusVoxels = Mathf.CeilToInt(initialSpawnSearchRadius / voxelSize);
       int step = Mathf.Max(1, VoxelConstants.ChunkSize / 2);
 
       float bestDistanceSq = float.PositiveInfinity;
@@ -1757,21 +1631,10 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
             continue;
           }
 
-          Vector3Int surfaceChunkCoord = new(
-              VoxelMath.FloorDiv(voxelX, VoxelConstants.ChunkSize),
-              VoxelMath.FloorDiv(surfaceVoxelY, VoxelConstants.ChunkSize),
-              VoxelMath.FloorDiv(voxelZ, VoxelConstants.ChunkSize)
-          );
-
-          if (!worldRenderer.HasChunkView(surfaceChunkCoord))
-          {
-            continue;
-          }
-
           Vector3 candidateLocal = new(
-              (voxelX + 0.5f) * world.Settings.VoxelSize,
-              (surfaceVoxelY + initialSpawnClearance) * world.Settings.VoxelSize,
-              (voxelZ + 0.5f) * world.Settings.VoxelSize
+              (voxelX + 0.5f) * voxelSize,
+              (surfaceVoxelY + initialSpawnClearance) * voxelSize,
+              (voxelZ + 0.5f) * voxelSize
           );
 
           float distanceSq = (candidateLocal - localReference).sqrMagnitude;
@@ -1795,9 +1658,9 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     }
 
     private bool TryFindHighestRenderedSolidVoxelInColumn(
-    int voxelX,
-    int voxelZ,
-    out int surfaceVoxelY)
+        int voxelX,
+        int voxelZ,
+        out int surfaceVoxelY)
     {
       surfaceVoxelY = 0;
 
@@ -1821,8 +1684,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
         if (world.Settings.TerrainSystem == TerrainSystem.Block)
         {
-          if (!world.Data.BlockChunks.TryGetValue(chunkCoord, out BlockChunkData chunkData) ||
-              chunkData == null)
+          if (!world.Data.BlockChunks.TryGetValue(chunkCoord, out BlockChunkData blockChunk) ||
+              blockChunk == null)
           {
             continue;
           }
@@ -1830,14 +1693,14 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
           int localX = voxelX - minX;
           int localZ = voxelZ - minZ;
 
-          for (int y = VoxelConstants.ChunkSize - 1; y >= 0; y--)
+          for (int localY = VoxelConstants.ChunkSize - 1; localY >= 0; localY--)
           {
-            if (!chunkData.IsSolid(localX, y, localZ))
+            if (!blockChunk.IsSolid(localX, localY, localZ))
             {
               continue;
             }
 
-            int worldY = chunkCoord.y * VoxelConstants.ChunkSize + y;
+            int worldY = chunkCoord.y * VoxelConstants.ChunkSize + localY;
 
             if (worldY > bestY)
             {
@@ -1850,8 +1713,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         }
         else if (world.Settings.TerrainSystem == TerrainSystem.SmoothDensity)
         {
-          if (!world.Data.DensityChunks.TryGetValue(chunkCoord, out DensityChunkData chunkData) ||
-              chunkData == null)
+          if (!world.Data.DensityChunks.TryGetValue(chunkCoord, out DensityChunkData densityChunk) ||
+              densityChunk == null)
           {
             continue;
           }
@@ -1859,14 +1722,14 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
           int localX = voxelX - minX;
           int localZ = voxelZ - minZ;
 
-          for (int y = VoxelConstants.ChunkSize - 1; y >= 0; y--)
+          for (int localY = VoxelConstants.ChunkSize - 1; localY >= 0; localY--)
           {
-            if (!chunkData.GetVoxel(localX, y, localZ).IsSolid)
+            if (!densityChunk.GetVoxel(localX, localY, localZ).IsSolid)
             {
               continue;
             }
 
-            int worldY = chunkCoord.y * VoxelConstants.ChunkSize + y;
+            int worldY = chunkCoord.y * VoxelConstants.ChunkSize + localY;
 
             if (worldY > bestY)
             {
@@ -1886,6 +1749,17 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
       surfaceVoxelY = bestY;
       return true;
+    }
+
+    private void QueueBlockChunkAndNeighboursForRender(Vector3Int chunkCoord)
+    {
+      QueueRender(chunkCoord);
+      QueueRender(chunkCoord + Vector3Int.left);
+      QueueRender(chunkCoord + Vector3Int.right);
+      QueueRender(chunkCoord + Vector3Int.down);
+      QueueRender(chunkCoord + Vector3Int.up);
+      QueueRender(chunkCoord + new Vector3Int(0, 0, -1));
+      QueueRender(chunkCoord + new Vector3Int(0, 0, 1));
     }
   }
 }
