@@ -98,70 +98,54 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World
         return;
       }
 
-      BiomeClimateSample sample = SampleBiomeClimate(worldX, worldZ, BiomeRuleWorldScale);
-
-      float bestWeightedScore = -1.0f;
-
-      int bestIndex = -1;
-      int blendIndex0 = -1;
-      int blendIndex1 = -1;
-      int blendIndex2 = -1;
-      int blendIndex3 = -1;
-      float blendScore0 = 0.0f;
-      float blendScore1 = 0.0f;
-      float blendScore2 = 0.0f;
-      float blendScore3 = 0.0f;
+      BiomeClimateSample sample = SampleBiomeClimate(
+          worldX,
+          worldZ,
+          BiomeRuleWorldScale
+      );
 
       float feather = Mathf.Max(0.01f, BiomeBlendFeather);
 
+      int fallbackIndex = -1;
+      int fallbackPriority = int.MinValue;
+
+      int bestIndex = -1;
+      float bestScore = 0.0f;
+
       for (int i = 0; i < BiomeRules.Length; i++)
       {
-        float rawScore = BiomeRules[i].GetMatchScore(sample, feather);
-        if (rawScore <= 0.0f)
+        BiomeRuleSnapshot rule = BiomeRules[i];
+
+        if (rule.IsFallback)
+        {
+          if (fallbackIndex < 0 || rule.Priority > fallbackPriority)
+          {
+            fallbackIndex = i;
+            fallbackPriority = rule.Priority;
+          }
+
+          continue;
+        }
+
+        float score = rule.GetMatchScore(sample, feather);
+
+        if (score <= 0.0f)
         {
           continue;
         }
 
-        float weightedScore = rawScore + Mathf.Max(0, BiomeRules[i].Priority) * 0.0001f;
+        score += Mathf.Max(0, rule.Priority) * 0.00001f;
 
-        if (weightedScore > bestWeightedScore)
+        if (score > bestScore)
         {
+          bestScore = score;
           bestIndex = i;
-          bestWeightedScore = weightedScore;
         }
+      }
 
-        if (rawScore > blendScore0)
-        {
-          blendIndex3 = blendIndex2;
-          blendScore3 = blendScore2;
-          blendIndex2 = blendIndex1;
-          blendScore2 = blendScore1;
-          blendIndex1 = blendIndex0;
-          blendScore1 = blendScore0;
-          blendIndex0 = i;
-          blendScore0 = rawScore;
-        }
-        else if (rawScore > blendScore1)
-        {
-          blendIndex3 = blendIndex2;
-          blendScore3 = blendScore2;
-          blendIndex2 = blendIndex1;
-          blendScore2 = blendScore1;
-          blendIndex1 = i;
-          blendScore1 = rawScore;
-        }
-        else if (rawScore > blendScore2)
-        {
-          blendIndex3 = blendIndex2;
-          blendScore3 = blendScore2;
-          blendIndex2 = i;
-          blendScore2 = rawScore;
-        }
-        else if (rawScore > blendScore3)
-        {
-          blendIndex3 = i;
-          blendScore3 = rawScore;
-        }
+      if (bestIndex < 0)
+      {
+        bestIndex = fallbackIndex;
       }
 
       if (bestIndex < 0)
@@ -169,61 +153,33 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World
         return;
       }
 
-      profile = BiomeRules[bestIndex].Profile;
-      biomeId = BiomeRules[bestIndex].BiomeId;
+      BiomeRuleSnapshot bestRule = BiomeRules[bestIndex];
 
-      if (blendIndex0 < 0 || blendScore0 <= 0.0f)
-      {
-        return;
-      }
+      profile = bestRule.Profile;
+      biomeId = bestRule.BiomeId;
+    }
 
-      float feather01 = Mathf.InverseLerp(0.05f, 0.6f, feather);
-      float relativeGate = Mathf.Lerp(0.20f, 0.70f, feather01);
-      float absoluteGate = Mathf.Lerp(0.01f, 0.05f, feather01);
-      float minBlendScore = Mathf.Max(absoluteGate, blendScore0 * relativeGate);
+    public BiomeBlendSample ResolveBiomeBlendAtWorldXZ(float worldX, float worldZ)
+    {
+      ResolveBiomeAtWorldXZ(
+          worldX,
+          worldZ,
+          out TerrainGenerationProfileSnapshot profile,
+          out byte biomeId
+      );
 
-      if (blendIndex1 < 0 || blendScore1 < minBlendScore)
-      {
-        profile = BiomeRules[blendIndex0].Profile;
-        return;
-      }
+      BiomeBlendSample result = new();
 
-      TerrainGenerationProfileSnapshot blended = BiomeRules[blendIndex0].Profile;
-      float accumulated = blendScore0;
+      result.Contributor0 = new BiomeBlendContributor(
+          profile,
+          biomeId,
+          1.0f
+      );
 
-      if (blendIndex1 >= 0 && blendScore1 >= minBlendScore)
-      {
-        float t = blendScore1 / Mathf.Max(0.0001f, accumulated + blendScore1);
-        blended = TerrainGenerationProfileSnapshot.Blend(
-            blended,
-            BiomeRules[blendIndex1].Profile,
-            t
-        );
-        accumulated += blendScore1;
-      }
+      result.Count = 1;
+      result.DominantBiomeId = biomeId;
 
-      if (blendIndex2 >= 0 && blendScore2 >= minBlendScore)
-      {
-        float t = blendScore2 / Mathf.Max(0.0001f, accumulated + blendScore2);
-        blended = TerrainGenerationProfileSnapshot.Blend(
-            blended,
-            BiomeRules[blendIndex2].Profile,
-            t
-        );
-        accumulated += blendScore2;
-      }
-
-      if (blendIndex3 >= 0 && blendScore3 >= minBlendScore)
-      {
-        float t = blendScore3 / Mathf.Max(0.0001f, accumulated + blendScore3);
-        blended = TerrainGenerationProfileSnapshot.Blend(
-            blended,
-            BiomeRules[blendIndex3].Profile,
-            t
-        );
-      }
-
-      profile = blended;
+      return result;
     }
 
     private static BiomeClimateSample SampleBiomeClimate(float worldX, float worldZ, float worldScale)

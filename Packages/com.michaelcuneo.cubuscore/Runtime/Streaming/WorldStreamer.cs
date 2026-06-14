@@ -21,15 +21,15 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     [SerializeField] private StreamingSettings settings = new();
 
     [Header("Density Mesh LOD")]
-    [SerializeField] private bool useDistanceDensityMeshLod = true;
+    [SerializeField] private bool useDistanceDensityMeshLod = false;
 
     [SerializeField]
     [Min(0)]
-    private int densityFullResolutionRadiusInChunks = 1;
+    private int densityFullResolutionRadiusInChunks = 999;
 
     [SerializeField]
     [Min(1)]
-    private int densityHalfResolutionRadiusInChunks = 3;
+    private int densityHalfResolutionRadiusInChunks = 999;
 
     [SerializeField]
     [Range(1, 4)]
@@ -37,11 +37,11 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
     [SerializeField]
     [Range(1, 4)]
-    private int densityMidCellStep = 2;
+    private int densityMidCellStep = 1;
 
     [SerializeField]
     [Range(1, 4)]
-    private int densityFarCellStep = 4;
+    private int densityFarCellStep = 1;
 
     private readonly HashSet<Vector3Int> desiredChunkCoords = new();
     private readonly HashSet<Vector3Int> keepChunkCoords = new();
@@ -167,35 +167,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
     private int GetDensityCellStepForChunk(Vector3Int chunkCoord)
     {
-      if (!useDistanceDensityMeshLod)
-      {
-        return Mathf.Max(1, world.Settings.DensityMeshStep);
-      }
-
-      Vector3 referencePosition = GetSpawnReferencePosition();
-      Vector3Int viewerChunkCoord = WorldToChunkCoord(referencePosition);
-
-      int dx = Mathf.Abs(chunkCoord.x - viewerChunkCoord.x);
-      int dy = Mathf.Abs(chunkCoord.y - viewerChunkCoord.y);
-      int dz = Mathf.Abs(chunkCoord.z - viewerChunkCoord.z);
-
-      // Horizontal distance matters most for terrain visibility.
-      // Include Y lightly so vertical slabs do not all become full-res.
-      int horizontalDistance = Mathf.Max(dx, dz);
-      int verticalDistance = dy;
-      int lodDistance = Mathf.Max(horizontalDistance, verticalDistance / 2);
-
-      if (lodDistance <= densityFullResolutionRadiusInChunks)
-      {
-        return Mathf.Clamp(densityNearCellStep, 1, 4);
-      }
-
-      if (lodDistance <= densityHalfResolutionRadiusInChunks)
-      {
-        return Mathf.Clamp(densityMidCellStep, 1, 4);
-      }
-
-      return Mathf.Clamp(densityFarCellStep, 1, 4);
+      return 1;
     }
 
     private void Awake()
@@ -433,6 +405,12 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
               $"BlockTasks={buildQueue.ActiveTaskCount}, " +
               $"DensityTasks={densityBuildQueue.ActiveTaskCount}"
           );
+
+          if (viewer != null && world != null && world.Settings != null)
+          {
+            Vector3 p = viewer.position;
+            Debug.Log(world.Settings.DebugResolveBiomeAtWorldXZ(p.x, p.z));
+          }
         }
       }
     }
@@ -1171,7 +1149,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
         if (!world.Data.DensityChunks.TryGetValue(chunkCoord, out DensityChunkData densityChunkData) ||
             densityChunkData == null ||
-            !densityChunkData.HasAnySolidVoxel() ||
             !densityChunkData.HasSurfaceCrossing())
         {
           knownEmptyChunks.Add(chunkCoord);
@@ -1515,9 +1492,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
     private void RenderDensityChunk(Vector3Int chunkCoord, DensityChunkData chunkData)
     {
-      if (chunkData == null ||
-          !chunkData.HasAnySolidVoxel() ||
-          !chunkData.HasSurfaceCrossing())
+      if (chunkData == null || !chunkData.HasSurfaceCrossing())
       {
         knownEmptyChunks.Add(chunkCoord);
         worldRenderer.RemoveChunk(chunkCoord);

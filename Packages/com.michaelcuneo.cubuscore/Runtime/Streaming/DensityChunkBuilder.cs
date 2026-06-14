@@ -26,6 +26,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         for (int x = 0; x < size; x++)
         {
           Vector3Int baseWorldVoxel = chunkData.LocalToWorldVoxel(x, 0, z);
+
           snapshot.ResolveBiomeAtWorldXZ(
               baseWorldVoxel.x,
               baseWorldVoxel.z,
@@ -41,9 +42,9 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
                 profile,
                 biomeId,
                 new Vector3(
-                worldVoxel.x * scale,
-                worldVoxel.y * scale,
-                worldVoxel.z * scale
+                    worldVoxel.x * scale,
+                    worldVoxel.y * scale,
+                    worldVoxel.z * scale
                 )
             );
 

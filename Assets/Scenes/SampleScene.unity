@@ -448,7 +448,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: CubusCore.Runtime::CubusCore.World.CubusWorld
   settings:
-    TerrainSystem: 0
+    TerrainSystem: 1
     ViewDistanceInChunks: 6
     VoxelSize: 1
     BlockMinChunkY: -1
@@ -458,7 +458,7 @@ MonoBehaviour:
     DensityMeshStep: 1
     DensitySampleScale: 1
     BiomeRuleWorldScale: 2
-    BiomeBlendFeather: 0.45
+    BiomeBlendFeather: 0.05
     BiomeWorldRules:
     - RuleName: Brown Valley
       IsFallback: 0
@@ -552,7 +552,7 @@ MonoBehaviour:
   biomeAtlasGrid: {x: 8, y: 8}
   blockMaterialDatabase: {fileID: 11400000, guid: 9f3dd8c62d0f4e43a96e91bd7ea8be12, type: 2}
   biomeTint: {r: 1, g: 1, b: 1, a: 1}
-  logRenderedChunkMeshes: 0
+  logRenderedChunkMeshes: 1
   collisionMode: 1
   collisionViewer: {fileID: 1517188426}
   collisionActivationRadius: 64
@@ -586,7 +586,7 @@ MonoBehaviour:
   densityNearCellStep: 1
   densityMidCellStep: 2
   densityFarCellStep: 4
-  logStreamingStats: 0
+  logStreamingStats: 1
   useIncrementalPreGeneration: 1
   preGenerationChunksPerFrame: 8
   spawnFirstRadiusInChunks: 1

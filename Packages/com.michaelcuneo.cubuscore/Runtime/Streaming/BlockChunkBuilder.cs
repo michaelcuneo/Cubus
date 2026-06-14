@@ -35,6 +35,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         for (int x = 0; x < size; x++)
         {
           Vector3Int baseWorldVoxel = chunkData.LocalToWorldVoxel(x, 0, z);
+
           snapshot.ResolveBiomeAtWorldXZ(
               baseWorldVoxel.x,
               baseWorldVoxel.z,
@@ -72,7 +73,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
       if (overrides != null)
       {
-        BlockChunkBuilder.ApplyOverrides(chunkData, overrides);
+        ApplyOverrides(chunkData, overrides);
       }
 
       return chunkData;
