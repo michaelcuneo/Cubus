@@ -469,7 +469,7 @@ MonoBehaviour:
       UseElevation: 1
       ElevationRange: {x: 0, y: 0.45}
       UseRise: 1
-      RiseRange: {x: 0, y: 0.35}
+      RiseRange: {x: 0, y: 0.7}
       UseHarshness: 0
       HarshnessRange: {x: 0.2, y: 0.82}
       UseErosion: 0
@@ -481,9 +481,9 @@ MonoBehaviour:
       UseTemperature: 0
       TemperatureRange: {x: 0.34, y: 0.76}
       UseElevation: 1
-      ElevationRange: {x: 0.15, y: 0.65}
+      ElevationRange: {x: 0.1, y: 0.65}
       UseRise: 1
-      RiseRange: {x: 0, y: 0.45}
+      RiseRange: {x: 0, y: 0.7}
       UseHarshness: 0
       HarshnessRange: {x: 0, y: 0.56}
       UseErosion: 0
@@ -495,9 +495,9 @@ MonoBehaviour:
       UseTemperature: 0
       TemperatureRange: {x: 0.22, y: 0.72}
       UseElevation: 1
-      ElevationRange: {x: 0.35, y: 0.9}
+      ElevationRange: {x: 0.25, y: 0.9}
       UseRise: 1
-      RiseRange: {x: 0.25, y: 0.8}
+      RiseRange: {x: 0.25, y: 0.9}
       UseHarshness: 0
       HarshnessRange: {x: 0.34, y: 1}
       UseErosion: 0
@@ -509,9 +509,9 @@ MonoBehaviour:
       UseTemperature: 0
       TemperatureRange: {x: 0, y: 0.48}
       UseElevation: 1
-      ElevationRange: {x: 0.6, y: 1}
+      ElevationRange: {x: 0.55, y: 1}
       UseRise: 1
-      RiseRange: {x: 0.45, y: 1}
+      RiseRange: {x: 0.35, y: 1}
       UseHarshness: 0
       HarshnessRange: {x: 0.55, y: 1}
       UseErosion: 0
@@ -523,9 +523,9 @@ MonoBehaviour:
       UseTemperature: 0
       TemperatureRange: {x: 0.62, y: 1}
       UseElevation: 1
-      ElevationRange: {x: 0.08, y: 0.78}
+      ElevationRange: {x: 0, y: 0.55}
       UseRise: 1
-      RiseRange: {x: 0, y: 0.58}
+      RiseRange: {x: 0.35, y: 0.85}
       UseHarshness: 0
       HarshnessRange: {x: 0.35, y: 1}
       UseErosion: 0
@@ -580,6 +580,7 @@ MonoBehaviour:
     MeshAppliesPerFrame: 16
     UseAsyncGeneration: 1
     MaxAsyncChunkTasks: 8
+  initialSpawnRequiredRenderedChunks: 9
   logStreamingStats: 1
   useIncrementalPreGeneration: 1
   preGenerationChunksPerFrame: 8

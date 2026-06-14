@@ -20,6 +20,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     [SerializeField] private Transform viewer;
     [SerializeField] private StreamingSettings settings = new();
 
+    [SerializeField][Min(1)] private int initialSpawnRequiredRenderedChunks = 9;
+
     private readonly HashSet<Vector3Int> desiredChunkCoords = new();
     private readonly HashSet<Vector3Int> keepChunkCoords = new();
     private readonly Queue<Vector3Int> pendingGenerateQueue = new();
@@ -352,6 +354,10 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
           {
             Vector3 p = viewer.position;
             Debug.Log(world.Settings.DebugResolveBiomeAtWorldXZ(p.x, p.z));
+            Debug.Log(world.Settings.DebugResolveBiomeAtWorldXZ(p.x + 128.0f, p.z));
+            Debug.Log(world.Settings.DebugResolveBiomeAtWorldXZ(p.x - 128.0f, p.z));
+            Debug.Log(world.Settings.DebugResolveBiomeAtWorldXZ(p.x, p.z + 128.0f));
+            Debug.Log(world.Settings.DebugResolveBiomeAtWorldXZ(p.x, p.z - 128.0f));
           }
         }
       }
@@ -1588,6 +1594,11 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         return;
       }
 
+      if (worldRenderer.ActiveChunkViews.Count < initialSpawnRequiredRenderedChunks)
+      {
+        return;
+      }
+
       if (!TryFindRenderedSpawnPosition(out Vector3 spawnPosition))
       {
         return;
@@ -1627,6 +1638,17 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
                   voxelX,
                   voxelZ,
                   out int surfaceVoxelY))
+          {
+            continue;
+          }
+
+          Vector3Int surfaceChunkCoord = new(
+            VoxelMath.FloorDiv(voxelX, VoxelConstants.ChunkSize),
+            VoxelMath.FloorDiv(surfaceVoxelY, VoxelConstants.ChunkSize),
+            VoxelMath.FloorDiv(voxelZ, VoxelConstants.ChunkSize)
+        );
+
+          if (!worldRenderer.HasChunkView(surfaceChunkCoord))
           {
             continue;
           }
