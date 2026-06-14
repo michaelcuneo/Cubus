@@ -22,10 +22,10 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
     [SerializeField] private bool logRenderedChunkMeshes;
 
     [Header("Collision")]
-    [SerializeField] private WorldCollisionMode collisionMode = WorldCollisionMode.AllChunks;
+    [SerializeField] private WorldCollisionMode collisionMode = WorldCollisionMode.NearViewerOnly;
     [SerializeField] private Transform collisionViewer;
-    [SerializeField] private float collisionActivationRadius = 64.0f;
-    [SerializeField] private float collisionUpdateInterval = 0.25f;
+    [SerializeField] private float collisionActivationRadius = 96.0f;
+    [SerializeField] private float collisionUpdateInterval = 0.05f;
 
     public WorldCollisionMode CollisionMode
     {
@@ -119,7 +119,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
       ApplyCollisionStateToChunk(chunkView);
     }
 
-    public void RenderUnityMesh(Vector3Int chunkCoord, Mesh unityMesh)
+    public void RenderUnityMesh(Vector3Int chunkCoord, Mesh unityMesh, bool generateCollision = false)
     {
       if (world == null)
       {
@@ -148,8 +148,12 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
       }
 
       ChunkView chunkView = GetOrCreateChunkView(chunkCoord);
-      // chunkView.ApplyMesh(unityMesh, collisionMode != WorldCollisionMode.None);
-      chunkView.ApplyMesh(unityMesh, false);
+
+      bool shouldGenerateCollision =
+          generateCollision &&
+          collisionMode != WorldCollisionMode.None;
+
+      chunkView.ApplyMesh(unityMesh, shouldGenerateCollision);
 
       if (logRenderedChunkMeshes)
       {
@@ -291,7 +295,9 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
           var chunkCoord = pair.Key;
           var chunkData = pair.Value;
 
-          if (chunkData == null)
+          if (chunkData == null ||
+              !chunkData.HasAnySolidVoxel() ||
+              !chunkData.HasSurfaceCrossing())
           {
             RemoveChunk(chunkCoord);
             continue;
@@ -313,7 +319,11 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
           }
 
           ChunkView cv = GetOrCreateChunkView(chunkCoord);
-          cv.ApplyMesh(unityMesh, collisionMode != WorldCollisionMode.None);
+
+          // Smooth-density RebuildAll is visual-only for now.
+          // Do not cook full marching-cubes MeshColliders for every chunk.
+          cv.ApplyMesh(unityMesh, false);
+
           ApplyCollisionStateToChunk(cv);
           rendered++;
         }

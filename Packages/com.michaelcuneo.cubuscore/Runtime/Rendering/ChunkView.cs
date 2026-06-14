@@ -231,7 +231,28 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
         return;
       }
 
-      meshCollider.enabled = enabled && hasCollisionMesh;
+      if (!enabled)
+      {
+        meshCollider.enabled = false;
+        return;
+      }
+
+      if (currentMesh == null)
+      {
+        meshCollider.enabled = false;
+        hasCollisionMesh = false;
+        return;
+      }
+
+      if (!hasCollisionMesh || meshCollider.sharedMesh != currentMesh)
+      {
+        meshCollider.enabled = false;
+        meshCollider.sharedMesh = null;
+        meshCollider.sharedMesh = currentMesh;
+        hasCollisionMesh = true;
+      }
+
+      meshCollider.enabled = true;
     }
 
     public void Release(Transform poolParent)

@@ -448,7 +448,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: CubusCore.Runtime::CubusCore.World.CubusWorld
   settings:
-    TerrainSystem: 1
+    TerrainSystem: 0
     ViewDistanceInChunks: 6
     VoxelSize: 1
     BlockMinChunkY: -1
