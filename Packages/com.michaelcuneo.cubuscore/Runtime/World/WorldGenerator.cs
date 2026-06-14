@@ -10,15 +10,10 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World
   public sealed class WorldGenerator
   {
     private readonly WorldSettings settings;
-    private readonly TerrainSampler terrainSampler;
 
     public WorldGenerator(WorldSettings settings)
     {
       this.settings = settings;
-      terrainSampler = new TerrainSampler(
-          settings.GetActiveGenerationProfile(),
-          settings.GetActiveBiomeId()
-      );
     }
 
     public void Generate(WorldData worldData)
@@ -41,13 +36,21 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World
     public void GenerateBlockWorld(WorldData worldData)
     {
       int safeRadius = Mathf.Max(0, settings.ViewDistanceInChunks);
+      settings.GetGenerationChunkBoundsXZ(
+          safeRadius,
+          out int minChunkX,
+          out int maxChunkX,
+          out int minChunkZ,
+          out int maxChunkZ
+      );
+
       settings.GetEffectiveBlockChunkYRange(out int minChunkY, out int maxChunkY);
 
       for (int y = minChunkY; y <= maxChunkY; y++)
       {
-        for (int z = -safeRadius; z <= safeRadius; z++)
+        for (int z = minChunkZ; z <= maxChunkZ; z++)
         {
-          for (int x = -safeRadius; x <= safeRadius; x++)
+          for (int x = minChunkX; x <= maxChunkX; x++)
           {
             Vector3Int chunkCoord = new(x, y, z);
             BlockChunkData chunkData = new(chunkCoord);
@@ -66,13 +69,21 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World
     public void GenerateSmoothDensityWorld(WorldData worldData)
     {
       int safeRadius = Mathf.Max(0, settings.ViewDistanceInChunks);
+      settings.GetGenerationChunkBoundsXZ(
+          safeRadius,
+          out int minChunkX,
+          out int maxChunkX,
+          out int minChunkZ,
+          out int maxChunkZ
+      );
+
       settings.GetEffectiveDensityChunkYRange(out int minChunkY, out int maxChunkY);
 
       for (int y = minChunkY; y <= maxChunkY; y++)
       {
-        for (int z = -safeRadius; z <= safeRadius; z++)
+        for (int z = minChunkZ; z <= maxChunkZ; z++)
         {
-          for (int x = -safeRadius; x <= safeRadius; x++)
+          for (int x = minChunkX; x <= maxChunkX; x++)
           {
             Vector3Int chunkCoord = new(x, y, z);
             DensityChunkData chunkData = new(chunkCoord);
@@ -92,15 +103,26 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World
     {
       const int size = VoxelConstants.ChunkSize;
 
-      for (int y = 0; y < size; y++)
+      for (int z = 0; z < size; z++)
       {
-        for (int z = 0; z < size; z++)
+        for (int x = 0; x < size; x++)
         {
-          for (int x = 0; x < size; x++)
+          Vector3Int worldVoxelAtColumnBase = chunkData.LocalToWorldVoxel(x, 0, z);
+
+          settings.ResolveBiomeAtWorldXZ(
+              worldVoxelAtColumnBase.x,
+              worldVoxelAtColumnBase.z,
+              out TerrainGenerationProfileSnapshot profile,
+              out byte biomeId
+          );
+
+          for (int y = 0; y < size; y++)
           {
             Vector3Int worldVoxel = chunkData.LocalToWorldVoxel(x, y, z);
 
-            TerrainSample sample = terrainSampler.Sample(
+            TerrainSample sample = TerrainSampler.Sample(
+                profile,
+                biomeId,
                 new Vector3(
                     worldVoxel.x,
                     worldVoxel.y,
@@ -159,7 +181,16 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World
       int worldVoxelX = chunkColumn.x * size + size / 2;
       int worldVoxelZ = chunkColumn.y * size + size / 2;
 
-      TerrainSample sample = terrainSampler.Sample(
+      settings.ResolveBiomeAtWorldXZ(
+        worldVoxelX,
+        worldVoxelZ,
+        out TerrainGenerationProfileSnapshot profile,
+        out byte biomeId
+      );
+
+      TerrainSample sample = TerrainSampler.Sample(
+        profile,
+        biomeId,
           new Vector3(
               worldVoxelX,
               0,
@@ -177,15 +208,26 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World
       const int size = VoxelConstants.ChunkSize;
       float scale = Mathf.Max(0.001f, settings.DensitySampleScale);
 
-      for (int y = 0; y < size; y++)
+      for (int z = 0; z < size; z++)
       {
-        for (int z = 0; z < size; z++)
+        for (int x = 0; x < size; x++)
         {
-          for (int x = 0; x < size; x++)
+          Vector3Int worldVoxelAtColumnBase = chunkData.LocalToWorldVoxel(x, 0, z);
+
+          settings.ResolveBiomeAtWorldXZ(
+              worldVoxelAtColumnBase.x,
+              worldVoxelAtColumnBase.z,
+              out TerrainGenerationProfileSnapshot profile,
+              out byte biomeId
+          );
+
+          for (int y = 0; y < size; y++)
           {
             Vector3Int worldVoxel = chunkData.LocalToWorldVoxel(x, y, z);
 
-            TerrainSample sample = terrainSampler.Sample(
+            TerrainSample sample = TerrainSampler.Sample(
+                profile,
+                biomeId,
                 new Vector3(
                     worldVoxel.x * scale,
                     worldVoxel.y * scale,

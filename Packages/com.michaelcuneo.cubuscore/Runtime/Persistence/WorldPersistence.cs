@@ -12,6 +12,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Persistence
   {
     [SerializeField] private string defaultSaveName = "cubus_world";
     [SerializeField] private WorldLoadTerrainPolicy loadTerrainPolicy = WorldLoadTerrainPolicy.UseSaveTerrainSystem;
+    [SerializeField] private bool overrideActiveTerrainSystemOnLoad = false;
     [SerializeField] private WorldPersistenceMode persistenceMode = WorldPersistenceMode.ManualOnly;
     [SerializeField] private bool autoSaveOnlyWhenModified = true;
 
@@ -43,7 +44,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Persistence
         if (!autoSaveOnlyWhenModified || world.HasBlockOverrides() ||
             world.Data.DensityVoxelOverridesByChunk.Count > 0)
         {
-          SaveDefaultWorld();
+          string modeSaveName = GetModeSpecificDefaultSaveName(world.Settings.TerrainSystem);
+          SaveWorld(modeSaveName);
         }
       }
     }
@@ -51,37 +53,105 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Persistence
     [ContextMenu("Save Default Block World")]
     public bool SaveDefaultBlockWorld()
     {
-      return SaveBlockWorld(defaultSaveName);
+      return SaveBlockWorld(GetModeSpecificDefaultSaveName(TerrainSystem.Block));
     }
 
     [ContextMenu("Save Default World")]
     public bool SaveDefaultWorld()
     {
-      return SaveWorld(defaultSaveName);
+      return SaveWorld(GetModeSpecificDefaultSaveName(world.Settings.TerrainSystem));
     }
 
     [ContextMenu("Load Default Block World")]
     public bool LoadDefaultBlockWorld()
     {
-      return LoadBlockWorld(defaultSaveName);
+      return LoadBlockWorld(GetModeSpecificDefaultSaveName(TerrainSystem.Block));
     }
 
     [ContextMenu("Load Default World")]
     public bool LoadDefaultWorld()
     {
-      return LoadWorld(defaultSaveName);
+      string modeSaveName = GetModeSpecificDefaultSaveName(world.Settings.TerrainSystem);
+
+      if (LoadWorld(modeSaveName))
+      {
+        return true;
+      }
+
+      // Backward compatibility: try the legacy unsuffixed default save name once.
+      if (!string.Equals(modeSaveName, defaultSaveName, System.StringComparison.OrdinalIgnoreCase))
+      {
+        return LoadWorld(defaultSaveName);
+      }
+
+      return false;
     }
 
     [ContextMenu("Clear Default Block World Save")]
     public bool ClearDefaultBlockWorldSave()
     {
-      return ClearBlockWorldSave(defaultSaveName);
+      return ClearBlockWorldSave(GetModeSpecificDefaultSaveName(TerrainSystem.Block));
     }
 
     [ContextMenu("Clear Default World Save")]
     public bool ClearDefaultWorldSave()
     {
-      return ClearWorldSave(defaultSaveName);
+      string modeSaveName = GetModeSpecificDefaultSaveName(world.Settings.TerrainSystem);
+      bool clearedModeSave = ClearWorldSave(modeSaveName);
+
+      if (string.Equals(modeSaveName, defaultSaveName, System.StringComparison.OrdinalIgnoreCase))
+      {
+        return clearedModeSave;
+      }
+
+      bool clearedLegacySave = ClearWorldSave(defaultSaveName);
+      return clearedModeSave || clearedLegacySave;
+    }
+
+    public bool WillAutoLoadDefaultWorldOnStart()
+    {
+      return persistenceMode == WorldPersistenceMode.AutoLoadOnly ||
+             persistenceMode == WorldPersistenceMode.AutoLoadAndSave;
+    }
+
+    public bool HasDefaultWorldSave()
+    {
+      string modeSaveName = GetModeSpecificDefaultSaveName(world.Settings.TerrainSystem);
+
+      if (File.Exists(GetSavePath(modeSaveName)))
+      {
+        return true;
+      }
+
+      return File.Exists(GetSavePath(defaultSaveName));
+    }
+
+    [ContextMenu("Clear All World Saves")]
+    public bool ClearAllWorldSaves()
+    {
+      string saveDirectory = GetSaveDirectoryPath();
+
+      if (!Directory.Exists(saveDirectory))
+      {
+        Debug.LogWarning($"No Cubus world save directory exists to clear. Path={saveDirectory}");
+        return false;
+      }
+
+      string[] saveFiles = Directory.GetFiles(saveDirectory, "*.json", SearchOption.TopDirectoryOnly);
+
+      if (saveFiles.Length == 0)
+      {
+        Debug.LogWarning($"No Cubus world saves exist to clear. Path={saveDirectory}");
+        return false;
+      }
+
+      for (int i = 0; i < saveFiles.Length; i++)
+      {
+        File.Delete(saveFiles[i]);
+      }
+
+      Debug.Log($"Cleared Cubus world saves. Path={saveDirectory}, Deleted={saveFiles.Length}");
+      return true;
     }
 
     public bool SaveWorld(string saveName)
@@ -102,7 +172,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Persistence
 
       Debug.Log(
           $"Saved Cubus world. Path={path}, Terrain={saveData.TerrainSystem}, " +
-          $"BlockChunks={saveData.SavedBlockChunks.Count}, DensityChunks={saveData.SavedDensityChunks.Count}"
+          $"BlockOverrideChunks={saveData.SavedBlockChunks.Count}, DensityOverrideChunks={saveData.SavedDensityChunks.Count}"
       );
 
       return true;
@@ -143,7 +213,18 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Persistence
         return false;
       }
 
-      bool applySavedTerrainSystem = loadTerrainPolicy == WorldLoadTerrainPolicy.UseSaveTerrainSystem;
+      bool applySavedTerrainSystem =
+        overrideActiveTerrainSystemOnLoad &&
+        loadTerrainPolicy == WorldLoadTerrainPolicy.UseSaveTerrainSystem;
+
+      if (!overrideActiveTerrainSystemOnLoad &&
+        world.Settings.TerrainSystem != saveData.TerrainSystem)
+      {
+        Debug.Log(
+          "Loaded save while preserving active terrain mode. " +
+          $"Active={world.Settings.TerrainSystem}, Save={saveData.TerrainSystem}, Path={path}"
+        );
+      }
 
       if (!world.LoadWorldSaveData(saveData, applySavedTerrainSystem))
       {
@@ -154,7 +235,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Persistence
 
       Debug.Log(
           $"Loaded Cubus world. Path={path}, Terrain={saveData.TerrainSystem}, " +
-          $"BlockChunks={saveData.SavedBlockChunks.Count}, DensityChunks={saveData.SavedDensityChunks.Count}"
+          $"BlockOverrideChunks={saveData.SavedBlockChunks.Count}, DensityOverrideChunks={saveData.SavedDensityChunks.Count}"
       );
 
       return true;
@@ -190,7 +271,17 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Persistence
         return false;
       }
 
-      BlockWorldSaveData saveData = world.CreateBlockSaveData();
+      if (world.Settings.TerrainSystem != TerrainSystem.Block)
+      {
+        Debug.LogWarning(
+            $"Cannot save block world while terrain system is {world.Settings.TerrainSystem}. Switch to Block mode first."
+        );
+        return false;
+      }
+
+      // Persist as terrain-aware world save so default AutoLoad restores the same mode
+      WorldSaveData saveData = world.CreateWorldSaveData();
+      saveData.TerrainSystem = TerrainSystem.Block;
 
       string json = JsonUtility.ToJson(saveData, true);
       string path = GetSavePath(saveName);
@@ -199,7 +290,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Persistence
       File.WriteAllText(path, json);
 
       Debug.Log(
-          $"Saved Cubus block world. Path={path}, SavedChunks={saveData.SavedBlockChunks.Count}"
+          $"Saved Cubus block world. Path={path}, " +
+          $"BlockOverrideChunks={saveData.SavedBlockChunks.Count}"
       );
 
       return true;
@@ -274,7 +366,10 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Persistence
         return;
       }
 
-      world.GenerateWorld();
+      if (!world.IsWorldReady)
+      {
+        world.GenerateWorld();
+      }
 
       if (worldRenderer != null)
       {
@@ -356,10 +451,24 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Persistence
     {
       string safeName = saveName.Trim();
       return Path.Combine(
-          Application.persistentDataPath,
-          "CubusCore",
+          GetSaveDirectoryPath(),
           $"{safeName}.json"
       );
+    }
+
+    private string GetModeSpecificDefaultSaveName(TerrainSystem terrainSystem)
+    {
+      string safeBase = string.IsNullOrWhiteSpace(defaultSaveName)
+          ? "cubus_world"
+          : defaultSaveName.Trim();
+
+      string suffix = terrainSystem == TerrainSystem.Block ? "block" : "density";
+      return $"{safeBase}_{suffix}";
+    }
+
+    private static string GetSaveDirectoryPath()
+    {
+      return Path.Combine(Application.persistentDataPath, "CubusCore");
     }
   }
 }

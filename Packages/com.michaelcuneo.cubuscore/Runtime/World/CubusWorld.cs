@@ -47,6 +47,21 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World
     [ContextMenu("Generate World")]
     public void GenerateWorld()
     {
+      WorldStreamer streamer = GetComponent<WorldStreamer>();
+      if (streamer != null && streamer.isActiveAndEnabled)
+      {
+        streamer.RegenerateStreamedWorld();
+        return;
+      }
+
+      SyncBiomeMaterialLayersFromRules();
+
+      if (!settings.TryValidateConfiguration(out string configError))
+      {
+        Debug.LogError($"Cannot generate Cubus world due to invalid settings: {configError}");
+        return;
+      }
+
       IsWorldReady = false;
       GenerationProgress = 0.0f;
 
@@ -181,12 +196,16 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World
       if (!worldData.DensityChunks.TryGetValue(chunkCoord, out DensityChunkData chunkData))
       {
         float scale = Mathf.Max(0.001f, settings.DensitySampleScale);
-        TerrainSampler sampler = new(
-            settings.GetActiveGenerationProfile(),
-            settings.GetActiveBiomeId()
+        settings.ResolveBiomeAtWorldXZ(
+          worldVoxelCoord.x,
+          worldVoxelCoord.z,
+          out TerrainGenerationProfileSnapshot profile,
+          out byte biomeId
         );
 
-        TerrainSample sample = sampler.Sample(
+        TerrainSample sample = TerrainSampler.Sample(
+          profile,
+          biomeId,
             new Vector3(
           worldVoxelCoord.x * scale,
           worldVoxelCoord.y * scale,
@@ -277,12 +296,16 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World
 
       if (!worldData.DensityChunks.TryGetValue(chunkCoord, out DensityChunkData chunkData))
       {
-        TerrainSampler sampler = new(
-            settings.GetActiveGenerationProfile(),
-            settings.GetActiveBiomeId()
+        settings.ResolveBiomeAtWorldXZ(
+          worldVoxelCoord.x,
+          worldVoxelCoord.z,
+          out TerrainGenerationProfileSnapshot profile,
+          out byte biomeId
         );
 
-        TerrainSample sample = sampler.Sample(
+        TerrainSample sample = TerrainSampler.Sample(
+          profile,
+          biomeId,
             new Vector3(
                 worldVoxelCoord.x,
                 worldVoxelCoord.y,
@@ -843,7 +866,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World
     {
       WorldSaveData saveData = new()
       {
-        SaveVersion = 2,
+        SaveVersion = 4,
         TerrainSystem = settings.TerrainSystem,
         ChunkSize = VoxelConstants.ChunkSize,
         VoxelSize = settings.VoxelSize,
@@ -1028,10 +1051,29 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World
 
       settings.VoxelSize = Mathf.Max(0.01f, saveData.VoxelSize);
       settings.ViewDistanceInChunks = Mathf.Max(1, saveData.ViewDistanceInChunks);
-      settings.BlockMinChunkY = saveData.BlockMinChunkY;
-      settings.BlockMaxChunkY = saveData.BlockMaxChunkY;
-      settings.DensityMinChunkY = saveData.DensityMinChunkY;
-      settings.DensityMaxChunkY = saveData.DensityMaxChunkY;
+
+      if (applySavedTerrainSystem)
+      {
+        settings.BlockMinChunkY = saveData.BlockMinChunkY;
+        settings.BlockMaxChunkY = saveData.BlockMaxChunkY;
+        settings.DensityMinChunkY = saveData.DensityMinChunkY;
+        settings.DensityMaxChunkY = saveData.DensityMaxChunkY;
+      }
+      else
+      {
+        switch (settings.TerrainSystem)
+        {
+          case TerrainSystem.Block:
+            settings.BlockMinChunkY = saveData.BlockMinChunkY;
+            settings.BlockMaxChunkY = saveData.BlockMaxChunkY;
+            break;
+
+          case TerrainSystem.SmoothDensity:
+            settings.DensityMinChunkY = saveData.DensityMinChunkY;
+            settings.DensityMaxChunkY = saveData.DensityMaxChunkY;
+            break;
+        }
+      }
 
       worldData.ClearAll();
 
@@ -1112,12 +1154,16 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World
 
     public TerrainSample SampleTerrainAtWorldVoxel(Vector3Int worldVoxel)
     {
-      TerrainSampler sampler = new(
-          settings.GetActiveGenerationProfile(),
-          settings.GetActiveBiomeId()
+      settings.ResolveBiomeAtWorldXZ(
+        worldVoxel.x,
+        worldVoxel.z,
+        out TerrainGenerationProfileSnapshot profile,
+        out byte biomeId
       );
 
-      return sampler.Sample(
+      return TerrainSampler.Sample(
+        profile,
+        biomeId,
           new Vector3(
               worldVoxel.x,
               worldVoxel.y,
@@ -1251,6 +1297,278 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World
           $"SuggestedSpawnLocation={SuggestedSpawnLocation}, " +
           $"IsInitialTerrainReady={IsInitialTerrainReady}"
       );
+    }
+
+    [ContextMenu("Biome Rules/Configure From Resources")]
+    public void ConfigureBiomeWorldRulesFromResources()
+    {
+      BiomeDefinition[] biomes = Resources.LoadAll<BiomeDefinition>("Biomes");
+
+      if (biomes == null || biomes.Length == 0)
+      {
+        Debug.LogWarning("No biome assets found in Resources/Biomes.");
+        return;
+      }
+
+      Array.Sort(biomes, (a, b) =>
+      {
+        if (ReferenceEquals(a, b))
+        {
+          return 0;
+        }
+
+        if (a == null)
+        {
+          return 1;
+        }
+
+        if (b == null)
+        {
+          return -1;
+        }
+
+        return a.BiomeId.CompareTo(b.BiomeId);
+      });
+
+      List<BiomeWorldRule> rules = new();
+
+      for (int i = 0; i < biomes.Length; i++)
+      {
+        BiomeDefinition biome = biomes[i];
+        if (biome == null)
+        {
+          continue;
+        }
+
+        SyncBiomeMaterialLayers(biome);
+
+        BiomeWorldRule rule = CreateRuleForBiome(biome);
+        rules.Add(rule);
+      }
+
+      if (rules.Count == 0)
+      {
+        Debug.LogWarning("No valid biome assets were found to create world rules.");
+        return;
+      }
+
+      int fallbackIndex = FindPreferredFallbackIndex(rules);
+      for (int i = 0; i < rules.Count; i++)
+      {
+        rules[i].IsFallback = i == fallbackIndex;
+      }
+
+      settings.BiomeWorldRules = rules;
+
+      Debug.Log($"Configured {rules.Count} biome world rules from Resources/Biomes.");
+    }
+
+    [ContextMenu("Biome Rules/Sync Material Sets To Layers")]
+    public void SyncBiomeMaterialLayersFromRules()
+    {
+      if (settings == null || settings.BiomeWorldRules == null)
+      {
+        return;
+      }
+
+      for (int i = 0; i < settings.BiomeWorldRules.Count; i++)
+      {
+        BiomeWorldRule rule = settings.BiomeWorldRules[i];
+        if (rule == null || rule.Biome == null)
+        {
+          continue;
+        }
+
+        SyncBiomeMaterialLayers(rule.Biome);
+      }
+    }
+
+    private static void SyncBiomeMaterialLayers(BiomeDefinition biome)
+    {
+      if (biome == null || biome.MaterialSet == null)
+      {
+        return;
+      }
+
+      biome.ApplyMaterialSetToGenerationProfile();
+    }
+
+    private static BiomeWorldRule CreateRuleForBiome(BiomeDefinition biome)
+    {
+      BiomeWorldRule rule = new()
+      {
+        RuleName = string.IsNullOrWhiteSpace(biome.BiomeName) ? biome.name : biome.BiomeName,
+        Priority = Mathf.Max(0, biome.BiomeId),
+        Biome = biome,
+        UseTemperature = true,
+        TemperatureRange = new Vector2(0.0f, 1.0f),
+        UseElevation = true,
+        ElevationRange = new Vector2(0.0f, 1.0f),
+        UseRise = false,
+        RiseRange = new Vector2(0.0f, 1.0f),
+        UseHarshness = false,
+        HarshnessRange = new Vector2(0.0f, 1.0f),
+        UseErosion = false,
+        ErosionRange = new Vector2(0.0f, 1.0f),
+      };
+
+      string lowerName = rule.RuleName.ToLowerInvariant();
+      ApplyBiomeGenerationStyle(biome, lowerName);
+
+      if (lowerName.Contains("snow"))
+      {
+        rule.TemperatureRange = new Vector2(0.0f, 0.48f);
+        rule.ElevationRange = new Vector2(0.68f, 1.0f);
+        rule.UseRise = true;
+        rule.RiseRange = new Vector2(0.72f, 1.0f);
+        rule.UseHarshness = true;
+        rule.HarshnessRange = new Vector2(0.55f, 1.0f);
+        rule.UseErosion = true;
+        rule.ErosionRange = new Vector2(0.0f, 0.55f);
+      }
+      else if (lowerName.Contains("desert"))
+      {
+        rule.TemperatureRange = new Vector2(0.62f, 1.0f);
+        rule.ElevationRange = new Vector2(0.08f, 0.78f);
+        rule.UseRise = true;
+        rule.RiseRange = new Vector2(0.0f, 0.58f);
+        rule.UseHarshness = true;
+        rule.HarshnessRange = new Vector2(0.35f, 1.0f);
+        rule.UseErosion = true;
+        rule.ErosionRange = new Vector2(0.42f, 1.0f);
+      }
+      else if (lowerName.Contains("rock"))
+      {
+        rule.TemperatureRange = new Vector2(0.22f, 0.72f);
+        rule.ElevationRange = new Vector2(0.44f, 1.0f);
+        rule.UseRise = true;
+        rule.RiseRange = new Vector2(0.36f, 1.0f);
+        rule.UseHarshness = true;
+        rule.HarshnessRange = new Vector2(0.34f, 1.0f);
+        rule.UseErosion = true;
+        rule.ErosionRange = new Vector2(0.0f, 0.66f);
+      }
+      else if (lowerName.Contains("brown") || lowerName.Contains("valley"))
+      {
+        rule.TemperatureRange = new Vector2(0.32f, 0.78f);
+        rule.ElevationRange = new Vector2(0.0f, 0.56f);
+        rule.UseRise = true;
+        rule.RiseRange = new Vector2(0.0f, 0.46f);
+        rule.UseHarshness = true;
+        rule.HarshnessRange = new Vector2(0.2f, 0.82f);
+        rule.UseErosion = true;
+        rule.ErosionRange = new Vector2(0.4f, 1.0f);
+      }
+      else if (lowerName.Contains("green") || lowerName.Contains("plains"))
+      {
+        rule.TemperatureRange = new Vector2(0.34f, 0.76f);
+        rule.ElevationRange = new Vector2(0.22f, 0.72f);
+        rule.UseRise = true;
+        rule.RiseRange = new Vector2(0.0f, 0.64f);
+        rule.UseHarshness = true;
+        rule.HarshnessRange = new Vector2(0.0f, 0.56f);
+        rule.UseErosion = true;
+        rule.ErosionRange = new Vector2(0.24f, 0.86f);
+      }
+
+      return rule;
+    }
+
+    private static void ApplyBiomeGenerationStyle(BiomeDefinition biome, string lowerName)
+    {
+      if (biome == null)
+      {
+        return;
+      }
+
+      if (biome.GenerationProfile == null)
+      {
+        biome.GenerationProfile = new TerrainGenerationProfile();
+      }
+
+      TerrainGenerationProfile profile = biome.GenerationProfile;
+
+      profile.MacroFrequency = 1.0f;
+      profile.MacroStrength = 1.0f;
+      profile.HillsFrequency = 1.0f;
+      profile.HillsStrength = 1.0f;
+      profile.DetailFrequency = 1.0f;
+      profile.DetailStrength = 1.0f;
+      profile.RidgeFrequency = 1.0f;
+      profile.RidgeStrength = 1.0f;
+      profile.RidgeSharpness = 2.0f;
+      profile.ValleyFrequency = 1.0f;
+      profile.ValleyStrength = 1.0f;
+      profile.BasinDepth = 0.0f;
+      profile.DuneFrequency = 1.0f;
+      profile.DuneStrength = 0.0f;
+
+      if (lowerName.Contains("snow"))
+      {
+        profile.LandformStyle = TerrainLandformStyle.Mountains;
+        profile.RidgeStrength = 1.35f;
+        profile.RidgeSharpness = 2.4f;
+        profile.ValleyStrength = 0.85f;
+      }
+      else if (lowerName.Contains("desert"))
+      {
+        profile.LandformStyle = TerrainLandformStyle.DesertDunes;
+        profile.DuneStrength = 0.9f;
+        profile.DuneFrequency = 1.2f;
+        profile.RidgeStrength = 0.45f;
+      }
+      else if (lowerName.Contains("rock"))
+      {
+        profile.LandformStyle = TerrainLandformStyle.Badlands;
+        profile.RidgeStrength = 1.15f;
+        profile.BasinDepth = 4.0f;
+        profile.DetailStrength = 1.1f;
+      }
+      else if (lowerName.Contains("brown") || lowerName.Contains("valley"))
+      {
+        profile.LandformStyle = TerrainLandformStyle.Basin;
+        profile.BasinDepth = 10.0f;
+        profile.ValleyStrength = 1.2f;
+        profile.RidgeStrength = 0.35f;
+      }
+      else if (lowerName.Contains("green") || lowerName.Contains("plains"))
+      {
+        profile.LandformStyle = TerrainLandformStyle.Plains;
+        profile.HillsStrength = 0.7f;
+        profile.DetailStrength = 0.75f;
+        profile.RidgeStrength = 0.25f;
+      }
+      else
+      {
+        profile.LandformStyle = TerrainLandformStyle.Custom;
+      }
+    }
+
+    private static int FindPreferredFallbackIndex(List<BiomeWorldRule> rules)
+    {
+      int firstValidIndex = -1;
+
+      for (int i = 0; i < rules.Count; i++)
+      {
+        if (rules[i] == null || rules[i].Biome == null)
+        {
+          continue;
+        }
+
+        if (firstValidIndex < 0)
+        {
+          firstValidIndex = i;
+        }
+
+        string name = rules[i].RuleName;
+        if (!string.IsNullOrWhiteSpace(name) &&
+            name.ToLowerInvariant().Contains("green"))
+        {
+          return i;
+        }
+      }
+
+      return Mathf.Max(firstValidIndex, 0);
     }
   }
 }

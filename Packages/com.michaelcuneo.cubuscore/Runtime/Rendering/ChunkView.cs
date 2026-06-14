@@ -24,12 +24,40 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
 
     private void Awake()
     {
-      meshFilter = GetComponent<MeshFilter>();
-      meshRenderer = GetComponent<MeshRenderer>();
-      meshCollider = GetComponent<MeshCollider>();
+      EnsureComponents();
       if (meshRenderer != null)
       {
         meshRenderer.enabled = false;
+      }
+    }
+
+    private void EnsureComponents()
+    {
+      if (meshFilter == null)
+      {
+        meshFilter = GetComponent<MeshFilter>();
+        if (meshFilter == null)
+        {
+          meshFilter = gameObject.AddComponent<MeshFilter>();
+        }
+      }
+
+      if (meshRenderer == null)
+      {
+        meshRenderer = GetComponent<MeshRenderer>();
+        if (meshRenderer == null)
+        {
+          meshRenderer = gameObject.AddComponent<MeshRenderer>();
+        }
+      }
+
+      if (meshCollider == null)
+      {
+        meshCollider = GetComponent<MeshCollider>();
+        if (meshCollider == null)
+        {
+          meshCollider = gameObject.AddComponent<MeshCollider>();
+        }
       }
     }
 
@@ -39,6 +67,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
         Material material,
         Transform parent)
     {
+      EnsureComponents();
+
       ChunkCoord = chunkCoord;
       IsActive = true;
 
@@ -51,7 +81,10 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
       gameObject.name = $"Chunk {chunkCoord.x}, {chunkCoord.y}, {chunkCoord.z}";
       gameObject.SetActive(true);
 
-      meshRenderer.sharedMaterial = material != null ? material : GetFallbackMaterial();
+      if (meshRenderer != null)
+      {
+        meshRenderer.sharedMaterial = material != null ? material : GetFallbackMaterial();
+      }
 
       if (meshRenderer != null)
       {
@@ -61,6 +94,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
 
     public void ApplyMesh(MeshData meshData, bool generateCollision)
     {
+      EnsureComponents();
       ClearMesh();
 
       if (meshData == null || meshData.IsEmpty)
@@ -93,6 +127,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
 
     public void ApplyMesh(Mesh unityMesh, bool generateCollision)
     {
+      EnsureComponents();
       ClearMesh();
 
       if (unityMesh == null)
@@ -152,6 +187,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
 
     public void ClearMesh()
     {
+      EnsureComponents();
+
       if (meshFilter != null)
       {
         meshFilter.sharedMesh = null;
@@ -187,6 +224,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
 
     public void SetCollisionEnabled(bool enabled)
     {
+      EnsureComponents();
+
       if (meshCollider == null)
       {
         return;
@@ -197,6 +236,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
 
     public void Release(Transform poolParent)
     {
+      EnsureComponents();
       ClearMesh();
 
       IsActive = false;

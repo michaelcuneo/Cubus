@@ -19,22 +19,27 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       DensityChunkData chunkData = new(chunkCoord);
       float scale = Mathf.Max(0.001f, snapshot.DensitySampleScale);
 
-      TerrainSampler sampler = new(
-          snapshot.TerrainProfile,
-          snapshot.BiomeId
-      );
-
       const int size = VoxelConstants.ChunkSize;
 
-      for (int y = 0; y < size; y++)
+      for (int z = 0; z < size; z++)
       {
-        for (int z = 0; z < size; z++)
+        for (int x = 0; x < size; x++)
         {
-          for (int x = 0; x < size; x++)
+          Vector3Int baseWorldVoxel = chunkData.LocalToWorldVoxel(x, 0, z);
+          snapshot.ResolveBiomeAtWorldXZ(
+              baseWorldVoxel.x,
+              baseWorldVoxel.z,
+              out TerrainGenerationProfileSnapshot profile,
+              out byte biomeId
+          );
+
+          for (int y = 0; y < size; y++)
           {
             Vector3Int worldVoxel = chunkData.LocalToWorldVoxel(x, y, z);
 
-            TerrainSample sample = sampler.Sample(
+            TerrainSample sample = TerrainSampler.Sample(
+                profile,
+                biomeId,
                 new Vector3(
                 worldVoxel.x * scale,
                 worldVoxel.y * scale,

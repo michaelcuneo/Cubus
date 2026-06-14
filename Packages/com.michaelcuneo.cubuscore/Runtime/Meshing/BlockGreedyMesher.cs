@@ -512,13 +512,19 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
       mesh.UVs.Add(new Vector2(uvScale.x, uvScale.y));
       mesh.UVs.Add(new Vector2(uvScale.x, 0.0f));
 
-      byte colorValue = (byte)Mathf.Clamp(materialId * 60, 60, 255);
-      Color32 vertexColor = new(colorValue, colorValue, colorValue, 255);
+      Color32 vertexColor = EncodeMaterialId(materialId);
 
       mesh.Colors.Add(vertexColor);
       mesh.Colors.Add(vertexColor);
       mesh.Colors.Add(vertexColor);
       mesh.Colors.Add(vertexColor);
+    }
+
+    private static Color32 EncodeMaterialId(ushort materialId)
+    {
+      byte low = (byte)(materialId & 0xFF);
+      byte high = (byte)((materialId >> 8) & 0xFF);
+      return new Color32(low, high, 0, 255);
     }
   }
 }

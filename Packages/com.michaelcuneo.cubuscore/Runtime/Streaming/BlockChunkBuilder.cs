@@ -30,16 +30,24 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       Voxel[] voxels = chunkData.GetRawVoxelArray();
       hasAnySolidVoxel = false;
 
-      for (int y = 0; y < size; y++)
+      for (int z = 0; z < size; z++)
       {
-        for (int z = 0; z < size; z++)
+        for (int x = 0; x < size; x++)
         {
-          for (int x = 0; x < size; x++)
+          Vector3Int baseWorldVoxel = chunkData.LocalToWorldVoxel(x, 0, z);
+          snapshot.ResolveBiomeAtWorldXZ(
+              baseWorldVoxel.x,
+              baseWorldVoxel.z,
+              out TerrainGenerationProfileSnapshot profile,
+              out _
+          );
+
+          for (int y = 0; y < size; y++)
           {
             Vector3Int worldVoxel = chunkData.LocalToWorldVoxel(x, y, z);
 
             TerrainSamplerBurst.Sample(
-                snapshot.TerrainProfile,
+                profile,
                 worldVoxel.x,
                 worldVoxel.z,
                 worldVoxel.y,
@@ -74,8 +82,15 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         Vector3Int worldVoxel,
         WorldGenerationSnapshot snapshot)
     {
+      snapshot.ResolveBiomeAtWorldXZ(
+        worldVoxel.x,
+        worldVoxel.z,
+        out TerrainGenerationProfileSnapshot profile,
+        out _
+      );
+
       TerrainSamplerBurst.Sample(
-          snapshot.TerrainProfile,
+        profile,
           worldVoxel.x,
           worldVoxel.z,
           worldVoxel.y,

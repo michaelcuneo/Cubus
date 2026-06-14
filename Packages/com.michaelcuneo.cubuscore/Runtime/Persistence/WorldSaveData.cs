@@ -8,7 +8,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Persistence
   [Serializable]
   public sealed class WorldSaveData
   {
-    public int SaveVersion = 2;
+    public int SaveVersion = 4;
     public TerrainSystem TerrainSystem = TerrainSystem.SmoothDensity;
     public int ChunkSize;
     public float VoxelSize;

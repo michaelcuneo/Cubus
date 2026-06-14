@@ -48,13 +48,20 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World
       int voxelZ = Mathf.FloorToInt(voxelPos.z);
 
       // Approximate surface height (in voxel units).
-      TerrainSampler sampler = new(
-          world.Settings.GetActiveGenerationProfile(),
-          world.Settings.GetActiveBiomeId()
-      );
-
       float scale = Mathf.Max(0.001f, world.Settings.DensitySampleScale);
-      TerrainSample sample = sampler.Sample(new Vector3((voxelX + 0.5f) * scale, 0.0f, (voxelZ + 0.5f) * scale));
+
+      world.Settings.ResolveBiomeAtWorldXZ(
+        (voxelX + 0.5f) * scale,
+        (voxelZ + 0.5f) * scale,
+        out TerrainGenerationProfileSnapshot profile,
+        out byte biomeId
+    );
+
+      TerrainSample sample = TerrainSampler.Sample(
+        profile,
+        biomeId,
+        new Vector3((voxelX + 0.5f) * scale, 0.0f, (voxelZ + 0.5f) * scale)
+      );
       int estimatedSurfaceY = Mathf.FloorToInt(sample.SurfaceHeight);
 
       int minY = estimatedSurfaceY - Mathf.Max(0, searchBelowVoxels);
