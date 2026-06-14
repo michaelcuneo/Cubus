@@ -26,38 +26,28 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         out bool hasAnySolidVoxel)
     {
       const int size = VoxelConstants.ChunkSize;
+
       BlockChunkData chunkData = new(chunkCoord);
       Voxel[] voxels = chunkData.GetRawVoxelArray();
+
       hasAnySolidVoxel = false;
 
       for (int z = 0; z < size; z++)
       {
         for (int x = 0; x < size; x++)
         {
-          Vector3Int baseWorldVoxel = chunkData.LocalToWorldVoxel(x, 0, z);
-
-          snapshot.ResolveBiomeAtWorldXZ(
-              baseWorldVoxel.x,
-              baseWorldVoxel.z,
-              out TerrainGenerationProfileSnapshot profile,
-              out _
-          );
-
           for (int y = 0; y < size; y++)
           {
             Vector3Int worldVoxel = chunkData.LocalToWorldVoxel(x, y, z);
 
-            TerrainSamplerBurst.Sample(
-                profile,
-                worldVoxel.x,
-                worldVoxel.z,
-                worldVoxel.y,
-                out float density,
-                out int solidMaterialId
+            TerrainSample sample = BiomeTerrainSampler.Sample(
+                snapshot,
+                worldVoxel,
+                1.0f
             );
 
-            ushort materialId = density > 0.0f
-                ? (ushort)Mathf.Clamp(solidMaterialId, 1, 65535)
+            ushort materialId = sample.Density > 0.0f
+                ? (ushort)Mathf.Clamp(sample.SolidMaterialId, 1, 65535)
                 : (ushort)0;
 
             int voxelIndex = VoxelMath.FlattenIndex(x, y, z);
@@ -74,6 +64,18 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       if (overrides != null)
       {
         ApplyOverrides(chunkData, overrides);
+
+        Voxel[] finalVoxels = chunkData.GetRawVoxelArray();
+        hasAnySolidVoxel = false;
+
+        for (int i = 0; i < finalVoxels.Length; i++)
+        {
+          if (finalVoxels[i].IsSolid)
+          {
+            hasAnySolidVoxel = true;
+            break;
+          }
+        }
       }
 
       return chunkData;
@@ -83,24 +85,14 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         Vector3Int worldVoxel,
         WorldGenerationSnapshot snapshot)
     {
-      snapshot.ResolveBiomeAtWorldXZ(
-        worldVoxel.x,
-        worldVoxel.z,
-        out TerrainGenerationProfileSnapshot profile,
-        out _
+      TerrainSample sample = BiomeTerrainSampler.Sample(
+          snapshot,
+          worldVoxel,
+          1.0f
       );
 
-      TerrainSamplerBurst.Sample(
-        profile,
-          worldVoxel.x,
-          worldVoxel.z,
-          worldVoxel.y,
-          out float density,
-          out int solidMaterialId
-      );
-
-      return density > 0.0f
-          ? (ushort)Mathf.Clamp(solidMaterialId, 1, 65535)
+      return sample.Density > 0.0f
+          ? (ushort)Mathf.Clamp(sample.SolidMaterialId, 1, 65535)
           : (ushort)0;
     }
 

@@ -38,14 +38,10 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
           {
             Vector3Int worldVoxel = chunkData.LocalToWorldVoxel(x, y, z);
 
-            TerrainSample sample = TerrainSampler.Sample(
-                profile,
-                biomeId,
-                new Vector3(
-                    worldVoxel.x * scale,
-                    worldVoxel.y * scale,
-                    worldVoxel.z * scale
-                )
+            TerrainSample sample = BiomeTerrainSampler.Sample(
+                snapshot,
+                worldVoxel,
+                scale
             );
 
             ushort materialId = sample.Density > 0.0f

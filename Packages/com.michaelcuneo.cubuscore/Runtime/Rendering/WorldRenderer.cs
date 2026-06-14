@@ -295,9 +295,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
           var chunkCoord = pair.Key;
           var chunkData = pair.Value;
 
-          if (chunkData == null ||
-              !chunkData.HasAnySolidVoxel() ||
-              !chunkData.HasSurfaceCrossing())
+          if (chunkData == null || !chunkData.HasSurfaceCrossing())
           {
             RemoveChunk(chunkCoord);
             continue;

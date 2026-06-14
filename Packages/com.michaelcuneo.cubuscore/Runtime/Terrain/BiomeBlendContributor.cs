@@ -1,6 +1,6 @@
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain;
 
-namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain
+namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World
 {
   public readonly struct BiomeBlendContributor
   {

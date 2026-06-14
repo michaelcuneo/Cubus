@@ -107,27 +107,14 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World
       {
         for (int x = 0; x < size; x++)
         {
-          Vector3Int worldVoxelAtColumnBase = chunkData.LocalToWorldVoxel(x, 0, z);
-
-          settings.ResolveBiomeAtWorldXZ(
-              worldVoxelAtColumnBase.x,
-              worldVoxelAtColumnBase.z,
-              out TerrainGenerationProfileSnapshot profile,
-              out byte biomeId
-          );
-
           for (int y = 0; y < size; y++)
           {
             Vector3Int worldVoxel = chunkData.LocalToWorldVoxel(x, y, z);
 
-            TerrainSample sample = TerrainSampler.Sample(
-                profile,
-                biomeId,
-                new Vector3(
-                    worldVoxel.x,
-                    worldVoxel.y,
-                    worldVoxel.z
-                )
+            TerrainSample sample = BiomeTerrainSampler.Sample(
+                settings,
+                worldVoxel,
+                1.0f
             );
 
             ushort materialId = sample.Density > 0.0f
@@ -181,25 +168,13 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World
       int worldVoxelX = chunkColumn.x * size + size / 2;
       int worldVoxelZ = chunkColumn.y * size + size / 2;
 
-      settings.ResolveBiomeAtWorldXZ(
-        worldVoxelX,
-        worldVoxelZ,
-        out TerrainGenerationProfileSnapshot profile,
-        out byte biomeId
-      );
-
-      TerrainSample sample = TerrainSampler.Sample(
-        profile,
-        biomeId,
-          new Vector3(
-              worldVoxelX,
-              0,
-              worldVoxelZ
-          )
+      TerrainSample sample = BiomeTerrainSampler.Sample(
+          settings,
+          new Vector3Int(worldVoxelX, 0, worldVoxelZ),
+          1.0f
       );
 
       int surfaceVoxelY = Mathf.FloorToInt(sample.SurfaceHeight);
-
       return VoxelMath.FloorDiv(surfaceVoxelY, size);
     }
 

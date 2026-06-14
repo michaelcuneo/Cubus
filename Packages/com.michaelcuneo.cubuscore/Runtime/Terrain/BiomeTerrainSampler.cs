@@ -1,134 +1,151 @@
+using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World;
 using UnityEngine;
 
 namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain
 {
-  public readonly struct BiomeTerrainColumnSample
-  {
-    public readonly float SurfaceHeight;
-    public readonly float CaveAmount;
-    public readonly int SolidMaterialId;
-    public readonly byte BiomeId;
-
-    public BiomeTerrainColumnSample(
-        float surfaceHeight,
-        float caveAmount,
-        int solidMaterialId,
-        byte biomeId)
-    {
-      SurfaceHeight = surfaceHeight;
-      CaveAmount = caveAmount;
-      SolidMaterialId = solidMaterialId;
-      BiomeId = biomeId;
-    }
-  }
-
   public static class BiomeTerrainSampler
   {
-    public static BiomeTerrainColumnSample SampleColumn(
-        in BiomeBlendSample biomeBlend,
-        float worldX,
-        float worldZ,
-        float materialDepthBelowSurface)
+    public static TerrainSample Sample(
+        WorldSettings settings,
+        Vector3Int worldVoxel,
+        float densityScale)
     {
-      if (!biomeBlend.IsValid)
+      BiomeBlendSample blend = settings.ResolveBiomeBlendAtWorldXZ(
+          worldVoxel.x,
+          worldVoxel.z
+      );
+
+      if (!blend.IsValid)
       {
-        return new BiomeTerrainColumnSample(
-            0.0f,
-            0.0f,
-            1,
-            1
+        settings.ResolveBiomeAtWorldXZ(
+            worldVoxel.x,
+            worldVoxel.z,
+            out TerrainGenerationProfileSnapshot fallbackProfile,
+            out byte fallbackBiomeId
+        );
+
+        return TerrainSampler.Sample(
+            fallbackProfile,
+            fallbackBiomeId,
+            new Vector3(
+                worldVoxel.x * densityScale,
+                worldVoxel.y * densityScale,
+                worldVoxel.z * densityScale
+            )
         );
       }
 
-      float blendedSurfaceHeight = 0.0f;
-      float blendedCaveAmount = 0.0f;
-
-      int dominantMaterialId = 1;
-      byte dominantBiomeId = biomeBlend.DominantBiomeId;
-
-      for (int i = 0; i < biomeBlend.Count; i++)
-      {
-        BiomeBlendContributor contributor = biomeBlend.GetContributor(i);
-
-        TerrainSamplerBurst.Sample(
-            contributor.Profile,
-            worldX,
-            worldZ,
-            0.0f,
-            out float densityAtZero,
-            out int materialIdAtZero
-        );
-
-        float surfaceHeight = densityAtZero;
-
-        blendedSurfaceHeight += surfaceHeight * contributor.Weight;
-
-        if (i == 0)
-        {
-          dominantMaterialId = contributor.Profile.GetMaterialId(materialDepthBelowSurface);
-          dominantBiomeId = contributor.BiomeId;
-        }
-      }
-
-      return new BiomeTerrainColumnSample(
-          blendedSurfaceHeight,
-          blendedCaveAmount,
-          Mathf.Clamp(dominantMaterialId, 1, 65535),
-          dominantBiomeId
+      return SampleBlend(
+          blend,
+          worldVoxel,
+          densityScale
       );
     }
 
-    public static TerrainSample SampleVoxel(
-        in BiomeBlendSample biomeBlend,
-        Vector3 worldVoxelPosition)
+    public static TerrainSample Sample(
+        WorldGenerationSnapshot snapshot,
+        Vector3Int worldVoxel,
+        float densityScale)
     {
-      TerrainSample result = new();
+      BiomeBlendSample blend = snapshot.ResolveBiomeBlendAtWorldXZ(
+          worldVoxel.x,
+          worldVoxel.z
+      );
 
-      if (!biomeBlend.IsValid)
+      if (!blend.IsValid)
       {
-        result.Density = -1.0f;
-        result.SurfaceHeight = 0.0f;
-        result.SolidMaterialId = 0;
-        result.BiomeId = 1;
-        return result;
+        snapshot.ResolveBiomeAtWorldXZ(
+            worldVoxel.x,
+            worldVoxel.z,
+            out TerrainGenerationProfileSnapshot fallbackProfile,
+            out byte fallbackBiomeId
+        );
+
+        return TerrainSampler.Sample(
+            fallbackProfile,
+            fallbackBiomeId,
+            new Vector3(
+                worldVoxel.x * densityScale,
+                worldVoxel.y * densityScale,
+                worldVoxel.z * densityScale
+            )
+        );
       }
 
+      return SampleBlend(
+          blend,
+          worldVoxel,
+          densityScale
+      );
+    }
+
+    private static TerrainSample SampleBlend(
+        BiomeBlendSample blend,
+        Vector3Int worldVoxel,
+        float densityScale)
+    {
+      Vector3 samplePosition = new(
+          worldVoxel.x * densityScale,
+          worldVoxel.y * densityScale,
+          worldVoxel.z * densityScale
+      );
+
+      TerrainSample result = new();
+
+      float totalWeight = 0.0f;
+      float blendedDensity = 0.0f;
       float blendedSurfaceHeight = 0.0f;
       float blendedCaveAmount = 0.0f;
 
-      int dominantMaterialId = 1;
-      byte dominantBiomeId = biomeBlend.DominantBiomeId;
+      int dominantMaterialId = 0;
+      byte dominantBiomeId = blend.DominantBiomeId;
+      float dominantWeight = -1.0f;
 
-      for (int i = 0; i < biomeBlend.Count; i++)
+      for (int i = 0; i < blend.Count; i++)
       {
-        BiomeBlendContributor contributor = biomeBlend.GetContributor(i);
+        BiomeBlendContributor contributor = blend.GetContributor(i);
+
+        if (contributor.Weight <= 0.0f)
+        {
+          continue;
+        }
 
         TerrainSample sample = TerrainSampler.Sample(
             contributor.Profile,
             contributor.BiomeId,
-            worldVoxelPosition
+            samplePosition
         );
 
-        blendedSurfaceHeight += sample.SurfaceHeight * contributor.Weight;
-        blendedCaveAmount += sample.CaveAmount * contributor.Weight;
+        float weight = Mathf.Max(0.0f, contributor.Weight);
 
-        if (i == 0)
+        blendedDensity += sample.Density * weight;
+        blendedSurfaceHeight += sample.SurfaceHeight * weight;
+        blendedCaveAmount += sample.CaveAmount * weight;
+        totalWeight += weight;
+
+        if (weight > dominantWeight && sample.SolidMaterialId > 0)
         {
+          dominantWeight = weight;
           dominantMaterialId = sample.SolidMaterialId;
           dominantBiomeId = contributor.BiomeId;
         }
       }
 
-      float density = blendedSurfaceHeight - worldVoxelPosition.y - blendedCaveAmount;
+      if (totalWeight <= 0.0001f)
+      {
+        return default;
+      }
 
-      result.SurfaceHeight = blendedSurfaceHeight;
-      result.CaveAmount = blendedCaveAmount;
-      result.Density = density;
-      result.SolidMaterialId = density > 0.0f
+      float invWeight = 1.0f / totalWeight;
+
+      result.Density = blendedDensity * invWeight;
+      result.SurfaceHeight = blendedSurfaceHeight * invWeight;
+      result.CaveAmount = blendedCaveAmount * invWeight;
+      result.BiomeId = dominantBiomeId;
+      result.SolidMaterialId = result.Density > 0.0f
           ? Mathf.Clamp(dominantMaterialId, 1, 65535)
           : 0;
       result.LiquidMaterialId = 0;
-      result.BiomeId = dominantBiomeId;
       result.IsLiquid = false;
 
       return result;

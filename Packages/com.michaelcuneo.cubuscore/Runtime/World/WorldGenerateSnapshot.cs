@@ -161,24 +161,247 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World
 
     public BiomeBlendSample ResolveBiomeBlendAtWorldXZ(float worldX, float worldZ)
     {
-      ResolveBiomeAtWorldXZ(
-          worldX,
-          worldZ,
-          out TerrainGenerationProfileSnapshot profile,
-          out byte biomeId
-      );
-
       BiomeBlendSample result = new();
 
-      result.Contributor0 = new BiomeBlendContributor(
-          profile,
-          biomeId,
-          1.0f
+      if (!UseBiomeWorldRules || BiomeRules == null || BiomeRules.Length == 0)
+      {
+        result.Add(new BiomeBlendContributor(
+            TerrainProfile,
+            BiomeId,
+            1.0f
+        ));
+
+        result.Normalize();
+        return result;
+      }
+
+      int fallbackIndex = -1;
+      int fallbackPriority = int.MinValue;
+
+      int validCount = 0;
+
+      for (int i = 0; i < BiomeRules.Length; i++)
+      {
+        BiomeRuleSnapshot rule = BiomeRules[i];
+
+        if (rule.IsFallback)
+        {
+          if (fallbackIndex < 0 || rule.Priority > fallbackPriority)
+          {
+            fallbackIndex = i;
+            fallbackPriority = rule.Priority;
+          }
+
+          continue;
+        }
+
+        validCount++;
+      }
+
+      if (validCount <= 0)
+      {
+        if (fallbackIndex >= 0)
+        {
+          BiomeRuleSnapshot fallbackRule = BiomeRules[fallbackIndex];
+
+          result.Add(new BiomeBlendContributor(
+              fallbackRule.Profile,
+              fallbackRule.BiomeId,
+              1.0f
+          ));
+        }
+        else
+        {
+          result.Add(new BiomeBlendContributor(
+              TerrainProfile,
+              BiomeId,
+              1.0f
+          ));
+        }
+
+        result.Normalize();
+        return result;
+      }
+
+      float selector = SampleBiomePrioritySelector(
+          worldX,
+          worldZ,
+          BiomeRuleWorldScale
       );
 
-      result.Count = 1;
-      result.DominantBiomeId = biomeId;
+      int minPriority = int.MaxValue;
+      int maxPriority = int.MinValue;
 
+      for (int i = 0; i < BiomeRules.Length; i++)
+      {
+        BiomeRuleSnapshot rule = BiomeRules[i];
+
+        if (rule.IsFallback)
+        {
+          continue;
+        }
+
+        minPriority = Mathf.Min(minPriority, rule.Priority);
+        maxPriority = Mathf.Max(maxPriority, rule.Priority);
+      }
+
+      if (minPriority == int.MaxValue || maxPriority == int.MinValue)
+      {
+        result.Add(new BiomeBlendContributor(
+            TerrainProfile,
+            BiomeId,
+            1.0f
+        ));
+
+        result.Normalize();
+        return result;
+      }
+
+      float targetPriority = Mathf.Lerp(
+          minPriority,
+          maxPriority,
+          selector
+      );
+
+      int lowerIndex = -1;
+      int upperIndex = -1;
+      int lowerPriority = int.MinValue;
+      int upperPriority = int.MaxValue;
+
+      for (int i = 0; i < BiomeRules.Length; i++)
+      {
+        BiomeRuleSnapshot rule = BiomeRules[i];
+
+        if (rule.IsFallback)
+        {
+          continue;
+        }
+
+        if (rule.Priority <= targetPriority && rule.Priority > lowerPriority)
+        {
+          lowerPriority = rule.Priority;
+          lowerIndex = i;
+        }
+
+        if (rule.Priority >= targetPriority && rule.Priority < upperPriority)
+        {
+          upperPriority = rule.Priority;
+          upperIndex = i;
+        }
+      }
+
+      if (lowerIndex < 0)
+      {
+        lowerIndex = upperIndex;
+        lowerPriority = upperPriority;
+      }
+
+      if (upperIndex < 0)
+      {
+        upperIndex = lowerIndex;
+        upperPriority = lowerPriority;
+      }
+
+      if (lowerIndex < 0 || upperIndex < 0)
+      {
+        if (fallbackIndex >= 0)
+        {
+          BiomeRuleSnapshot fallbackRule = BiomeRules[fallbackIndex];
+
+          result.Add(new BiomeBlendContributor(
+              fallbackRule.Profile,
+              fallbackRule.BiomeId,
+              1.0f
+          ));
+        }
+        else
+        {
+          result.Add(new BiomeBlendContributor(
+              TerrainProfile,
+              BiomeId,
+              1.0f
+          ));
+        }
+
+        result.Normalize();
+        return result;
+      }
+
+      if (lowerIndex == upperIndex || lowerPriority == upperPriority)
+      {
+        BiomeRuleSnapshot rule = BiomeRules[lowerIndex];
+
+        result.Add(new BiomeBlendContributor(
+            rule.Profile,
+            rule.BiomeId,
+            1.0f
+        ));
+
+        result.Normalize();
+        return result;
+      }
+
+      float blendT = Mathf.InverseLerp(
+          lowerPriority,
+          upperPriority,
+          targetPriority
+      );
+
+      float feather = Mathf.Clamp01(BiomeBlendFeather);
+
+      if (feather <= 0.0001f)
+      {
+        blendT = blendT < 0.5f ? 0.0f : 1.0f;
+      }
+      else
+      {
+        float edge = Mathf.Clamp01(feather);
+
+        if (blendT < 0.5f - edge * 0.5f)
+        {
+          blendT = 0.0f;
+        }
+        else if (blendT > 0.5f + edge * 0.5f)
+        {
+          blendT = 1.0f;
+        }
+        else
+        {
+          blendT = Mathf.InverseLerp(
+              0.5f - edge * 0.5f,
+              0.5f + edge * 0.5f,
+              blendT
+          );
+
+          blendT = blendT * blendT * (3.0f - 2.0f * blendT);
+        }
+      }
+
+      BiomeRuleSnapshot lowerRule = BiomeRules[lowerIndex];
+      BiomeRuleSnapshot upperRule = BiomeRules[upperIndex];
+
+      float lowerWeight = 1.0f - blendT;
+      float upperWeight = blendT;
+
+      if (lowerWeight > 0.0001f)
+      {
+        result.Add(new BiomeBlendContributor(
+            lowerRule.Profile,
+            lowerRule.BiomeId,
+            lowerWeight
+        ));
+      }
+
+      if (upperWeight > 0.0001f)
+      {
+        result.Add(new BiomeBlendContributor(
+            upperRule.Profile,
+            upperRule.BiomeId,
+            upperWeight
+        ));
+      }
+
+      result.Normalize();
       return result;
     }
 
@@ -202,6 +425,21 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World
       float a = Mathf.Sin((x * fx) + (z * fz) + phase);
       float b = Mathf.Cos((x * (fx * 0.77f)) - (z * (fz * 1.31f)) - phase * 0.53f);
       return Mathf.Clamp01(((a + b) * 0.25f) + 0.5f);
+    }
+
+    private static float SampleBiomePrioritySelector(
+    float worldX,
+    float worldZ,
+    float worldScale)
+    {
+      float s = Mathf.Max(0.0001f, worldScale);
+      float x = worldX * s;
+      float z = worldZ * s;
+
+      float broad = Noise01(x, z, 0.0009f, 0.0007f, 11.17f);
+      float detail = Noise01(x, z, 0.0021f, 0.0018f, 43.71f);
+
+      return Mathf.Clamp01((broad * 0.8f) + (detail * 0.2f));
     }
 
     public readonly struct BiomeRuleSnapshot
@@ -261,67 +499,30 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World
 
         if (UseTemperature)
         {
-          float s = ScoreRange(sample.Temperature, TemperatureRange, safeFeather);
-          if (s <= 0.0f)
-          {
-            return 0.0f;
-          }
-
-          score *= s;
+          score *= ScoreRange(sample.Temperature, TemperatureRange, safeFeather);
         }
 
         if (UseElevation)
         {
-          float s = ScoreRange(sample.Elevation, ElevationRange, safeFeather);
-          if (s <= 0.0f)
-          {
-            return 0.0f;
-          }
-
-          score *= s;
+          score *= ScoreRange(sample.Elevation, ElevationRange, safeFeather);
         }
 
         if (UseRise)
         {
-          float s = ScoreRange(sample.Rise, RiseRange, safeFeather);
-          if (s <= 0.0f)
-          {
-            return 0.0f;
-          }
-
-          score *= s;
+          score *= ScoreRange(sample.Rise, RiseRange, safeFeather);
         }
 
         if (UseHarshness)
         {
-          float s = ScoreRange(sample.Harshness, HarshnessRange, safeFeather);
-          if (s <= 0.0f)
-          {
-            return 0.0f;
-          }
-
-          score *= s;
+          score *= ScoreRange(sample.Harshness, HarshnessRange, safeFeather);
         }
 
         if (UseErosion)
         {
-          float s = ScoreRange(sample.Erosion, ErosionRange, safeFeather);
-          if (s <= 0.0f)
-          {
-            return 0.0f;
-          }
-
-          score *= s;
+          score *= ScoreRange(sample.Erosion, ErosionRange, safeFeather);
         }
 
         return Mathf.Clamp01(score);
-      }
-
-      private static bool InRange(float value, Vector2 range)
-      {
-        float min = Mathf.Min(range.x, range.y);
-        float max = Mathf.Max(range.x, range.y);
-        return value >= min && value <= max;
       }
 
       private static float ScoreRange(float value, Vector2 range, float feather)
@@ -329,27 +530,20 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World
         float min = Mathf.Min(range.x, range.y);
         float max = Mathf.Max(range.x, range.y);
 
-        float distance = 0.0f;
-
-        if (value < min)
-        {
-          distance = min - value;
-        }
-        else if (value > max)
-        {
-          distance = value - max;
-        }
-
-        if (distance <= 0.0f)
+        if (value >= min && value <= max)
         {
           return 1.0f;
         }
 
-        float sigma = Mathf.Max(0.0001f, feather);
-        float normalized = distance / sigma;
-        float score = Mathf.Exp(-normalized * normalized);
+        float distance = value < min
+            ? min - value
+            : value - max;
 
-        return Mathf.Clamp01(score);
+        float t = Mathf.Clamp01(
+            1.0f - distance / Mathf.Max(0.0001f, feather)
+        );
+
+        return t * t * (3.0f - 2.0f * t);
       }
     }
   }

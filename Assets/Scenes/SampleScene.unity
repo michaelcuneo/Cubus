@@ -448,7 +448,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: CubusCore.Runtime::CubusCore.World.CubusWorld
   settings:
-    TerrainSystem: 1
+    TerrainSystem: 0
     ViewDistanceInChunks: 6
     VoxelSize: 1
     BlockMinChunkY: -1
@@ -457,7 +457,7 @@ MonoBehaviour:
     DensityMaxChunkY: 2
     DensityMeshStep: 1
     DensitySampleScale: 1
-    BiomeRuleWorldScale: 2
+    BiomeRuleWorldScale: 10
     BiomeBlendFeather: 0.05
     BiomeWorldRules:
     - RuleName: Brown Valley
@@ -571,21 +571,15 @@ MonoBehaviour:
   m_EditorClassIdentifier: CubusCore.Runtime::CubusCore.Streaming.WorldStreamer
   viewer: {fileID: 1517188426}
   settings:
-    UnloadPaddingInChunks: 1
-    ChunksBelowSurface: 2
-    ChunksAboveSurface: 1
+    UnloadPaddingInChunks: 4
+    ChunksBelowSurface: 32
+    ChunksAboveSurface: 8
     ChunksGeneratedPerFrame: 8
-    InitialChunksGeneratedPerFrame: 24
-    ChunksRenderedPerFrame: 8
-    MeshAppliesPerFrame: 6
+    InitialChunksGeneratedPerFrame: 32
+    ChunksRenderedPerFrame: 16
+    MeshAppliesPerFrame: 16
     UseAsyncGeneration: 1
-    MaxAsyncChunkTasks: 6
-  useDistanceDensityMeshLod: 1
-  densityFullResolutionRadiusInChunks: 1
-  densityHalfResolutionRadiusInChunks: 3
-  densityNearCellStep: 1
-  densityMidCellStep: 2
-  densityFarCellStep: 4
+    MaxAsyncChunkTasks: 8
   logStreamingStats: 1
   useIncrementalPreGeneration: 1
   preGenerationChunksPerFrame: 8

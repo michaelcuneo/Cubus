@@ -1,84 +1,102 @@
+using System.Collections.Generic;
 using UnityEngine;
 
-namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain
+namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World
 {
-  public struct BiomeBlendSample
+  public sealed class BiomeBlendSample
   {
-    public BiomeBlendContributor Contributor0;
-    public BiomeBlendContributor Contributor1;
-    public BiomeBlendContributor Contributor2;
-    public BiomeBlendContributor Contributor3;
+    private readonly List<BiomeBlendContributor> contributors = new();
 
-    public int Count;
-    public byte DominantBiomeId;
+    public IReadOnlyList<BiomeBlendContributor> Contributors => contributors;
+    public int Count => contributors.Count;
 
-    public bool IsValid => Count > 0;
+    public byte DominantBiomeId { get; private set; }
+
+    public bool IsValid => contributors.Count > 0;
+
+    public void Clear()
+    {
+      contributors.Clear();
+      DominantBiomeId = 0;
+    }
 
     public BiomeBlendContributor GetContributor(int index)
     {
-      return index switch
-      {
-        0 => Contributor0,
-        1 => Contributor1,
-        2 => Contributor2,
-        3 => Contributor3,
-        _ => Contributor0
-      };
+      return contributors[index];
     }
 
-    public void Normalize()
+    public void Add(BiomeBlendContributor contributor)
     {
-      float total = 0.0f;
-
-      if (Count > 0) total += Contributor0.Weight;
-      if (Count > 1) total += Contributor1.Weight;
-      if (Count > 2) total += Contributor2.Weight;
-      if (Count > 3) total += Contributor3.Weight;
-
-      if (total <= 0.0001f)
+      if (contributor.Weight <= 0.0f)
       {
         return;
       }
 
-      float inv = 1.0f / total;
+      contributors.Add(contributor);
 
-      if (Count > 0)
+      if (contributors.Count == 1)
       {
-        Contributor0 = new BiomeBlendContributor(
-            Contributor0.Profile,
-            Contributor0.BiomeId,
-            Mathf.Clamp01(Contributor0.Weight * inv)
-        );
+        DominantBiomeId = contributor.BiomeId;
+      }
+      else
+      {
+        float bestWeight = -1.0f;
+        byte bestBiomeId = DominantBiomeId;
 
-        DominantBiomeId = Contributor0.BiomeId;
+        for (int i = 0; i < contributors.Count; i++)
+        {
+          if (contributors[i].Weight > bestWeight)
+          {
+            bestWeight = contributors[i].Weight;
+            bestBiomeId = contributors[i].BiomeId;
+          }
+        }
+
+        DominantBiomeId = bestBiomeId;
+      }
+    }
+
+    public void Normalize()
+    {
+      float totalWeight = 0.0f;
+
+      for (int i = 0; i < contributors.Count; i++)
+      {
+        totalWeight += Mathf.Max(0.0f, contributors[i].Weight);
       }
 
-      if (Count > 1)
+      if (totalWeight <= 0.0001f)
       {
-        Contributor1 = new BiomeBlendContributor(
-            Contributor1.Profile,
-            Contributor1.BiomeId,
-            Mathf.Clamp01(Contributor1.Weight * inv)
-        );
+        contributors.Clear();
+        DominantBiomeId = 0;
+        return;
       }
 
-      if (Count > 2)
+      float inv = 1.0f / totalWeight;
+
+      float bestWeight = -1.0f;
+      byte bestBiomeId = 0;
+
+      for (int i = 0; i < contributors.Count; i++)
       {
-        Contributor2 = new BiomeBlendContributor(
-            Contributor2.Profile,
-            Contributor2.BiomeId,
-            Mathf.Clamp01(Contributor2.Weight * inv)
+        BiomeBlendContributor oldContributor = contributors[i];
+
+        BiomeBlendContributor normalized = new(
+            oldContributor.Profile,
+            oldContributor.BiomeId,
+            Mathf.Max(0.0f, oldContributor.Weight) * inv
         );
+
+        contributors[i] = normalized;
+
+        if (normalized.Weight > bestWeight)
+        {
+          bestWeight = normalized.Weight;
+          bestBiomeId = normalized.BiomeId;
+        }
       }
 
-      if (Count > 3)
-      {
-        Contributor3 = new BiomeBlendContributor(
-            Contributor3.Profile,
-            Contributor3.BiomeId,
-            Mathf.Clamp01(Contributor3.Weight * inv)
-        );
-      }
+      DominantBiomeId = bestBiomeId;
     }
   }
 }

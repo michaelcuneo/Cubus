@@ -147,9 +147,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         );
       }
 
-      bool hasAnySolid = chunkData != null && chunkData.HasAnySolidVoxel();
       bool hasSurfaceCrossing = chunkData != null && chunkData.HasSurfaceCrossing();
-      bool isEmpty = !hasAnySolid || !hasSurfaceCrossing;
+      bool isEmpty = !hasSurfaceCrossing;
 
       return new DensityChunkBuildResult
       {

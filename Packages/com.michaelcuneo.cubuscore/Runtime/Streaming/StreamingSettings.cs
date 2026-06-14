@@ -7,36 +7,35 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
   public sealed class StreamingSettings
   {
     [Header("Horizontal")]
-
-    [Min(0)]
-    public int UnloadPaddingInChunks = 1;
+    [Min(2)]
+    public int UnloadPaddingInChunks = 4;
 
     [Header("Vertical Around Surface")]
-    [Min(0)]
-    public int ChunksBelowSurface = 1;
+    [Tooltip("Developer hint only. WorldStreamer clamps this to a safe minimum.")]
+    [Min(24)]
+    public int ChunksBelowSurface = 32;
 
-    [Min(0)]
-    public int ChunksAboveSurface = 1;
+    [Tooltip("Developer hint only. WorldStreamer clamps this to a safe minimum.")]
+    [Min(6)]
+    public int ChunksAboveSurface = 8;
 
     [Header("Budgets")]
-    [Min(1)]
-    public int ChunksGeneratedPerFrame = 2;
+    [Min(4)]
+    public int ChunksGeneratedPerFrame = 8;
 
-    [Tooltip("Higher generation budget used during the initial load burst before the first chunk is visible. Reverts to ChunksGeneratedPerFrame once initial terrain is ready.")]
-    [Min(1)]
-    public int InitialChunksGeneratedPerFrame = 4;
+    [Min(8)]
+    public int InitialChunksGeneratedPerFrame = 32;
 
-    [Min(1)]
-    public int ChunksRenderedPerFrame = 1;
+    [Min(4)]
+    public int ChunksRenderedPerFrame = 16;
 
-    [Tooltip("How many completed async mesh results are applied to the scene per frame. Keep low to avoid frame spikes.")]
-    [Min(1)]
-    public int MeshAppliesPerFrame = 1;
+    [Min(4)]
+    public int MeshAppliesPerFrame = 16;
 
     [Header("Async")]
     public bool UseAsyncGeneration = true;
 
-    [Min(1)]
-    public int MaxAsyncChunkTasks = 2;
+    [Min(2)]
+    public int MaxAsyncChunkTasks = 8;
   }
 }
