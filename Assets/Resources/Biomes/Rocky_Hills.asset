@@ -1,0 +1,60 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bb44a8b084ab43747af44680a8bd10ab, type: 3}
+  m_Name: Rocky_Hills
+  m_EditorClassIdentifier: CubusCore.Runtime::CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain.BiomeDefinition
+  BiomeId: 30
+  BiomeName: Rocky Hills
+  GenerationProfile:
+    UseWorldEdgeFalloff: 0
+    WorldEdgeRadius: 100000
+    WorldEdgeTargetHeight: -55
+    BaseHeight: 18
+    HeightScale: 54
+    LandformStyle: 2
+    MacroFrequency: 1.05
+    MacroStrength: 1
+    HillsFrequency: 1.18
+    HillsStrength: 1.05
+    DetailFrequency: 1.1
+    DetailStrength: 0.95
+    RidgeFrequency: 1.15
+    RidgeStrength: 0.95
+    RidgeSharpness: 2.15
+    ValleyFrequency: 1.05
+    ValleyStrength: 0.6
+    BasinDepth: 1
+    DuneFrequency: 1
+    DuneStrength: 0
+    CaveStrength: 0.11
+    CaveFrequency: 0.034
+    CaveStartDepth: 19
+    MaterialLayers:
+    - MaxDepthBelowSurface: 1
+      MaterialId: 3
+      Label: Gravel
+    - MaxDepthBelowSurface: 12
+      MaterialId: 7
+      Label: Sandstone
+    - MaxDepthBelowSurface: 99999
+      MaterialId: 11
+      Label: Granite
+  MaterialSet: {fileID: 11400000, guid: c3f2e4a5b6d74930c1e2f3a4b5c6d703, type: 2}
+  AutoApplyMaterialSet: 1
+  SettingsXYZ: {x: 1, y: 1, z: 1}
+  TextureXYZ: {x: 1, y: 1, z: 1}
+  RuleXYZ: {x: 1, y: 1, z: 1}
+  Temperature: 0.42
+  Elevation: 0.58
+  Rise: 0.57
+  Harshness: 0.63
+  Erosion: 0.33

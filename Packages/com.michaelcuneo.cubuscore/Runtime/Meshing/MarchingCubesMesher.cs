@@ -185,7 +185,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
       Func<Vector3Int, CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Voxels.DensityVoxel> sampleVoxelAtWorld = null)
     {
       // Force full-resolution density meshing for correctness. Coarser sampling currently introduces holes/artifacts.
-      int safeCellStep = 1;
+      int safeCellStep = Mathf.Clamp(cellStep, 1, 4);
       int numCellsAxis = Mathf.CeilToInt((float)VoxelConstants.ChunkSize / safeCellStep);
       int numSamplesAxis = numCellsAxis + 1;
       int totalSamples = numSamplesAxis * numSamplesAxis * numSamplesAxis;
@@ -994,6 +994,191 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
           }
         }
       }
+    }
+
+    private static int AddOrGetEdgeVertex(
+    MeshData mesh,
+    int edgeIndex,
+    Vector3[] positions,
+    float[] densities,
+    Vector3[] edgeVertices,
+    int[] edgeIndices,
+    Color32 color)
+    {
+      if (edgeIndices[edgeIndex] >= 0)
+      {
+        return edgeIndices[edgeIndex];
+      }
+
+      int cornerA = MarchingCubesTables.EdgeConnection[edgeIndex, 0];
+      int cornerB = MarchingCubesTables.EdgeConnection[edgeIndex, 1];
+
+      Vector3 position = InterpolateVertex(
+          positions[cornerA],
+          positions[cornerB],
+          densities[cornerA],
+          densities[cornerB]
+      );
+
+      int index = mesh.Vertices.Count;
+
+      mesh.Vertices.Add(position);
+      mesh.Normals.Add(Vector3.up);
+      mesh.UVs.Add(Vector2.zero);
+      mesh.Colors.Add(color);
+
+      edgeVertices[edgeIndex] = position;
+      edgeIndices[edgeIndex] = index;
+
+      return index;
+    }
+
+    public static MeshData GenerateMeshData(
+    Vector3Int chunkCoord,
+    WorldGenerationSnapshot snapshot,
+    int cellStep,
+    bool flipWinding,
+    Func<Vector3Int, CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Voxels.DensityVoxel> sampleVoxelAtWorld)
+    {
+      int safeCellStep = Mathf.Clamp(cellStep, 1, 4);
+      int numCellsAxis = Mathf.CeilToInt((float)VoxelConstants.ChunkSize / safeCellStep);
+      int numSamplesAxis = numCellsAxis + 1;
+
+      MeshData mesh = MeshDataPool.Rent(4096, 6144);
+
+      float[] densities = new float[8];
+      Vector3[] positions = new Vector3[8];
+      Vector3[] normals = new Vector3[8];
+      ushort[] materials = new ushort[8];
+
+      Vector3[] edgeVertices = new Vector3[12];
+      Vector3[] edgeNormals = new Vector3[12];
+      int[] edgeIndices = new int[12];
+
+      for (int z = 0; z < numCellsAxis; z++)
+      {
+        for (int y = 0; y < numCellsAxis; y++)
+        {
+          for (int x = 0; x < numCellsAxis; x++)
+          {
+            int cubeIndex = 0;
+
+            for (int corner = 0; corner < 8; corner++)
+            {
+              int sx = x + MarchingCubesTables.CubeCornerOffset[corner, 0];
+              int sy = y + MarchingCubesTables.CubeCornerOffset[corner, 1];
+              int sz = z + MarchingCubesTables.CubeCornerOffset[corner, 2];
+
+              int lx = sx * safeCellStep;
+              int ly = sy * safeCellStep;
+              int lz = sz * safeCellStep;
+
+              Vector3Int worldVoxel = new(
+                  chunkCoord.x * VoxelConstants.ChunkSize + lx,
+                  chunkCoord.y * VoxelConstants.ChunkSize + ly,
+                  chunkCoord.z * VoxelConstants.ChunkSize + lz
+              );
+
+              var voxel = sampleVoxelAtWorld(worldVoxel);
+
+              densities[corner] = voxel.Density;
+              materials[corner] = voxel.MaterialId;
+
+              positions[corner] = new Vector3(
+                  lx * snapshot.VoxelSize,
+                  ly * snapshot.VoxelSize,
+                  lz * snapshot.VoxelSize
+              );
+
+              if (densities[corner] > 0.0f)
+              {
+                cubeIndex |= 1 << corner;
+              }
+            }
+
+            if (cubeIndex == 0 || cubeIndex == 255)
+            {
+              continue;
+            }
+
+            for (int i = 0; i < 12; i++)
+            {
+              edgeIndices[i] = -1;
+            }
+
+            ushort materialId = ChooseMaterial(densities, materials);
+            Color32 color = MaterialToColor(materialId);
+
+            for (int t = 0; t < 16; t += 3)
+            {
+              int e0 = MarchingCubesTables.TriangleTable[cubeIndex, t + 0];
+              if (e0 < 0)
+              {
+                break;
+              }
+
+              int e1 = MarchingCubesTables.TriangleTable[cubeIndex, t + 1];
+              int e2 = MarchingCubesTables.TriangleTable[cubeIndex, t + 2];
+
+              int v0 = AddOrGetEdgeVertex(
+                  mesh,
+                  e0,
+                  positions,
+                  densities,
+                  edgeVertices,
+                  edgeIndices,
+                  color
+              );
+
+              int v1 = AddOrGetEdgeVertex(
+                  mesh,
+                  e1,
+                  positions,
+                  densities,
+                  edgeVertices,
+                  edgeIndices,
+                  color
+              );
+
+              int v2 = AddOrGetEdgeVertex(
+                  mesh,
+                  e2,
+                  positions,
+                  densities,
+                  edgeVertices,
+                  edgeIndices,
+                  color
+              );
+
+              if (v0 == v1 || v1 == v2 || v0 == v2)
+              {
+                continue;
+              }
+
+              if (flipWinding)
+              {
+                mesh.Triangles.Add(v0);
+                mesh.Triangles.Add(v2);
+                mesh.Triangles.Add(v1);
+              }
+              else
+              {
+                mesh.Triangles.Add(v0);
+                mesh.Triangles.Add(v1);
+                mesh.Triangles.Add(v2);
+              }
+            }
+          }
+        }
+      }
+
+      if (mesh.IsEmpty)
+      {
+        MeshDataPool.Return(mesh);
+        return null;
+      }
+
+      return mesh;
     }
 
 #if UNITY_BURST

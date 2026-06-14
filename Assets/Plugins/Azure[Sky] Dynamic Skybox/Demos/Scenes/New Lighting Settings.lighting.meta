@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 040a5b9edf10be74a8a773b44ec64aa5
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 4890085278179872738
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 36050
+  packageName: Azure[Sky] Dynamic Skybox
+  packageVersion: 8.0.7
+  assetPath: Assets/Plugins/Azure[Sky] Dynamic Skybox/Demos/Scenes/New Lighting Settings.lighting
+  uploadId: 910670

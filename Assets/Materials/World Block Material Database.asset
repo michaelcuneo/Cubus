@@ -1,0 +1,271 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 971003d9f52676048a726cabb8d15eb7, type: 3}
+  m_Name: World Block Material Database
+  m_EditorClassIdentifier: CubusCore.Runtime::CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering.BlockMaterialDatabase
+  Definitions:
+  - MaterialId: 1
+    DisplayName: Verdant Canopy
+    TopTileId: 1
+    SideTileId: 1
+    BottomTileId: 1
+    RenderCategory: 0
+    LightingCategory: 0
+    EmissionIntensity: 0
+  - MaterialId: 2
+    DisplayName: Frostcap Crust
+    TopTileId: 2
+    SideTileId: 2
+    BottomTileId: 2
+    RenderCategory: 0
+    LightingCategory: 0
+    EmissionIntensity: 0
+  - MaterialId: 3
+    DisplayName: Gravel Crest
+    TopTileId: 3
+    SideTileId: 3
+    BottomTileId: 3
+    RenderCategory: 0
+    LightingCategory: 0
+    EmissionIntensity: 0
+  - MaterialId: 4
+    DisplayName: Meadow Turf
+    TopTileId: 4
+    SideTileId: 4
+    BottomTileId: 4
+    RenderCategory: 0
+    LightingCategory: 0
+    EmissionIntensity: 0
+  - MaterialId: 5
+    DisplayName: Loam Matrix
+    TopTileId: 5
+    SideTileId: 5
+    BottomTileId: 5
+    RenderCategory: 0
+    LightingCategory: 0
+    EmissionIntensity: 0
+  - MaterialId: 6
+    DisplayName: Packed Frost Soil
+    TopTileId: 6
+    SideTileId: 6
+    BottomTileId: 6
+    RenderCategory: 0
+    LightingCategory: 0
+    EmissionIntensity: 0
+  - MaterialId: 7
+    DisplayName: Weathered Sandstone
+    TopTileId: 7
+    SideTileId: 7
+    BottomTileId: 7
+    RenderCategory: 0
+    LightingCategory: 0
+    EmissionIntensity: 0
+  - MaterialId: 8
+    DisplayName: Rooted Earth
+    TopTileId: 8
+    SideTileId: 8
+    BottomTileId: 8
+    RenderCategory: 0
+    LightingCategory: 0
+    EmissionIntensity: 0
+  - MaterialId: 9
+    DisplayName: Basalt Core
+    TopTileId: 9
+    SideTileId: 9
+    BottomTileId: 9
+    RenderCategory: 0
+    LightingCategory: 0
+    EmissionIntensity: 0
+  - MaterialId: 10
+    DisplayName: Glacial Stone
+    TopTileId: 10
+    SideTileId: 10
+    BottomTileId: 10
+    RenderCategory: 0
+    LightingCategory: 0
+    EmissionIntensity: 0
+  - MaterialId: 11
+    DisplayName: Granite Vein
+    TopTileId: 11
+    SideTileId: 11
+    BottomTileId: 11
+    RenderCategory: 0
+    LightingCategory: 0
+    EmissionIntensity: 0
+  - MaterialId: 12
+    DisplayName: Claystone Bed
+    TopTileId: 12
+    SideTileId: 12
+    BottomTileId: 12
+    RenderCategory: 0
+    LightingCategory: 0
+    EmissionIntensity: 0
+  - MaterialId: 13
+    DisplayName: Arid Sand
+    TopTileId: 13
+    SideTileId: 13
+    BottomTileId: 13
+    RenderCategory: 0
+    LightingCategory: 0
+    EmissionIntensity: 0
+  - MaterialId: 14
+    DisplayName: Shale Drift
+    TopTileId: 14
+    SideTileId: 14
+    BottomTileId: 14
+    RenderCategory: 0
+    LightingCategory: 0
+    EmissionIntensity: 0
+  - MaterialId: 15
+    DisplayName: Ironstone Band
+    TopTileId: 15
+    SideTileId: 15
+    BottomTileId: 15
+    RenderCategory: 0
+    LightingCategory: 0
+    EmissionIntensity: 0
+  - MaterialId: 16
+    DisplayName: Marble Shelf
+    TopTileId: 16
+    SideTileId: 16
+    BottomTileId: 16
+    RenderCategory: 0
+    LightingCategory: 0
+    EmissionIntensity: 0
+  - MaterialId: 17
+    DisplayName: Moss Fronds
+    TopTileId: 17
+    SideTileId: 17
+    BottomTileId: 17
+    RenderCategory: 1
+    LightingCategory: 0
+    EmissionIntensity: 0
+  - MaterialId: 18
+    DisplayName: Dry Brush Mat
+    TopTileId: 18
+    SideTileId: 18
+    BottomTileId: 18
+    RenderCategory: 1
+    LightingCategory: 0
+    EmissionIntensity: 0
+  - MaterialId: 19
+    DisplayName: Shallow Water
+    TopTileId: 19
+    SideTileId: 19
+    BottomTileId: 19
+    RenderCategory: 2
+    LightingCategory: 0
+    EmissionIntensity: 0
+  - MaterialId: 20
+    DisplayName: Deep Water
+    TopTileId: 20
+    SideTileId: 20
+    BottomTileId: 20
+    RenderCategory: 2
+    LightingCategory: 0
+    EmissionIntensity: 0
+  - MaterialId: 21
+    DisplayName: Moon Dust
+    TopTileId: 21
+    SideTileId: 21
+    BottomTileId: 21
+    RenderCategory: 0
+    LightingCategory: 1
+    EmissionIntensity: 0
+  - MaterialId: 22
+    DisplayName: Ember Glass
+    TopTileId: 22
+    SideTileId: 22
+    BottomTileId: 22
+    RenderCategory: 0
+    LightingCategory: 2
+    EmissionIntensity: 1.5
+  - MaterialId: 23
+    DisplayName: Lumen Crystal
+    TopTileId: 23
+    SideTileId: 23
+    BottomTileId: 23
+    RenderCategory: 0
+    LightingCategory: 2
+    EmissionIntensity: 3
+  - MaterialId: 24
+    DisplayName: Core Plasma
+    TopTileId: 24
+    SideTileId: 24
+    BottomTileId: 24
+    RenderCategory: 0
+    LightingCategory: 2
+    EmissionIntensity: 5
+  - MaterialId: 25
+    DisplayName: Ashfield
+    TopTileId: 25
+    SideTileId: 25
+    BottomTileId: 25
+    RenderCategory: 0
+    LightingCategory: 0
+    EmissionIntensity: 0
+  - MaterialId: 26
+    DisplayName: Silt Plain
+    TopTileId: 26
+    SideTileId: 26
+    BottomTileId: 26
+    RenderCategory: 0
+    LightingCategory: 0
+    EmissionIntensity: 0
+  - MaterialId: 27
+    DisplayName: Oxide Crust
+    TopTileId: 27
+    SideTileId: 27
+    BottomTileId: 27
+    RenderCategory: 0
+    LightingCategory: 0
+    EmissionIntensity: 0
+  - MaterialId: 28
+    DisplayName: Chalk Bed
+    TopTileId: 28
+    SideTileId: 28
+    BottomTileId: 28
+    RenderCategory: 0
+    LightingCategory: 0
+    EmissionIntensity: 0
+  - MaterialId: 29
+    DisplayName: Mist Vapor
+    TopTileId: 29
+    SideTileId: 29
+    BottomTileId: 29
+    RenderCategory: 2
+    LightingCategory: 1
+    EmissionIntensity: 0
+  - MaterialId: 30
+    DisplayName: Reed Cluster
+    TopTileId: 30
+    SideTileId: 30
+    BottomTileId: 30
+    RenderCategory: 1
+    LightingCategory: 1
+    EmissionIntensity: 0
+  - MaterialId: 31
+    DisplayName: Nova Ore
+    TopTileId: 31
+    SideTileId: 31
+    BottomTileId: 31
+    RenderCategory: 0
+    LightingCategory: 2
+    EmissionIntensity: 7
+  - MaterialId: 32
+    DisplayName: Starforge Core
+    TopTileId: 32
+    SideTileId: 32
+    BottomTileId: 32
+    RenderCategory: 0
+    LightingCategory: 2
+    EmissionIntensity: 8

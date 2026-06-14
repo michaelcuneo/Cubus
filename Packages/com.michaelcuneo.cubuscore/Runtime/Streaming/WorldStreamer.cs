@@ -21,6 +21,29 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     [SerializeField] private Transform viewer;
     [SerializeField] private StreamingSettings settings = new();
 
+    [Header("Density Mesh LOD")]
+    [SerializeField] private bool useDistanceDensityMeshLod = true;
+
+    [SerializeField]
+    [Min(0)]
+    private int densityFullResolutionRadiusInChunks = 1;
+
+    [SerializeField]
+    [Min(1)]
+    private int densityHalfResolutionRadiusInChunks = 3;
+
+    [SerializeField]
+    [Range(1, 4)]
+    private int densityNearCellStep = 1;
+
+    [SerializeField]
+    [Range(1, 4)]
+    private int densityMidCellStep = 2;
+
+    [SerializeField]
+    [Range(1, 4)]
+    private int densityFarCellStep = 4;
+
     private readonly HashSet<Vector3Int> desiredChunkCoords = new();
     private readonly HashSet<Vector3Int> keepChunkCoords = new();
     private readonly Queue<Vector3Int> pendingGenerateQueue = new();
@@ -62,12 +85,12 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     private float timeSinceLastStreamingLog;
 
     [Header("Pre-Generation")]
-    [SerializeField] private bool useIncrementalPreGeneration = true;
-    [SerializeField][Min(1)] private int preGenerationChunksPerFrame = 4;
-    [SerializeField][Min(0)] private int spawnFirstRadiusInChunks = 1;
-    [SerializeField] private bool continuePreGenerationInBackground = true;
+    [SerializeField] private bool useIncrementalPreGeneration = false;
+    [SerializeField][Min(1)] private int preGenerationChunksPerFrame = 1;
+    [SerializeField][Min(0)] private int spawnFirstRadiusInChunks = 0;
+    [SerializeField] private bool continuePreGenerationInBackground = false;
     [SerializeField][Min(1)] private int maxAutoPreGenerationChunks = 8192;
-    [SerializeField] private bool allowVeryLargePreGeneration;
+    [SerializeField] private bool allowVeryLargePreGeneration = false;
 
     private Coroutine bootstrapCoroutine;
     private bool backgroundPreGenerationActive;
@@ -141,6 +164,39 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       int surfaceChunkY = generator.GetSurfaceChunkYForChunkColumn(column);
       surfaceChunkYCache[column] = surfaceChunkY;
       return surfaceChunkY;
+    }
+
+    private int GetDensityCellStepForChunk(Vector3Int chunkCoord)
+    {
+      if (!useDistanceDensityMeshLod)
+      {
+        return Mathf.Max(1, world.Settings.DensityMeshStep);
+      }
+
+      Vector3 referencePosition = GetSpawnReferencePosition();
+      Vector3Int viewerChunkCoord = WorldToChunkCoord(referencePosition);
+
+      int dx = Mathf.Abs(chunkCoord.x - viewerChunkCoord.x);
+      int dy = Mathf.Abs(chunkCoord.y - viewerChunkCoord.y);
+      int dz = Mathf.Abs(chunkCoord.z - viewerChunkCoord.z);
+
+      // Horizontal distance matters most for terrain visibility.
+      // Include Y lightly so vertical slabs do not all become full-res.
+      int horizontalDistance = Mathf.Max(dx, dz);
+      int verticalDistance = dy;
+      int lodDistance = Mathf.Max(horizontalDistance, verticalDistance / 2);
+
+      if (lodDistance <= densityFullResolutionRadiusInChunks)
+      {
+        return Mathf.Clamp(densityNearCellStep, 1, 4);
+      }
+
+      if (lodDistance <= densityHalfResolutionRadiusInChunks)
+      {
+        return Mathf.Clamp(densityMidCellStep, 1, 4);
+      }
+
+      return Mathf.Clamp(densityFarCellStep, 1, 4);
     }
 
     private void Awake()
@@ -766,12 +822,14 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
           existingSnapshot = existing.Clone();
         }
 
+        int densityCellStep = GetDensityCellStepForChunk(chunkCoord);
+
         DensityChunkBuildRequest request = new()
         {
           ChunkCoord = chunkCoord,
           GenerationId = densityBuildQueue.GenerationId,
           WorldSnapshot = worldSnapshot,
-          CellStep = Mathf.Max(1, world.Settings.DensityMeshStep),
+          CellStep = densityCellStep,
           FlipWinding = true,
           OverrideSnapshot = world.CreateDensityOverrideSnapshot(chunkCoord),
           ChunkDataSnapshot = existingSnapshot
@@ -932,15 +990,23 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         knownEmptyChunks.Remove(result.ChunkCoord);
         world.Data.DensityChunks[result.ChunkCoord] = result.ChunkData;
 
-        // Build optimized mesh now on main thread using jobs
-        int cellStep = Mathf.Max(1, world.Settings.DensityMeshStep);
+        // Build optimized mesh now on main thread using jobs.
+        // TODO: move this whole mesh build into DensityChunkBuildQueue later.
+        // For now, at least use distance-based LOD.
+        int cellStep = GetDensityCellStepForChunk(result.ChunkCoord);
         float densityScale = Mathf.Max(0.001f, worldSnapshot.DensitySampleScale);
+
         var mesh = MarchingCubesMesher.GenerateMeshDirect(
             result.ChunkCoord,
             worldSnapshot,
             cellStep,
-          true,
-          worldVoxel => SampleDensityForMeshing(worldVoxel, result.ChunkCoord, result.ChunkData, densityScale)
+            true,
+            worldVoxel => SampleDensityForMeshing(
+                worldVoxel,
+                result.ChunkCoord,
+                result.ChunkData,
+                densityScale
+            )
         );
 
         if (mesh == null || mesh.vertexCount == 0)
@@ -1433,7 +1499,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         DensityChunkBuilder.ApplyOverrides(chunkData, overrides);
       }
 
-      int cellStep = Mathf.Max(1, world.Settings.DensityMeshStep);
+      int cellStep = GetDensityCellStepForChunk(chunkCoord);
       float densityScale = Mathf.Max(0.001f, worldSnapshot.DensitySampleScale);
 
       Mesh mesh = MarchingCubesMesher.GenerateMeshDirect(

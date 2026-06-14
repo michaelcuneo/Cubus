@@ -148,7 +148,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
       }
 
       ChunkView chunkView = GetOrCreateChunkView(chunkCoord);
-      chunkView.ApplyMesh(unityMesh, collisionMode != WorldCollisionMode.None);
+      // chunkView.ApplyMesh(unityMesh, collisionMode != WorldCollisionMode.None);
+      chunkView.ApplyMesh(unityMesh, false);
 
       if (logRenderedChunkMeshes)
       {

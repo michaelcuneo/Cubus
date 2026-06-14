@@ -1,0 +1,60 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bb44a8b084ab43747af44680a8bd10ab, type: 3}
+  m_Name: Snowy_Mountains
+  m_EditorClassIdentifier: CubusCore.Runtime::CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain.BiomeDefinition
+  BiomeId: 40
+  BiomeName: Snowy Mountains
+  GenerationProfile:
+    UseWorldEdgeFalloff: 0
+    WorldEdgeRadius: 100000
+    WorldEdgeTargetHeight: -55
+    BaseHeight: 30
+    HeightScale: 98
+    LandformStyle: 3
+    MacroFrequency: 0.92
+    MacroStrength: 1.2
+    HillsFrequency: 1.04
+    HillsStrength: 1.08
+    DetailFrequency: 0.92
+    DetailStrength: 0.72
+    RidgeFrequency: 1.22
+    RidgeStrength: 1.55
+    RidgeSharpness: 2.9
+    ValleyFrequency: 0.95
+    ValleyStrength: 0.95
+    BasinDepth: 0
+    DuneFrequency: 1
+    DuneStrength: 0
+    CaveStrength: 0.09
+    CaveFrequency: 0.031
+    CaveStartDepth: 26
+    MaterialLayers:
+    - MaxDepthBelowSurface: 2
+      MaterialId: 2
+      Label: Snow
+    - MaxDepthBelowSurface: 8
+      MaterialId: 6
+      Label: Packed Snow
+    - MaxDepthBelowSurface: 99999
+      MaterialId: 10
+      Label: Frozen Rock
+  MaterialSet: {fileID: 11400000, guid: d4f3a5b6c7e84a41d2f3a4b5c6d7e804, type: 2}
+  AutoApplyMaterialSet: 1
+  SettingsXYZ: {x: 1, y: 1, z: 1}
+  TextureXYZ: {x: 1, y: 1, z: 1}
+  RuleXYZ: {x: 1, y: 1, z: 1}
+  Temperature: 0.12
+  Elevation: 0.82
+  Rise: 0.86
+  Harshness: 0.84
+  Erosion: 0.24

@@ -1,0 +1,60 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bb44a8b084ab43747af44680a8bd10ab, type: 3}
+  m_Name: Green_Plains
+  m_EditorClassIdentifier: CubusCore.Runtime::CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain.BiomeDefinition
+  BiomeId: 20
+  BiomeName: Green Plains
+  GenerationProfile:
+    UseWorldEdgeFalloff: 0
+    WorldEdgeRadius: 100000
+    WorldEdgeTargetHeight: -55
+    BaseHeight: 16
+    HeightScale: 30
+    LandformStyle: 1
+    MacroFrequency: 0.85
+    MacroStrength: 0.8
+    HillsFrequency: 1.2
+    HillsStrength: 0.45
+    DetailFrequency: 1.15
+    DetailStrength: 0.55
+    RidgeFrequency: 0.8
+    RidgeStrength: 0.08
+    RidgeSharpness: 1.4
+    ValleyFrequency: 0.9
+    ValleyStrength: 0.35
+    BasinDepth: 0
+    DuneFrequency: 1
+    DuneStrength: 0
+    CaveStrength: 0.03
+    CaveFrequency: 0.028
+    CaveStartDepth: 18
+    MaterialLayers:
+    - MaxDepthBelowSurface: 3
+      MaterialId: 4
+      Label: Grass
+    - MaxDepthBelowSurface: 14
+      MaterialId: 8
+      Label: Dirt
+    - MaxDepthBelowSurface: 99999
+      MaterialId: 12
+      Label: Clay
+  MaterialSet: {fileID: 11400000, guid: b2f1d3e4a5c6482fb0d1e2f3a4b5c602, type: 2}
+  AutoApplyMaterialSet: 1
+  SettingsXYZ: {x: 1, y: 1, z: 1}
+  TextureXYZ: {x: 1, y: 1, z: 1}
+  RuleXYZ: {x: 1, y: 1, z: 1}
+  Temperature: 0.62
+  Elevation: 0.32
+  Rise: 0.28
+  Harshness: 0.22
+  Erosion: 0.58
