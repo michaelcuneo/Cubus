@@ -836,8 +836,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         };
 
         if (densityBuildQueue.TryStartBuild(
-            request,
-            settings.MaxAsyncChunkTasks))
+           request,
+           settings.MaxAsyncChunkTasks))
         {
           startedThisFrame++;
         }

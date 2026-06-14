@@ -184,7 +184,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
       bool flipWinding = true,
       Func<Vector3Int, CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Voxels.DensityVoxel> sampleVoxelAtWorld = null)
     {
-      // Force full-resolution density meshing for correctness. Coarser sampling currently introduces holes/artifacts.
+      // Use requested density mesh LOD. Higher cellStep reduces mesh cost for distant chunks.
       int safeCellStep = Mathf.Clamp(cellStep, 1, 4);
       int numCellsAxis = Mathf.CeilToInt((float)VoxelConstants.ChunkSize / safeCellStep);
       int numSamplesAxis = numCellsAxis + 1;
