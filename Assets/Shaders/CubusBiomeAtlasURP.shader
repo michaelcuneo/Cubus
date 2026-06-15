@@ -167,16 +167,11 @@ Shader "Cubus/BiomeAtlasURP"
         float totalTiles = max(1.0, columns * rows);
 
         float tile = fmod(tileId - 1.0, totalTiles);
-        float row = floor(tile / columns);
-        float col = tile - (row * columns);
+        float sourceRowTopToBottom = floor(tile / columns);
+        float row = rows - 1.0 - sourceRowTopToBottom;
+        float col = tile - (sourceRowTopToBottom * columns);
 
         float2 atlasGrid = float2(columns, rows);
-
-        // The greedy mesher writes UVs in voxel-tile units.
-        // A 1-wide face is 0..1, a 16-wide greedy face is 0..16.
-        // frac() gives one tile per voxel, but using implicit derivatives
-        // from frac() can choose awful mips and look stretched/compressed.
-        // Use gradients from the unwrapped UVs instead.
         float2 unwrappedTileUv = IN.uv;
         float2 tileUv = frac(unwrappedTileUv);
 
