@@ -139,7 +139,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World
           BiomeRuleWorldScale
       );
 
-      float feather = Mathf.Max(0.0001f, BiomeBlendFeather);
+      float feather = Mathf.Clamp(BiomeBlendFeather, 0.0001f, 1.0f);
 
       int fallbackIndex = -1;
       int fallbackPriority = int.MinValue;
@@ -185,14 +185,14 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World
           selector
       );
 
-      int lowerIndex = -1;
-      int upperIndex = -1;
+      float priorityRange = Mathf.Max(1.0f, maxPriority - minPriority);
 
-      int lowerPriority = int.MinValue;
-      int upperPriority = int.MaxValue;
+      float priorityWindow = Mathf.Max(
+          2.0f,
+          priorityRange * Mathf.Lerp(0.10f, 0.65f, feather)
+      );
 
-      float lowerValidity = 0.0f;
-      float upperValidity = 0.0f;
+      float totalWeight = 0.0f;
 
       for (int i = 0; i < BiomeRules.Length; i++)
       {
@@ -210,126 +210,32 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World
           continue;
         }
 
-        if (rule.Priority <= targetPriority && rule.Priority > lowerPriority)
+        float priorityDistance = Mathf.Abs(rule.Priority - targetPriority);
+        float priorityT = Mathf.Clamp01(1.0f - priorityDistance / priorityWindow);
+        float priorityWeight = priorityT * priorityT * (3.0f - 2.0f * priorityT);
+
+        if (priorityWeight <= 0.0001f)
         {
-          lowerPriority = rule.Priority;
-          lowerIndex = i;
-          lowerValidity = validity;
+          continue;
         }
 
-        if (rule.Priority >= targetPriority && rule.Priority < upperPriority)
+        float weight = validity * priorityWeight;
+
+        if (weight <= 0.0001f)
         {
-          upperPriority = rule.Priority;
-          upperIndex = i;
-          upperValidity = validity;
+          continue;
         }
-      }
-
-      if (lowerIndex < 0 && upperIndex < 0)
-      {
-        int nearestIndex = FindNearestValidBiomeRuleIndex(
-            targetPriority,
-            climate,
-            feather
-        );
-
-        if (nearestIndex >= 0)
-        {
-          BiomeRuleSnapshot nearestRule = BiomeRules[nearestIndex];
-
-          result.Add(new BiomeBlendContributor(
-              nearestRule.Profile,
-              nearestRule.BiomeId,
-              1.0f
-          ));
-
-          result.Normalize();
-          return result;
-        }
-
-        AddFallbackBiome(result, fallbackIndex);
-        result.Normalize();
-        return result;
-      }
-
-      if (lowerIndex < 0)
-      {
-        BiomeRuleSnapshot upperOnly = BiomeRules[upperIndex];
-
-        result.Add(new BiomeBlendContributor(
-            upperOnly.Profile,
-            upperOnly.BiomeId,
-            1.0f
-        ));
-
-        result.Normalize();
-        return result;
-      }
-
-      if (upperIndex < 0)
-      {
-        BiomeRuleSnapshot lowerOnly = BiomeRules[lowerIndex];
-
-        result.Add(new BiomeBlendContributor(
-            lowerOnly.Profile,
-            lowerOnly.BiomeId,
-            1.0f
-        ));
-
-        result.Normalize();
-        return result;
-      }
-
-      if (lowerIndex == upperIndex || lowerPriority == upperPriority)
-      {
-        BiomeRuleSnapshot rule = BiomeRules[lowerIndex];
 
         result.Add(new BiomeBlendContributor(
             rule.Profile,
             rule.BiomeId,
-            1.0f
+            weight
         ));
 
-        result.Normalize();
-        return result;
+        totalWeight += weight;
       }
 
-      float priorityT = Mathf.InverseLerp(
-          lowerPriority,
-          upperPriority,
-          targetPriority
-      );
-
-      float edge = Mathf.Clamp01(feather);
-      float blendT;
-
-      if (edge <= 0.0001f)
-      {
-        blendT = priorityT < 0.5f ? 0.0f : 1.0f;
-      }
-      else if (priorityT < 0.5f - edge * 0.5f)
-      {
-        blendT = 0.0f;
-      }
-      else if (priorityT > 0.5f + edge * 0.5f)
-      {
-        blendT = 1.0f;
-      }
-      else
-      {
-        blendT = Mathf.InverseLerp(
-            0.5f - edge * 0.5f,
-            0.5f + edge * 0.5f,
-            priorityT
-        );
-
-        blendT = blendT * blendT * (3.0f - 2.0f * blendT);
-      }
-
-      float lowerWeight = (1.0f - blendT) * lowerValidity;
-      float upperWeight = blendT * upperValidity;
-
-      if (lowerWeight <= 0.0001f && upperWeight <= 0.0001f)
+      if (totalWeight <= 0.0001f || result.Count <= 0)
       {
         int nearestIndex = FindNearestValidBiomeRuleIndex(
             targetPriority,
@@ -351,30 +257,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World
         {
           AddFallbackBiome(result, fallbackIndex);
         }
-
-        result.Normalize();
-        return result;
-      }
-
-      BiomeRuleSnapshot lowerRule = BiomeRules[lowerIndex];
-      BiomeRuleSnapshot upperRule = BiomeRules[upperIndex];
-
-      if (lowerWeight > 0.0001f)
-      {
-        result.Add(new BiomeBlendContributor(
-            lowerRule.Profile,
-            lowerRule.BiomeId,
-            lowerWeight
-        ));
-      }
-
-      if (upperWeight > 0.0001f)
-      {
-        result.Add(new BiomeBlendContributor(
-            upperRule.Profile,
-            upperRule.BiomeId,
-            upperWeight
-        ));
       }
 
       result.Normalize();

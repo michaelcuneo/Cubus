@@ -66,8 +66,21 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
           {
             for (x[u] = 0; x[u] < size; x[u]++)
             {
-              ushort materialA = GetMaterialNeighbourAware(chunkData, snapshot, x[0], x[1], x[2]);
-              ushort materialB = GetMaterialNeighbourAware(chunkData, snapshot, x[0] + q[0], x[1] + q[1], x[2] + q[2]);
+              ushort materialA = GetMaterialNeighbourAware(
+                  chunkData,
+                  snapshot,
+                  x[0],
+                  x[1],
+                  x[2]
+              );
+
+              ushort materialB = GetMaterialNeighbourAware(
+                  chunkData,
+                  snapshot,
+                  x[0] + q[0],
+                  x[1] + q[1],
+                  x[2] + q[2]
+              );
 
               bool solidA = materialA != 0;
               bool solidB = materialB != 0;
@@ -133,12 +146,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
                 height++;
               }
 
-              Span<int> d1 = stackalloc int[3];
-              Span<int> d2 = stackalloc int[3];
-
-              d1[u] = width;
-              d2[v] = height;
-
               Span<int> start = stackalloc int[3];
               start[0] = x[0];
               start[1] = x[1];
@@ -150,35 +157,20 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
               bool positiveFace = currentMask > 0;
               ushort materialId = (ushort)Math.Abs(currentMask);
 
-              Vector3 p0 = ToPosition(start[0], start[1], start[2], voxelSize);
-              Vector3 p1 = ToPosition(start[0] + d1[0], start[1] + d1[1], start[2] + d1[2], voxelSize);
-              Vector3 p2 = ToPosition(start[0] + d1[0] + d2[0], start[1] + d1[1] + d2[1], start[2] + d1[2] + d2[2], voxelSize);
-              Vector3 p3 = ToPosition(start[0] + d2[0], start[1] + d2[1], start[2] + d2[2], voxelSize);
-
-              Vector3 v0;
-              Vector3 v1;
-              Vector3 v2;
-              Vector3 v3;
-
-              if (positiveFace)
-              {
-                v0 = p0;
-                v1 = p3;
-                v2 = p2;
-                v3 = p1;
-              }
-              else
-              {
-                v0 = p0;
-                v1 = p1;
-                v2 = p2;
-                v3 = p3;
-              }
-
-              Vector3 normal = Vector3.zero;
-              normal[axis] = positiveFace ? 1.0f : -1.0f;
-
-              AddQuad(mesh, v0, v1, v2, v3, normal, materialId, new Vector2(width, height));
+              AddVoxelTiledGreedyQuad(
+                  mesh,
+                  axis,
+                  u,
+                  v,
+                  start[0],
+                  start[1],
+                  start[2],
+                  width,
+                  height,
+                  positiveFace,
+                  materialId,
+                  voxelSize
+              );
 
               for (int y = 0; y < height; y++)
               {
@@ -197,10 +189,9 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
     }
 
     public static MeshData GenerateNeighbourAware(
-      BlockChunkData chunkData,
-      BlockChunkNeighborhood neighborhood,
-      float voxelSize
-    )
+        BlockChunkData chunkData,
+        BlockChunkNeighborhood neighborhood,
+        float voxelSize)
     {
       MeshData mesh = new();
       mesh.Reserve(4096, 6144);
@@ -210,10 +201,10 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
           worldVoxelCoord =>
           {
             Vector3Int local = worldVoxelCoord - new Vector3Int(
-              chunkData.ChunkCoord.x * VoxelConstants.ChunkSize,
-              chunkData.ChunkCoord.y * VoxelConstants.ChunkSize,
-              chunkData.ChunkCoord.z * VoxelConstants.ChunkSize
-          );
+                chunkData.ChunkCoord.x * VoxelConstants.ChunkSize,
+                chunkData.ChunkCoord.y * VoxelConstants.ChunkSize,
+                chunkData.ChunkCoord.z * VoxelConstants.ChunkSize
+            );
 
             return neighborhood.GetMaterial(local.x, local.y, local.z);
           },
@@ -233,7 +224,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
       mesh.Reset();
 
       const int size = VoxelConstants.ChunkSize;
-
       Span<int> mask = stackalloc int[size * size];
 
       for (int axis = 0; axis < 3; axis++)
@@ -336,12 +326,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
                 height++;
               }
 
-              Span<int> d1 = stackalloc int[3];
-              Span<int> d2 = stackalloc int[3];
-
-              d1[u] = width;
-              d2[v] = height;
-
               Span<int> start = stackalloc int[3];
               start[0] = x[0];
               start[1] = x[1];
@@ -353,61 +337,19 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
               bool positiveFace = currentMask > 0;
               ushort materialId = (ushort)Math.Abs(currentMask);
 
-              Vector3 p0 = ToPosition(start[0], start[1], start[2], voxelSize);
-
-              Vector3 p1 = ToPosition(
-                  start[0] + d1[0],
-                  start[1] + d1[1],
-                  start[2] + d1[2],
-                  voxelSize
-              );
-
-              Vector3 p2 = ToPosition(
-                  start[0] + d1[0] + d2[0],
-                  start[1] + d1[1] + d2[1],
-                  start[2] + d1[2] + d2[2],
-                  voxelSize
-              );
-
-              Vector3 p3 = ToPosition(
-                  start[0] + d2[0],
-                  start[1] + d2[1],
-                  start[2] + d2[2],
-                  voxelSize
-              );
-
-              Vector3 v0;
-              Vector3 v1;
-              Vector3 v2;
-              Vector3 v3;
-
-              if (positiveFace)
-              {
-                v0 = p0;
-                v1 = p3;
-                v2 = p2;
-                v3 = p1;
-              }
-              else
-              {
-                v0 = p0;
-                v1 = p1;
-                v2 = p2;
-                v3 = p3;
-              }
-
-              Vector3 normal = Vector3.zero;
-              normal[axis] = positiveFace ? 1.0f : -1.0f;
-
-              AddQuad(
+              AddVoxelTiledGreedyQuad(
                   mesh,
-                  v0,
-                  v1,
-                  v2,
-                  v3,
-                  normal,
+                  axis,
+                  u,
+                  v,
+                  start[0],
+                  start[1],
+                  start[2],
+                  width,
+                  height,
+                  positiveFace,
                   materialId,
-                  new Vector2(width, height)
+                  voxelSize
               );
 
               for (int y = 0; y < height; y++)
@@ -466,6 +408,100 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
 
       Vector3Int worldVoxel = chunkData.LocalToWorldVoxel(localX, localY, localZ);
       return BlockChunkBuilder.SampleMaterialAtWorldVoxel(worldVoxel, snapshot);
+    }
+
+    private static void AddVoxelTiledGreedyQuad(
+        MeshData mesh,
+        int axis,
+        int u,
+        int v,
+        int startX,
+        int startY,
+        int startZ,
+        int width,
+        int height,
+        bool positiveFace,
+        ushort materialId,
+        float voxelSize)
+    {
+      Vector3 normal = Vector3.zero;
+      normal[axis] = positiveFace ? 1.0f : -1.0f;
+
+      for (int tileY = 0; tileY < height; tileY++)
+      {
+        for (int tileX = 0; tileX < width; tileX++)
+        {
+          Vector3Int start = new(startX, startY, startZ);
+
+          start[u] = start[u] + tileX;
+          start[v] = start[v] + tileY;
+
+          Vector3Int d1 = Vector3Int.zero;
+          Vector3Int d2 = Vector3Int.zero;
+
+          d1[u] = 1;
+          d2[v] = 1;
+
+          Vector3 p0 = ToPosition(
+              start.x,
+              start.y,
+              start.z,
+              voxelSize
+          );
+
+          Vector3 p1 = ToPosition(
+              start.x + d1.x,
+              start.y + d1.y,
+              start.z + d1.z,
+              voxelSize
+          );
+
+          Vector3 p2 = ToPosition(
+              start.x + d1.x + d2.x,
+              start.y + d1.y + d2.y,
+              start.z + d1.z + d2.z,
+              voxelSize
+          );
+
+          Vector3 p3 = ToPosition(
+              start.x + d2.x,
+              start.y + d2.y,
+              start.z + d2.z,
+              voxelSize
+          );
+
+          Vector3 v0;
+          Vector3 v1;
+          Vector3 v2;
+          Vector3 v3;
+
+          if (positiveFace)
+          {
+            v0 = p0;
+            v1 = p3;
+            v2 = p2;
+            v3 = p1;
+          }
+          else
+          {
+            v0 = p0;
+            v1 = p1;
+            v2 = p2;
+            v3 = p3;
+          }
+
+          AddQuad(
+              mesh,
+              v0,
+              v1,
+              v2,
+              v3,
+              normal,
+              materialId,
+              Vector2.one
+          );
+        }
+      }
     }
 
     private static Vector3 ToPosition(int x, int y, int z, float voxelSize)

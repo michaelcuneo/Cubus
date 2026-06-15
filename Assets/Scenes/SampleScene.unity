@@ -457,8 +457,8 @@ MonoBehaviour:
     DensityMaxChunkY: 2
     DensityMeshStep: 1
     DensitySampleScale: 1
-    BiomeRuleWorldScale: 0.15
-    BiomeBlendFeather: 0.12
+    BiomeRuleWorldScale: 8
+    BiomeBlendFeather: 0.55
     BiomeWorldRules:
     - RuleName: Brown Valley
       IsFallback: 0

@@ -2,6 +2,7 @@ using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Chunks;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Core;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Voxels;
+using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -101,34 +102,19 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World
 
     public void GenerateBlockChunkData(BlockChunkData chunkData)
     {
-      const int size = VoxelConstants.ChunkSize;
+      BlockChunkData generated = BlockChunkBuilder.GenerateChunkData(
+          chunkData.ChunkCoord,
+          WorldGenerationSnapshot.FromSettings(settings),
+          null,
+          out _
+      );
 
-      for (int z = 0; z < size; z++)
+      Voxel[] source = generated.GetRawVoxelArray();
+      Voxel[] target = chunkData.GetRawVoxelArray();
+
+      for (int i = 0; i < source.Length; i++)
       {
-        for (int x = 0; x < size; x++)
-        {
-          for (int y = 0; y < size; y++)
-          {
-            Vector3Int worldVoxel = chunkData.LocalToWorldVoxel(x, y, z);
-
-            TerrainSample sample = BiomeTerrainSampler.Sample(
-                settings,
-                worldVoxel,
-                1.0f
-            );
-
-            ushort materialId = sample.Density > 0.0f
-                ? (ushort)Mathf.Clamp(sample.SolidMaterialId, 1, 65535)
-                : (ushort)0;
-
-            chunkData.SetVoxel(
-                x,
-                y,
-                z,
-                new Voxel(materialId)
-            );
-          }
-        }
+        target[i] = source[i];
       }
     }
 
@@ -136,28 +122,19 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World
       BlockChunkData chunkData,
       IReadOnlyDictionary<int, ushort> overrides)
     {
-      GenerateBlockChunkData(chunkData);
+      BlockChunkData generated = BlockChunkBuilder.GenerateChunkData(
+          chunkData.ChunkCoord,
+          WorldGenerationSnapshot.FromSettings(settings),
+          overrides,
+          out _
+      );
 
-      if (overrides == null)
+      Voxel[] source = generated.GetRawVoxelArray();
+      Voxel[] target = chunkData.GetRawVoxelArray();
+
+      for (int i = 0; i < source.Length; i++)
       {
-        return;
-      }
-
-      foreach (KeyValuePair<int, ushort> pair in overrides)
-      {
-        int voxelIndex = pair.Key;
-        ushort materialId = pair.Value;
-
-        if (voxelIndex < 0 || voxelIndex >= VoxelConstants.ChunkVolume)
-        {
-          continue;
-        }
-
-        int x = voxelIndex % VoxelConstants.ChunkSize;
-        int y = voxelIndex / VoxelConstants.ChunkSize % VoxelConstants.ChunkSize;
-        int z = voxelIndex / (VoxelConstants.ChunkSize * VoxelConstants.ChunkSize);
-
-        chunkData.SetVoxel(x, y, z, new Voxel(materialId));
+        target[i] = source[i];
       }
     }
 

@@ -565,11 +565,13 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
 
       for (int id = 0; id < texelCount; id++)
       {
-        ushort safeId = id == 0 ? (ushort)1 : (ushort)id;
-        Color32 encodedId = EncodeU16(safeId);
-        topPixels[id] = encodedId;
-        sidePixels[id] = encodedId;
-        bottomPixels[id] = encodedId;
+        ushort fallbackTileId = id == 0 ? (ushort)1 : (ushort)Mathf.Clamp(id, 1, 64);
+        Color32 encodedFallbackTile = EncodeU16(fallbackTileId);
+
+        topPixels[id] = encodedFallbackTile;
+        sidePixels[id] = encodedFallbackTile;
+        bottomPixels[id] = encodedFallbackTile;
+
         propsPixels[id] = new Color32(
             (byte)BlockRenderCategory.Opaque,
             (byte)BlockLightingCategory.Lit,
@@ -578,24 +580,46 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
         );
       }
 
+      ApplyDefaultMaterialMapping(
+          topPixels,
+          sidePixels,
+          bottomPixels,
+          propsPixels
+      );
+
       if (blockMaterialDatabase != null && blockMaterialDatabase.Definitions != null)
       {
         for (int i = 0; i < blockMaterialDatabase.Definitions.Count; i++)
         {
           BlockMaterialDefinition def = blockMaterialDatabase.Definitions[i];
+
           if (def == null)
           {
             continue;
           }
 
           int materialId = Mathf.Clamp(def.MaterialId, 1, 65535);
-          topPixels[materialId] = EncodeU16((ushort)Mathf.Clamp(def.TopTileId, 1, 65535));
-          sidePixels[materialId] = EncodeU16((ushort)Mathf.Clamp(def.SideTileId, 1, 65535));
-          bottomPixels[materialId] = EncodeU16((ushort)Mathf.Clamp(def.BottomTileId, 1, 65535));
+
+          topPixels[materialId] = EncodeU16(
+              (ushort)Mathf.Clamp(def.TopTileId, 1, 64)
+          );
+
+          sidePixels[materialId] = EncodeU16(
+              (ushort)Mathf.Clamp(def.SideTileId, 1, 64)
+          );
+
+          bottomPixels[materialId] = EncodeU16(
+              (ushort)Mathf.Clamp(def.BottomTileId, 1, 64)
+          );
+
           propsPixels[materialId] = new Color32(
               (byte)def.RenderCategory,
               (byte)def.LightingCategory,
-              (byte)Mathf.Clamp(Mathf.RoundToInt(def.EmissionIntensity * 31.875f), 0, 255),
+              (byte)Mathf.Clamp(
+                  Mathf.RoundToInt(def.EmissionIntensity * 31.875f),
+                  0,
+                  255
+              ),
               255
           );
         }
@@ -615,6 +639,332 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
       runtimeWorldMaterial.SetTexture("_SideLookup", sideLookupTexture);
       runtimeWorldMaterial.SetTexture("_BottomLookup", bottomLookupTexture);
       runtimeWorldMaterial.SetTexture("_PropsLookup", propsLookupTexture);
+    }
+
+    private static void ApplyDefaultMaterialMapping(
+    Color32[] topPixels,
+    Color32[] sidePixels,
+    Color32[] bottomPixels,
+    Color32[] propsPixels)
+    {
+      SetMaterialLookup(
+          topPixels,
+          sidePixels,
+          bottomPixels,
+          propsPixels,
+          materialId: 1,
+          topTileId: 1,
+          sideTileId: 2,
+          bottomTileId: 3,
+          renderCategory: BlockRenderCategory.Opaque,
+          lightingCategory: BlockLightingCategory.Lit,
+          emissionIntensity: 0.0f
+      );
+
+      SetMaterialLookup(
+          topPixels,
+          sidePixels,
+          bottomPixels,
+          propsPixels,
+          materialId: 2,
+          topTileId: 2,
+          sideTileId: 2,
+          bottomTileId: 3,
+          renderCategory: BlockRenderCategory.Opaque,
+          lightingCategory: BlockLightingCategory.Lit,
+          emissionIntensity: 0.0f
+      );
+
+      SetMaterialLookup(
+          topPixels,
+          sidePixels,
+          bottomPixels,
+          propsPixels,
+          materialId: 3,
+          topTileId: 3,
+          sideTileId: 3,
+          bottomTileId: 3,
+          renderCategory: BlockRenderCategory.Opaque,
+          lightingCategory: BlockLightingCategory.Lit,
+          emissionIntensity: 0.0f
+      );
+
+      SetMaterialLookup(
+          topPixels,
+          sidePixels,
+          bottomPixels,
+          propsPixels,
+          materialId: 4,
+          topTileId: 4,
+          sideTileId: 4,
+          bottomTileId: 4,
+          renderCategory: BlockRenderCategory.Opaque,
+          lightingCategory: BlockLightingCategory.Lit,
+          emissionIntensity: 0.0f
+      );
+
+      SetMaterialLookup(
+          topPixels,
+          sidePixels,
+          bottomPixels,
+          propsPixels,
+          materialId: 5,
+          topTileId: 5,
+          sideTileId: 5,
+          bottomTileId: 5,
+          renderCategory: BlockRenderCategory.Opaque,
+          lightingCategory: BlockLightingCategory.Lit,
+          emissionIntensity: 0.0f
+      );
+
+      SetMaterialLookup(
+          topPixels,
+          sidePixels,
+          bottomPixels,
+          propsPixels,
+          materialId: 6,
+          topTileId: 6,
+          sideTileId: 6,
+          bottomTileId: 6,
+          renderCategory: BlockRenderCategory.Opaque,
+          lightingCategory: BlockLightingCategory.Lit,
+          emissionIntensity: 0.0f
+      );
+
+      SetMaterialLookup(
+          topPixels,
+          sidePixels,
+          bottomPixels,
+          propsPixels,
+          materialId: 7,
+          topTileId: 7,
+          sideTileId: 7,
+          bottomTileId: 7,
+          renderCategory: BlockRenderCategory.Opaque,
+          lightingCategory: BlockLightingCategory.Lit,
+          emissionIntensity: 0.0f
+      );
+
+      SetMaterialLookup(
+          topPixels,
+          sidePixels,
+          bottomPixels,
+          propsPixels,
+          materialId: 8,
+          topTileId: 8,
+          sideTileId: 8,
+          bottomTileId: 8,
+          renderCategory: BlockRenderCategory.Transparent,
+          lightingCategory: BlockLightingCategory.Lit,
+          emissionIntensity: 0.0f
+      );
+
+      SetMaterialLookup(
+          topPixels,
+          sidePixels,
+          bottomPixels,
+          propsPixels,
+          materialId: 9,
+          topTileId: 9,
+          sideTileId: 9,
+          bottomTileId: 9,
+          renderCategory: BlockRenderCategory.Opaque,
+          lightingCategory: BlockLightingCategory.Lit,
+          emissionIntensity: 0.0f
+      );
+
+      SetMaterialLookup(
+          topPixels,
+          sidePixels,
+          bottomPixels,
+          propsPixels,
+          materialId: 10,
+          topTileId: 10,
+          sideTileId: 10,
+          bottomTileId: 10,
+          renderCategory: BlockRenderCategory.Opaque,
+          lightingCategory: BlockLightingCategory.Lit,
+          emissionIntensity: 0.0f
+      );
+
+      SetMaterialLookup(
+          topPixels,
+          sidePixels,
+          bottomPixels,
+          propsPixels,
+          materialId: 11,
+          topTileId: 11,
+          sideTileId: 11,
+          bottomTileId: 11,
+          renderCategory: BlockRenderCategory.Transparent,
+          lightingCategory: BlockLightingCategory.Lit,
+          emissionIntensity: 0.0f
+      );
+
+      SetMaterialLookup(
+          topPixels,
+          sidePixels,
+          bottomPixels,
+          propsPixels,
+          materialId: 12,
+          topTileId: 12,
+          sideTileId: 12,
+          bottomTileId: 12,
+          renderCategory: BlockRenderCategory.Opaque,
+          lightingCategory: BlockLightingCategory.Emissive,
+          emissionIntensity: 4.0f
+      );
+
+      SetMaterialLookup(
+          topPixels,
+          sidePixels,
+          bottomPixels,
+          propsPixels,
+          materialId: 13,
+          topTileId: 13,
+          sideTileId: 14,
+          bottomTileId: 13,
+          renderCategory: BlockRenderCategory.Opaque,
+          lightingCategory: BlockLightingCategory.Lit,
+          emissionIntensity: 0.0f
+      );
+
+      SetMaterialLookup(
+          topPixels,
+          sidePixels,
+          bottomPixels,
+          propsPixels,
+          materialId: 14,
+          topTileId: 14,
+          sideTileId: 14,
+          bottomTileId: 14,
+          renderCategory: BlockRenderCategory.Opaque,
+          lightingCategory: BlockLightingCategory.Lit,
+          emissionIntensity: 0.0f
+      );
+
+      SetMaterialLookup(
+          topPixels,
+          sidePixels,
+          bottomPixels,
+          propsPixels,
+          materialId: 15,
+          topTileId: 15,
+          sideTileId: 15,
+          bottomTileId: 15,
+          renderCategory: BlockRenderCategory.Cutout,
+          lightingCategory: BlockLightingCategory.Lit,
+          emissionIntensity: 0.0f
+      );
+
+      SetMaterialLookup(
+          topPixels,
+          sidePixels,
+          bottomPixels,
+          propsPixels,
+          materialId: 16,
+          topTileId: 16,
+          sideTileId: 16,
+          bottomTileId: 16,
+          renderCategory: BlockRenderCategory.Opaque,
+          lightingCategory: BlockLightingCategory.Lit,
+          emissionIntensity: 0.0f
+      );
+
+      SetMaterialLookup(
+          topPixels,
+          sidePixels,
+          bottomPixels,
+          propsPixels,
+          materialId: 17,
+          topTileId: 17,
+          sideTileId: 17,
+          bottomTileId: 17,
+          renderCategory: BlockRenderCategory.Opaque,
+          lightingCategory: BlockLightingCategory.Lit,
+          emissionIntensity: 0.0f
+      );
+
+      SetMaterialLookup(
+          topPixels,
+          sidePixels,
+          bottomPixels,
+          propsPixels,
+          materialId: 18,
+          topTileId: 18,
+          sideTileId: 18,
+          bottomTileId: 18,
+          renderCategory: BlockRenderCategory.Opaque,
+          lightingCategory: BlockLightingCategory.Lit,
+          emissionIntensity: 0.0f
+      );
+
+      SetMaterialLookup(
+          topPixels,
+          sidePixels,
+          bottomPixels,
+          propsPixels,
+          materialId: 19,
+          topTileId: 19,
+          sideTileId: 19,
+          bottomTileId: 19,
+          renderCategory: BlockRenderCategory.Opaque,
+          lightingCategory: BlockLightingCategory.Lit,
+          emissionIntensity: 0.0f
+      );
+
+      SetMaterialLookup(
+          topPixels,
+          sidePixels,
+          bottomPixels,
+          propsPixels,
+          materialId: 20,
+          topTileId: 20,
+          sideTileId: 20,
+          bottomTileId: 20,
+          renderCategory: BlockRenderCategory.Opaque,
+          lightingCategory: BlockLightingCategory.Lit,
+          emissionIntensity: 0.0f
+      );
+    }
+
+    private static void SetMaterialLookup(
+    Color32[] topPixels,
+    Color32[] sidePixels,
+    Color32[] bottomPixels,
+    Color32[] propsPixels,
+    int materialId,
+    int topTileId,
+    int sideTileId,
+    int bottomTileId,
+    BlockRenderCategory renderCategory,
+    BlockLightingCategory lightingCategory,
+    float emissionIntensity)
+    {
+      int safeMaterialId = Mathf.Clamp(materialId, 1, 65535);
+
+      topPixels[safeMaterialId] = EncodeU16(
+          (ushort)Mathf.Clamp(topTileId, 1, 64)
+      );
+
+      sidePixels[safeMaterialId] = EncodeU16(
+          (ushort)Mathf.Clamp(sideTileId, 1, 64)
+      );
+
+      bottomPixels[safeMaterialId] = EncodeU16(
+          (ushort)Mathf.Clamp(bottomTileId, 1, 64)
+      );
+
+      propsPixels[safeMaterialId] = new Color32(
+          (byte)renderCategory,
+          (byte)lightingCategory,
+          (byte)Mathf.Clamp(
+              Mathf.RoundToInt(emissionIntensity * 31.875f),
+              0,
+              255
+          ),
+          255
+      );
     }
 
     private void EnsureLookupTextures()
