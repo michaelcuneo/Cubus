@@ -47,7 +47,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     public StreamingSettings Settings => settings;
 
     private int UnloadPaddingInChunks =>
-    Mathf.Max(2, settings != null ? settings.UnloadPaddingInChunks : 4);
+      Mathf.Max(2, settings != null ? settings.UnloadPaddingInChunks : 4);
 
     private int ChunksBelowSurface =>
         Mathf.Max(24, settings != null ? settings.ChunksBelowSurface : 32);
@@ -72,18 +72,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
     private int MaxAsyncChunkTasks =>
         Mathf.Clamp(settings != null ? settings.MaxAsyncChunkTasks : 8, 2, 32);
-
-    private const int StreamVerticalChunksBelowSurface = 32;
-    private const int StreamVerticalChunksAboveSurface = 8;
-    private const int StreamUnloadPaddingInChunks = 4;
-
-    private const int StreamChunksGeneratedPerFrame = 8;
-    private const int StreamInitialChunksGeneratedPerFrame = 32;
-    private const int StreamChunksRenderedPerFrame = 16;
-    private const int StreamMeshAppliesPerFrame = 16;
-    private const int StreamMaxAsyncChunkTasks = 8;
-
-    private const bool StreamUseAsyncGeneration = true;
 
     public void SetViewer(Transform newViewer)
     {
@@ -303,13 +291,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       bootstrapCoroutine = null;
     }
 
-    private void TryGenerateAndRenderSpawnChunkSync()
-    {
-      // Disabled intentionally.
-      // Initial spawn terrain must come from the normal streaming pipeline only.
-      // The old sync path created a single isolated chunk that could disagree with streamed terrain.
-    }
-
     private void Update()
     {
       if (bootstrapCoroutine != null)
@@ -409,7 +390,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
       BuildChunkSet(
         viewerChunkCoord,
-        Mathf.Max(1, world.Settings.ViewDistanceInChunks) + StreamUnloadPaddingInChunks,
+        Mathf.Max(1, world.Settings.ViewDistanceInChunks) + UnloadPaddingInChunks,
         keepChunkCoords
       );
 
@@ -463,8 +444,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
               viewerChunkCoord.y * VoxelConstants.ChunkSize
           );
 
-          int minChunkY = surfaceChunkY - StreamVerticalChunksBelowSurface;
-          int maxChunkY = surfaceChunkY + StreamVerticalChunksAboveSurface;
+          int minChunkY = surfaceChunkY - ChunksBelowSurface;
+          int maxChunkY = surfaceChunkY + ChunksAboveSurface;
 
           for (int chunkY = minChunkY; chunkY <= maxChunkY; chunkY++)
           {
@@ -479,7 +460,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         int radius,
         HashSet<Vector3Int> output)
     {
-      int radiusWithPadding = radius + StreamUnloadPaddingInChunks;
+      int radiusWithPadding = radius + UnloadPaddingInChunks;
 
       void AddIfNearby(Vector3Int editedChunkCoord)
       {
@@ -1451,9 +1432,14 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       Mesh mesh = MarchingCubesMesher.GenerateMeshDirect(
           chunkCoord,
           worldSnapshot,
-          1,
+          cellStep,
           true,
-          SampleDensityVoxelForMeshing
+          worldVoxel => SampleDensityForMeshing(
+              worldVoxel,
+              chunkCoord,
+              chunkData,
+              densityScale
+          )
       );
 
       if (mesh == null ||
@@ -1475,37 +1461,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       );
 
       worldRenderer.RefreshChunkCollision();
-    }
-
-    private DensityVoxel SampleDensityVoxelForMeshing(Vector3Int worldVoxel)
-    {
-      float scale = Mathf.Max(0.001f, worldSnapshot.DensitySampleScale);
-
-      worldSnapshot.ResolveBiomeAtWorldXZ(
-          worldVoxel.x,
-          worldVoxel.z,
-          out TerrainGenerationProfileSnapshot profile,
-          out byte biomeId
-      );
-
-      TerrainSample sample = TerrainSampler.Sample(
-          profile,
-          biomeId,
-          new Vector3(
-              worldVoxel.x * scale,
-              worldVoxel.y * scale,
-              worldVoxel.z * scale
-          )
-      );
-
-      ushort materialId = sample.Density > 0.0f
-          ? (ushort)Mathf.Clamp(sample.SolidMaterialId, 1, 65535)
-          : (ushort)0;
-
-      return new DensityVoxel(
-          sample.Density,
-          materialId
-      );
     }
 
     private bool ShouldGenerateDensityCollision(Vector3Int chunkCoord)
@@ -1612,7 +1567,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     {
       spawnPosition = Vector3.zero;
 
-      Vector3 referenceWorldPosition = desiredInitialSpawnLocation;
+      Vector3 referenceWorldPosition = GetSpawnReferencePosition();
       Vector3 localReference = transform.InverseTransformPoint(referenceWorldPosition);
 
       float voxelSize = Mathf.Max(0.0001f, world.Settings.VoxelSize);

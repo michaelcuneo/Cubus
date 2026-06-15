@@ -226,21 +226,27 @@ namespace Assets.Demo.Scripts.Player
       Vector3Int sampleVoxel;
       bool hasVoxel = TryGetCrosshairVoxel(out sampleVoxel);
 
-      TerrainSample sample = default;
+      TerrainSample proceduralSample = default;
+      ushort storedBlockMaterial = 0;
+
       if (hasVoxel)
       {
-        sample = world.SampleTerrainAtWorldVoxel(sampleVoxel);
+        proceduralSample = world.SampleTerrainAtWorldVoxel(sampleVoxel);
+        storedBlockMaterial = world.GetBlockMaterialAtWorldVoxel(sampleVoxel);
       }
 
-      string biomeName = ResolveBiomeName(sample.BiomeId);
+      string biomeName = ResolveBiomeName(proceduralSample.BiomeId);
+
       return
           "<b>Cubus Debug</b>\n" +
           $"Mode: {world.Settings.TerrainSystem} | Ready: {world.IsWorldReady} | InitialReady: {world.IsInitialTerrainReady}\n" +
           $"Camera: {(activeCamera != null ? activeCamera.name : "none")}\n" +
           $"Voxel: {(hasVoxel ? sampleVoxel.ToString() : "n/a")}\n" +
-          $"Biome: {sample.BiomeId} ({biomeName}) | Material: {sample.SolidMaterialId}\n" +
-          $"Density: {sample.Density.ToString("0.000", CultureInfo.InvariantCulture)} | SurfaceY: {sample.SurfaceHeight.ToString("0.00", CultureInfo.InvariantCulture)}\n" +
-              "F3 overlay | F4 heatmap | ` console";
+          $"Biome: {proceduralSample.BiomeId} ({biomeName})\n" +
+          $"Stored Block Material: {storedBlockMaterial}\n" +
+          $"Procedural Material: {proceduralSample.SolidMaterialId}\n" +
+          $"Density: {proceduralSample.Density.ToString("0.000", CultureInfo.InvariantCulture)} | SurfaceY: {proceduralSample.SurfaceHeight.ToString("0.00", CultureInfo.InvariantCulture)}\n" +
+          "F3 overlay | F4 heatmap | ` console";
     }
 
     private bool TryGetCrosshairVoxel(out Vector3Int worldVoxel)
@@ -258,23 +264,19 @@ namespace Assets.Demo.Scripts.Player
       {
         if (hit.collider != null && hit.collider.GetComponentInParent<ChunkView>() != null)
         {
-          Vector3 p = hit.point - ray.direction * 0.01f;
+          Vector3 p = hit.point + ray.direction.normalized * 0.01f;
+
           worldVoxel = new Vector3Int(
               Mathf.FloorToInt(p.x),
               Mathf.FloorToInt(p.y),
               Mathf.FloorToInt(p.z)
           );
+
           return true;
         }
       }
 
-      Vector3 fallback = activeCamera.transform.position + activeCamera.transform.forward * 4.0f;
-      worldVoxel = new Vector3Int(
-          Mathf.FloorToInt(fallback.x),
-          Mathf.FloorToInt(fallback.y),
-          Mathf.FloorToInt(fallback.z)
-      );
-      return true;
+      return false;
     }
 
     private string ResolveBiomeName(byte biomeId)
@@ -510,11 +512,23 @@ namespace Assets.Demo.Scripts.Player
           return;
         }
 
-        if (TryGetCrosshairVoxel(out Vector3Int voxel))
+        if (!TryGetCrosshairVoxel(out Vector3Int voxel))
         {
-          TerrainSample s = world.SampleTerrainAtWorldVoxel(voxel);
-          EnqueueLog($"Biome={s.BiomeId} ({ResolveBiomeName(s.BiomeId)}), Mat={s.SolidMaterialId}, Density={s.Density:0.000}, Voxel={voxel}");
+          EnqueueLog("No block hit under crosshair.");
+          return;
         }
+
+        TerrainSample s = world.SampleTerrainAtWorldVoxel(voxel);
+        ushort storedMaterial = world.GetBlockMaterialAtWorldVoxel(voxel);
+
+        EnqueueLog(
+            $"Voxel={voxel}, " +
+            $"Biome={s.BiomeId} ({ResolveBiomeName(s.BiomeId)}), " +
+            $"StoredBlockMat={storedMaterial}, " +
+            $"ProceduralMat={s.SolidMaterialId}, " +
+            $"Density={s.Density:0.000}, " +
+            $"SurfaceY={s.SurfaceHeight:0.00}"
+        );
       });
 
       RegisterCommand("regen", "Generate world immediately.", _ =>
