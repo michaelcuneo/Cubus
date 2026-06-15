@@ -1,7 +1,6 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Chunks;
-using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World;
 using UnityEngine;
 
@@ -130,30 +129,12 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
           out bool hasAnySolidVoxel
       );
 
-      if (!hasAnySolidVoxel)
-      {
-        return new BlockChunkBuildResult
-        {
-          ChunkCoord = request.ChunkCoord,
-          ChunkData = chunkData,
-          MeshData = null,
-          IsEmpty = true,
-          GenerationId = request.GenerationId
-        };
-      }
-
-      MeshData meshData = BlockGreedyMesher.GenerateNeighbourAware(
-        chunkData,
-        request.WorldSnapshot,
-        request.WorldSnapshot.VoxelSize
-    );
-
       return new BlockChunkBuildResult
       {
         ChunkCoord = request.ChunkCoord,
         ChunkData = chunkData,
-        MeshData = meshData,
-        IsEmpty = meshData == null || meshData.IsEmpty,
+        MeshData = null,
+        IsEmpty = !hasAnySolidVoxel,
         GenerationId = request.GenerationId
       };
     }
