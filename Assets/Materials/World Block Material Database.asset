@@ -14,258 +14,514 @@ MonoBehaviour:
   m_EditorClassIdentifier: CubusCore.Runtime::CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering.BlockMaterialDatabase
   Definitions:
   - MaterialId: 1
-    DisplayName: Verdant Canopy
+    DisplayName: Brown Valley Surface Grass
     TopTileId: 1
-    SideTileId: 1
-    BottomTileId: 1
-    RenderCategory: 0
-    LightingCategory: 0
-    EmissionIntensity: 0
-  - MaterialId: 2
-    DisplayName: Frostcap Crust
-    TopTileId: 2
     SideTileId: 2
-    BottomTileId: 2
-    RenderCategory: 0
-    LightingCategory: 0
-    EmissionIntensity: 0
-  - MaterialId: 3
-    DisplayName: Gravel Crest
-    TopTileId: 3
-    SideTileId: 3
     BottomTileId: 3
     RenderCategory: 0
     LightingCategory: 0
     EmissionIntensity: 0
-  - MaterialId: 4
-    DisplayName: Meadow Turf
-    TopTileId: 4
-    SideTileId: 4
+  - MaterialId: 2
+    DisplayName: Snow
+    TopTileId: 7
+    SideTileId: 7
     BottomTileId: 4
     RenderCategory: 0
     LightingCategory: 0
     EmissionIntensity: 0
-  - MaterialId: 5
-    DisplayName: Loam Matrix
-    TopTileId: 5
-    SideTileId: 5
-    BottomTileId: 5
-    RenderCategory: 0
-    LightingCategory: 0
-    EmissionIntensity: 0
-  - MaterialId: 6
-    DisplayName: Packed Frost Soil
+  - MaterialId: 3
+    DisplayName: Gravel
     TopTileId: 6
     SideTileId: 6
     BottomTileId: 6
     RenderCategory: 0
     LightingCategory: 0
     EmissionIntensity: 0
-  - MaterialId: 7
-    DisplayName: Weathered Sandstone
+  - MaterialId: 4
+    DisplayName: Grass Block
+    TopTileId: 1
+    SideTileId: 2
+    BottomTileId: 3
+    RenderCategory: 0
+    LightingCategory: 0
+    EmissionIntensity: 0
+  - MaterialId: 5
+    DisplayName: Sand Or Dry Soil
+    TopTileId: 5
+    SideTileId: 5
+    BottomTileId: 3
+    RenderCategory: 0
+    LightingCategory: 0
+    EmissionIntensity: 0
+  - MaterialId: 6
+    DisplayName: Packed Snow
     TopTileId: 7
-    SideTileId: 7
-    BottomTileId: 7
+    SideTileId: 8
+    BottomTileId: 4
+    RenderCategory: 0
+    LightingCategory: 0
+    EmissionIntensity: 0
+  - MaterialId: 7
+    DisplayName: Sandstone
+    TopTileId: 5
+    SideTileId: 17
+    BottomTileId: 4
     RenderCategory: 0
     LightingCategory: 0
     EmissionIntensity: 0
   - MaterialId: 8
-    DisplayName: Rooted Earth
-    TopTileId: 8
-    SideTileId: 8
-    BottomTileId: 8
+    DisplayName: Dirt
+    TopTileId: 3
+    SideTileId: 3
+    BottomTileId: 3
     RenderCategory: 0
     LightingCategory: 0
     EmissionIntensity: 0
   - MaterialId: 9
-    DisplayName: Basalt Core
+    DisplayName: Stone Core
+    TopTileId: 4
+    SideTileId: 4
+    BottomTileId: 4
+    RenderCategory: 0
+    LightingCategory: 0
+    EmissionIntensity: 0
+  - MaterialId: 10
+    DisplayName: Frozen Rock
+    TopTileId: 7
+    SideTileId: 4
+    BottomTileId: 4
+    RenderCategory: 0
+    LightingCategory: 0
+    EmissionIntensity: 0
+  - MaterialId: 11
+    DisplayName: Granite
+    TopTileId: 4
+    SideTileId: 4
+    BottomTileId: 4
+    RenderCategory: 0
+    LightingCategory: 0
+    EmissionIntensity: 0
+  - MaterialId: 12
+    DisplayName: Clay
     TopTileId: 9
     SideTileId: 9
     BottomTileId: 9
     RenderCategory: 0
     LightingCategory: 0
     EmissionIntensity: 0
-  - MaterialId: 10
-    DisplayName: Glacial Stone
-    TopTileId: 10
-    SideTileId: 10
-    BottomTileId: 10
-    RenderCategory: 0
-    LightingCategory: 0
-    EmissionIntensity: 0
-  - MaterialId: 11
-    DisplayName: Granite Vein
-    TopTileId: 11
-    SideTileId: 11
-    BottomTileId: 11
-    RenderCategory: 0
-    LightingCategory: 0
-    EmissionIntensity: 0
-  - MaterialId: 12
-    DisplayName: Claystone Bed
-    TopTileId: 12
-    SideTileId: 12
-    BottomTileId: 12
-    RenderCategory: 0
-    LightingCategory: 0
-    EmissionIntensity: 0
   - MaterialId: 13
-    DisplayName: Arid Sand
-    TopTileId: 13
-    SideTileId: 13
-    BottomTileId: 13
+    DisplayName: Limestone
+    TopTileId: 31
+    SideTileId: 31
+    BottomTileId: 4
     RenderCategory: 0
     LightingCategory: 0
     EmissionIntensity: 0
   - MaterialId: 14
-    DisplayName: Shale Drift
-    TopTileId: 14
-    SideTileId: 14
-    BottomTileId: 14
+    DisplayName: Shale
+    TopTileId: 29
+    SideTileId: 29
+    BottomTileId: 4
     RenderCategory: 0
     LightingCategory: 0
     EmissionIntensity: 0
   - MaterialId: 15
-    DisplayName: Ironstone Band
-    TopTileId: 15
-    SideTileId: 15
-    BottomTileId: 15
+    DisplayName: Ironstone Ore
+    TopTileId: 22
+    SideTileId: 22
+    BottomTileId: 4
     RenderCategory: 0
     LightingCategory: 0
     EmissionIntensity: 0
   - MaterialId: 16
-    DisplayName: Marble Shelf
-    TopTileId: 16
-    SideTileId: 16
-    BottomTileId: 16
+    DisplayName: Marble
+    TopTileId: 31
+    SideTileId: 31
+    BottomTileId: 31
     RenderCategory: 0
     LightingCategory: 0
     EmissionIntensity: 0
   - MaterialId: 17
-    DisplayName: Moss Fronds
-    TopTileId: 17
-    SideTileId: 17
-    BottomTileId: 17
-    RenderCategory: 1
+    DisplayName: Mossy Stone
+    TopTileId: 18
+    SideTileId: 18
+    BottomTileId: 4
+    RenderCategory: 0
     LightingCategory: 0
     EmissionIntensity: 0
   - MaterialId: 18
-    DisplayName: Dry Brush Mat
-    TopTileId: 18
-    SideTileId: 18
-    BottomTileId: 18
+    DisplayName: Dry Brush Grass
+    TopTileId: 26
+    SideTileId: 2
+    BottomTileId: 3
     RenderCategory: 1
     LightingCategory: 0
     EmissionIntensity: 0
   - MaterialId: 19
     DisplayName: Shallow Water
-    TopTileId: 19
-    SideTileId: 19
-    BottomTileId: 19
+    TopTileId: 11
+    SideTileId: 11
+    BottomTileId: 11
     RenderCategory: 2
     LightingCategory: 0
     EmissionIntensity: 0
   - MaterialId: 20
     DisplayName: Deep Water
-    TopTileId: 20
-    SideTileId: 20
-    BottomTileId: 20
+    TopTileId: 11
+    SideTileId: 11
+    BottomTileId: 11
     RenderCategory: 2
     LightingCategory: 0
     EmissionIntensity: 0
   - MaterialId: 21
     DisplayName: Moon Dust
-    TopTileId: 21
-    SideTileId: 21
-    BottomTileId: 21
+    TopTileId: 6
+    SideTileId: 6
+    BottomTileId: 6
     RenderCategory: 0
     LightingCategory: 1
     EmissionIntensity: 0
   - MaterialId: 22
     DisplayName: Ember Glass
-    TopTileId: 22
-    SideTileId: 22
-    BottomTileId: 22
+    TopTileId: 12
+    SideTileId: 12
+    BottomTileId: 12
     RenderCategory: 0
     LightingCategory: 2
     EmissionIntensity: 1.5
   - MaterialId: 23
     DisplayName: Lumen Crystal
-    TopTileId: 23
-    SideTileId: 23
-    BottomTileId: 23
-    RenderCategory: 0
-    LightingCategory: 2
-    EmissionIntensity: 3
-  - MaterialId: 24
-    DisplayName: Core Plasma
     TopTileId: 24
     SideTileId: 24
     BottomTileId: 24
     RenderCategory: 0
     LightingCategory: 2
+    EmissionIntensity: 3
+  - MaterialId: 24
+    DisplayName: Core Plasma
+    TopTileId: 12
+    SideTileId: 12
+    BottomTileId: 12
+    RenderCategory: 0
+    LightingCategory: 2
     EmissionIntensity: 5
   - MaterialId: 25
     DisplayName: Ashfield
-    TopTileId: 25
-    SideTileId: 25
-    BottomTileId: 25
+    TopTileId: 28
+    SideTileId: 28
+    BottomTileId: 29
     RenderCategory: 0
     LightingCategory: 0
     EmissionIntensity: 0
   - MaterialId: 26
     DisplayName: Silt Plain
-    TopTileId: 26
-    SideTileId: 26
-    BottomTileId: 26
+    TopTileId: 3
+    SideTileId: 5
+    BottomTileId: 3
     RenderCategory: 0
     LightingCategory: 0
     EmissionIntensity: 0
   - MaterialId: 27
     DisplayName: Oxide Crust
-    TopTileId: 27
-    SideTileId: 27
-    BottomTileId: 27
+    TopTileId: 23
+    SideTileId: 23
+    BottomTileId: 4
     RenderCategory: 0
     LightingCategory: 0
     EmissionIntensity: 0
   - MaterialId: 28
     DisplayName: Chalk Bed
-    TopTileId: 28
-    SideTileId: 28
-    BottomTileId: 28
+    TopTileId: 31
+    SideTileId: 31
+    BottomTileId: 31
     RenderCategory: 0
     LightingCategory: 0
     EmissionIntensity: 0
   - MaterialId: 29
     DisplayName: Mist Vapor
-    TopTileId: 29
-    SideTileId: 29
-    BottomTileId: 29
+    TopTileId: 8
+    SideTileId: 8
+    BottomTileId: 8
     RenderCategory: 2
     LightingCategory: 1
     EmissionIntensity: 0
   - MaterialId: 30
     DisplayName: Reed Cluster
-    TopTileId: 30
-    SideTileId: 30
-    BottomTileId: 30
+    TopTileId: 25
+    SideTileId: 25
+    BottomTileId: 3
     RenderCategory: 1
     LightingCategory: 1
     EmissionIntensity: 0
   - MaterialId: 31
     DisplayName: Nova Ore
-    TopTileId: 31
-    SideTileId: 31
-    BottomTileId: 31
+    TopTileId: 20
+    SideTileId: 20
+    BottomTileId: 4
     RenderCategory: 0
     LightingCategory: 2
     EmissionIntensity: 7
   - MaterialId: 32
     DisplayName: Starforge Core
-    TopTileId: 32
-    SideTileId: 32
-    BottomTileId: 32
+    TopTileId: 12
+    SideTileId: 12
+    BottomTileId: 12
     RenderCategory: 0
     LightingCategory: 2
     EmissionIntensity: 8
+  - MaterialId: 33
+    DisplayName: Mossy Ground
+    TopTileId: 33
+    SideTileId: 33
+    BottomTileId: 3
+    RenderCategory: 0
+    LightingCategory: 0
+    EmissionIntensity: 0
+  - MaterialId: 34
+    DisplayName: Mud
+    TopTileId: 34
+    SideTileId: 34
+    BottomTileId: 3
+    RenderCategory: 0
+    LightingCategory: 0
+    EmissionIntensity: 0
+  - MaterialId: 35
+    DisplayName: Blue Grey Stone
+    TopTileId: 35
+    SideTileId: 35
+    BottomTileId: 4
+    RenderCategory: 0
+    LightingCategory: 0
+    EmissionIntensity: 0
+  - MaterialId: 36
+    DisplayName: Dry Sandstone
+    TopTileId: 36
+    SideTileId: 36
+    BottomTileId: 5
+    RenderCategory: 0
+    LightingCategory: 0
+    EmissionIntensity: 0
+  - MaterialId: 37
+    DisplayName: Dark Loam
+    TopTileId: 37
+    SideTileId: 37
+    BottomTileId: 3
+    RenderCategory: 0
+    LightingCategory: 0
+    EmissionIntensity: 0
+  - MaterialId: 38
+    DisplayName: Tan Stone
+    TopTileId: 38
+    SideTileId: 38
+    BottomTileId: 4
+    RenderCategory: 0
+    LightingCategory: 0
+    EmissionIntensity: 0
+  - MaterialId: 39
+    DisplayName: Deep Blue Rock
+    TopTileId: 39
+    SideTileId: 39
+    BottomTileId: 4
+    RenderCategory: 0
+    LightingCategory: 0
+    EmissionIntensity: 0
+  - MaterialId: 40
+    DisplayName: Copper Dirt
+    TopTileId: 40
+    SideTileId: 40
+    BottomTileId: 3
+    RenderCategory: 0
+    LightingCategory: 0
+    EmissionIntensity: 0
+  - MaterialId: 41
+    DisplayName: Pale Stone
+    TopTileId: 41
+    SideTileId: 41
+    BottomTileId: 4
+    RenderCategory: 0
+    LightingCategory: 0
+    EmissionIntensity: 0
+  - MaterialId: 42
+    DisplayName: Forest Ground
+    TopTileId: 42
+    SideTileId: 42
+    BottomTileId: 3
+    RenderCategory: 0
+    LightingCategory: 0
+    EmissionIntensity: 0
+  - MaterialId: 43
+    DisplayName: Teal Ground
+    TopTileId: 43
+    SideTileId: 43
+    BottomTileId: 3
+    RenderCategory: 0
+    LightingCategory: 0
+    EmissionIntensity: 0
+  - MaterialId: 44
+    DisplayName: Red Rock
+    TopTileId: 44
+    SideTileId: 44
+    BottomTileId: 4
+    RenderCategory: 0
+    LightingCategory: 0
+    EmissionIntensity: 0
+  - MaterialId: 45
+    DisplayName: Purple Stone
+    TopTileId: 45
+    SideTileId: 45
+    BottomTileId: 4
+    RenderCategory: 0
+    LightingCategory: 0
+    EmissionIntensity: 0
+  - MaterialId: 46
+    DisplayName: Gold Dust
+    TopTileId: 46
+    SideTileId: 46
+    BottomTileId: 5
+    RenderCategory: 0
+    LightingCategory: 0
+    EmissionIntensity: 0
+  - MaterialId: 47
+    DisplayName: Slate
+    TopTileId: 47
+    SideTileId: 47
+    BottomTileId: 4
+    RenderCategory: 0
+    LightingCategory: 0
+    EmissionIntensity: 0
+  - MaterialId: 48
+    DisplayName: Blackstone
+    TopTileId: 48
+    SideTileId: 48
+    BottomTileId: 48
+    RenderCategory: 0
+    LightingCategory: 0
+    EmissionIntensity: 0
+  - MaterialId: 49
+    DisplayName: Red Debug Block
+    TopTileId: 49
+    SideTileId: 49
+    BottomTileId: 49
+    RenderCategory: 0
+    LightingCategory: 1
+    EmissionIntensity: 0
+  - MaterialId: 50
+    DisplayName: Green Debug Block
+    TopTileId: 50
+    SideTileId: 50
+    BottomTileId: 50
+    RenderCategory: 0
+    LightingCategory: 1
+    EmissionIntensity: 0
+  - MaterialId: 51
+    DisplayName: Blue Debug Block
+    TopTileId: 51
+    SideTileId: 51
+    BottomTileId: 51
+    RenderCategory: 0
+    LightingCategory: 1
+    EmissionIntensity: 0
+  - MaterialId: 52
+    DisplayName: Yellow Debug Block
+    TopTileId: 52
+    SideTileId: 52
+    BottomTileId: 52
+    RenderCategory: 0
+    LightingCategory: 1
+    EmissionIntensity: 0
+  - MaterialId: 53
+    DisplayName: Purple Debug Block
+    TopTileId: 53
+    SideTileId: 53
+    BottomTileId: 53
+    RenderCategory: 0
+    LightingCategory: 1
+    EmissionIntensity: 0
+  - MaterialId: 54
+    DisplayName: Cyan Debug Block
+    TopTileId: 54
+    SideTileId: 54
+    BottomTileId: 54
+    RenderCategory: 0
+    LightingCategory: 1
+    EmissionIntensity: 0
+  - MaterialId: 55
+    DisplayName: Light Debug Block
+    TopTileId: 55
+    SideTileId: 55
+    BottomTileId: 55
+    RenderCategory: 0
+    LightingCategory: 1
+    EmissionIntensity: 0
+  - MaterialId: 56
+    DisplayName: Dark Debug Block
+    TopTileId: 56
+    SideTileId: 56
+    BottomTileId: 56
+    RenderCategory: 0
+    LightingCategory: 1
+    EmissionIntensity: 0
+  - MaterialId: 57
+    DisplayName: Brown Stone
+    TopTileId: 57
+    SideTileId: 57
+    BottomTileId: 4
+    RenderCategory: 0
+    LightingCategory: 0
+    EmissionIntensity: 0
+  - MaterialId: 58
+    DisplayName: Warm Stone
+    TopTileId: 58
+    SideTileId: 58
+    BottomTileId: 4
+    RenderCategory: 0
+    LightingCategory: 0
+    EmissionIntensity: 0
+  - MaterialId: 59
+    DisplayName: Pale Sediment
+    TopTileId: 59
+    SideTileId: 59
+    BottomTileId: 5
+    RenderCategory: 0
+    LightingCategory: 0
+    EmissionIntensity: 0
+  - MaterialId: 60
+    DisplayName: Light Sediment
+    TopTileId: 60
+    SideTileId: 60
+    BottomTileId: 5
+    RenderCategory: 0
+    LightingCategory: 0
+    EmissionIntensity: 0
+  - MaterialId: 61
+    DisplayName: Dark Moss
+    TopTileId: 61
+    SideTileId: 61
+    BottomTileId: 3
+    RenderCategory: 0
+    LightingCategory: 0
+    EmissionIntensity: 0
+  - MaterialId: 62
+    DisplayName: Dark Bark Soil
+    TopTileId: 62
+    SideTileId: 62
+    BottomTileId: 3
+    RenderCategory: 0
+    LightingCategory: 0
+    EmissionIntensity: 0
+  - MaterialId: 63
+    DisplayName: Olive Gravel
+    TopTileId: 63
+    SideTileId: 63
+    BottomTileId: 6
+    RenderCategory: 0
+    LightingCategory: 0
+    EmissionIntensity: 0
+  - MaterialId: 64
+    DisplayName: Deep Wet Stone
+    TopTileId: 64
+    SideTileId: 64
+    BottomTileId: 4
+    RenderCategory: 0
+    LightingCategory: 0
+    EmissionIntensity: 0
