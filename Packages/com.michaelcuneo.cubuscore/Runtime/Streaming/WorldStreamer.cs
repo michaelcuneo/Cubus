@@ -372,11 +372,34 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       UpdateStreamingSetIfNeeded(force: true);
     }
 
+    private bool IsInsideGeneratedBounds(Vector3Int chunkCoord)
+    {
+      if (storage == null || !storage.HasLoadedManifest)
+      {
+        return true;
+      }
+
+      WorldManifest manifest = storage.LoadedManifest;
+
+      return chunkCoord.x >= manifest.MinChunkX &&
+             chunkCoord.x <= manifest.MaxChunkX &&
+             chunkCoord.y >= manifest.MinChunkY &&
+             chunkCoord.y <= manifest.MaxChunkY &&
+             chunkCoord.z >= manifest.MinChunkZ &&
+             chunkCoord.z <= manifest.MaxChunkZ;
+    }
+
     private bool EnsureChunkDataAvailable(Vector3Int chunkCoord)
     {
       if (HasChunkData(chunkCoord))
       {
         return true;
+      }
+
+      if (!IsInsideGeneratedBounds(chunkCoord))
+      {
+        knownEmptyChunks.Add(chunkCoord);
+        return false;
       }
 
       if (storage == null)
@@ -431,6 +454,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       );
 
       QueueGeneratedChunksForRender();
+      QueueSpawnTargetForRender();
 
       BuildChunkSet(
         viewerChunkCoord,
@@ -439,6 +463,28 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       );
 
       UnloadOutsideKeepSet();
+    }
+
+    private void QueueSpawnTargetForRender()
+    {
+      if (worldRenderer.HasChunkView(spawnTargetChunkCoord))
+      {
+        return;
+      }
+
+      if (pendingRenderSet.Contains(spawnTargetChunkCoord))
+      {
+        return;
+      }
+
+      if (!EnsureChunkDataAvailable(spawnTargetChunkCoord))
+      {
+        return;
+      }
+
+      desiredChunkCoords.Add(spawnTargetChunkCoord);
+      keepChunkCoords.Add(spawnTargetChunkCoord);
+      QueueRender(spawnTargetChunkCoord);
     }
 
     public void ClearStreamingState()
@@ -1577,7 +1623,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         return;
       }
 
-      if (!worldRenderer.ActiveChunkViews.ContainsKey(spawnTargetChunkCoord))
+      if (!HasAnyRenderedChunkNearSpawnTarget())
       {
         return;
       }
@@ -1587,17 +1633,37 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         return;
       }
 
+      world.BroadcastInitialTerrainReady(spawnPosition);
+      hasBroadcastInitialTerrainReady = true;
+
       Debug.Log(
           $"Initial terrain ready. " +
           $"SpawnPosition={spawnPosition}, " +
           $"SpawnTargetChunk={spawnTargetChunkCoord}, " +
-          $"ActiveViews={worldRenderer.ActiveChunkViews.Count}, " +
-          $"BlockChunks={world.Data.BlockChunks.Count}, " +
-          $"DensityChunks={world.Data.DensityChunks.Count}"
+          $"ActiveViews={worldRenderer.ActiveChunkViews.Count}"
       );
+    }
 
-      world.BroadcastInitialTerrainReady(spawnPosition);
-      hasBroadcastInitialTerrainReady = true;
+    private bool HasAnyRenderedChunkNearSpawnTarget()
+    {
+      if (worldRenderer.HasChunkView(spawnTargetChunkCoord))
+      {
+        return true;
+      }
+
+      foreach (Vector3Int chunkCoord in worldRenderer.ActiveChunkViews.Keys)
+      {
+        int dx = Mathf.Abs(chunkCoord.x - spawnTargetChunkCoord.x);
+        int dy = Mathf.Abs(chunkCoord.y - spawnTargetChunkCoord.y);
+        int dz = Mathf.Abs(chunkCoord.z - spawnTargetChunkCoord.z);
+
+        if (dx <= 1 && dy <= 1 && dz <= 1)
+        {
+          return true;
+        }
+      }
+
+      return false;
     }
 
     private bool TryFindRenderedSpawnPosition(out Vector3 spawnPosition)

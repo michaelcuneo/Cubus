@@ -170,42 +170,15 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World
 
     public void GenerateBlockChunkData(BlockChunkData chunkData)
     {
-      BlockChunkData generated = BlockChunkBuilder.GenerateChunkData(
-          chunkData.ChunkCoord,
-          WorldGenerationSnapshot.FromSettings(settings),
-          null,
-          out _
-      );
-
-      Voxel[] source = generated.GetRawVoxelArray();
-      Voxel[] target = chunkData.GetRawVoxelArray();
-
-      for (int i = 0; i < source.Length; i++)
-      {
-        target[i] = source[i];
-      }
+      FillBlockChunkFromTerrainSampler(chunkData, null);
     }
 
     public void GenerateBlockChunkDataWithOverrides(
       BlockChunkData chunkData,
       IReadOnlyDictionary<int, ushort> overrides)
     {
-      BlockChunkData generated = BlockChunkBuilder.GenerateChunkData(
-          chunkData.ChunkCoord,
-          WorldGenerationSnapshot.FromSettings(settings),
-          overrides,
-          out _
-      );
-
-      Voxel[] source = generated.GetRawVoxelArray();
-      Voxel[] target = chunkData.GetRawVoxelArray();
-
-      for (int i = 0; i < source.Length; i++)
-      {
-        target[i] = source[i];
-      }
+      FillBlockChunkFromTerrainSampler(chunkData, overrides);
     }
-
     public int GetSurfaceChunkYForChunkColumn(Vector2Int chunkColumn)
     {
       const int size = VoxelConstants.ChunkSize;
@@ -221,6 +194,63 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World
 
       int surfaceVoxelY = Mathf.FloorToInt(sample.SurfaceHeight);
       return VoxelMath.FloorDiv(surfaceVoxelY, size);
+    }
+
+    private void FillBlockChunkFromTerrainSampler(
+  BlockChunkData chunkData,
+  IReadOnlyDictionary<int, ushort> overrides)
+    {
+      const int size = VoxelConstants.ChunkSize;
+      float scale = Mathf.Max(0.001f, settings.DensitySampleScale);
+
+      for (int z = 0; z < size; z++)
+      {
+        for (int x = 0; x < size; x++)
+        {
+          Vector3Int worldVoxelAtColumnBase = chunkData.LocalToWorldVoxel(x, 0, z);
+
+          settings.ResolveBiomeAtWorldXZ(
+              worldVoxelAtColumnBase.x,
+              worldVoxelAtColumnBase.z,
+              out TerrainGenerationProfileSnapshot profile,
+              out byte biomeId
+          );
+
+          for (int y = 0; y < size; y++)
+          {
+            Vector3Int worldVoxel = chunkData.LocalToWorldVoxel(x, y, z);
+
+            TerrainSample sample = TerrainSampler.Sample(
+                profile,
+                biomeId,
+                new Vector3(
+                    worldVoxel.x * scale,
+                    worldVoxel.y * scale,
+                    worldVoxel.z * scale
+                )
+            );
+
+            ushort materialId = sample.Density > 0.0f
+                ? (ushort)Mathf.Clamp(sample.SolidMaterialId, 1, 65535)
+                : (ushort)0;
+
+            int voxelIndex = VoxelMath.FlattenIndex(x, y, z);
+
+            if (overrides != null &&
+                overrides.TryGetValue(voxelIndex, out ushort overrideMaterialId))
+            {
+              materialId = overrideMaterialId;
+            }
+
+            chunkData.SetVoxel(
+                x,
+                y,
+                z,
+                new Voxel(materialId)
+            );
+          }
+        }
+      }
     }
 
     public void FillDensityChunkFromTerrainSampler(DensityChunkData chunkData)

@@ -449,8 +449,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: CubusCore.Runtime::CubusCore.World.CubusWorld
   settings:
-    TerrainSystem: 1
-    ViewDistanceInChunks: 3
+    TerrainSystem: 0
+    ViewDistanceInChunks: 8
     VoxelSize: 1
     BlockMinChunkY: -1
     BlockMaxChunkY: 2
@@ -532,8 +532,8 @@ MonoBehaviour:
       UseErosion: 0
       ErosionRange: {x: 0.42, y: 1}
     UseFixedGenerationBounds: 0
-    GenerationMinChunkXZ: {x: -4, y: -4}
-    GenerationMaxChunkXZ: {x: 4, y: 4}
+    GenerationMinChunkXZ: {x: -16, y: -16}
+    GenerationMaxChunkXZ: {x: 16, y: 16}
 --- !u!114 &1298388479
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -574,7 +574,7 @@ MonoBehaviour:
   settings:
     UnloadPaddingInChunks: 2
     ChunksBelowSurface: 24
-    ChunksAboveSurface: 6
+    ChunksAboveSurface: 24
     ChunksGeneratedPerFrame: 16
     InitialChunksGeneratedPerFrame: 64
     ChunksRenderedPerFrame: 32
@@ -589,6 +589,7 @@ MonoBehaviour:
   continuePreGenerationInBackground: 0
   maxAutoPreGenerationChunks: 8192
   allowVeryLargePreGeneration: 0
+  evictCachedChunkDataOutsideKeepSet: 1
   desiredInitialSpawnLocation: {x: 0, y: 0, z: 0}
   initialSpawnSearchRadius: 128
   initialSpawnSearchBelowVoxels: 512
