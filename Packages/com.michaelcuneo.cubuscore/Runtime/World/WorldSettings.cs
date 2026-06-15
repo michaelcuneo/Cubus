@@ -64,22 +64,11 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World
     }
 
     public void GetGenerationChunkBoundsXZ(
-        int fallbackRadius,
         out int minChunkX,
         out int maxChunkX,
         out int minChunkZ,
         out int maxChunkZ)
     {
-      if (!UseFixedGenerationBounds)
-      {
-        int safeRadius = Mathf.Max(0, fallbackRadius);
-        minChunkX = -safeRadius;
-        maxChunkX = safeRadius;
-        minChunkZ = -safeRadius;
-        maxChunkZ = safeRadius;
-        return;
-      }
-
       minChunkX = Mathf.Min(GenerationMinChunkXZ.x, GenerationMaxChunkXZ.x);
       maxChunkX = Mathf.Max(GenerationMinChunkXZ.x, GenerationMaxChunkXZ.x);
       minChunkZ = Mathf.Min(GenerationMinChunkXZ.y, GenerationMaxChunkXZ.y);

@@ -8,6 +8,7 @@ using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Voxels;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World;
+using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage;
 using UnityEngine;
 
 namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
@@ -37,6 +38,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     private WorldGenerationSnapshot worldSnapshot;
 
     private CubusWorld world;
+    private CubusWorldStorage storage;
     private WorldRenderer worldRenderer;
     private WorldGenerator generator;
     private BlockEditTool editTool;
@@ -111,6 +113,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     private int backgroundGeneratedChunks;
     private int backgroundEstimatedChunks;
 
+    [SerializeField] private bool evictCachedChunkDataOutsideKeepSet = true;
+
     [Header("Initial Terrain Ready")]
     [SerializeField] private Vector3 desiredInitialSpawnLocation = Vector3.zero;
     [SerializeField] private float initialSpawnSearchRadius = 128.0f;
@@ -181,6 +185,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       world = GetComponent<CubusWorld>();
       worldRenderer = GetComponent<WorldRenderer>();
       editTool = GetComponent<BlockEditTool>();
+      storage = GetComponent<CubusWorldStorage>();
     }
 
     private void OnEnable()
@@ -263,17 +268,42 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
     private IEnumerator BootstrapRoutine(bool logRegenerateMessage)
     {
+      if (!world.IsWorldReady)
+      {
+        if (storage != null && storage.LoadWorldManifestOnly())
+        {
+          Debug.Log("WorldStreamer loaded generated world manifest from storage.");
+        }
+        else
+        {
+          Debug.LogWarning(
+              "No generated world database manifest exists. Generating now before streaming starts."
+          );
+
+          yield return world.GenerateWorldAsync();
+
+          if (!world.IsWorldReady)
+          {
+            Debug.LogError("WorldStreamer cannot start because world database generation failed.");
+            bootstrapCoroutine = null;
+            enabled = false;
+            yield break;
+          }
+
+          if (storage != null)
+          {
+            storage.LoadWorldManifestOnly();
+          }
+        }
+      }
+
       generator = new WorldGenerator(world.Settings);
       worldSnapshot = WorldGenerationSnapshot.FromSettings(world.Settings);
-      // Determine initial spawn target as the terrain surface chunk for the viewer's X/Z column.
+
       spawnTargetChunkCoord = WorldToSurfaceChunkCoord(GetSpawnReferencePosition());
 
-      world.ClearWorld();
       worldRenderer.ClearAll();
       ClearStreamingState();
-
-      yield return PreGenerateSpawnRegionIfNeededAsync();
-      ConfigureBackgroundPreGenerationIfNeeded();
 
       ForceRefreshStreamingSet();
       TryBroadcastInitialTerrainReady();
@@ -281,8 +311,10 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       if (logRegenerateMessage)
       {
         Debug.Log(
-            $"WorldStreamer regenerated streamed world. " +
+            $"WorldStreamer refreshed streamed views from generated world database. " +
             $"Mode={world.Settings.TerrainSystem}, " +
+            $"BlockChunks={world.Data.BlockChunks.Count}, " +
+            $"DensityChunks={world.Data.DensityChunks.Count}, " +
             $"BiomeRuleWorldScale={world.Settings.BiomeRuleWorldScale}, " +
             $"DensitySampleScale={world.Settings.DensitySampleScale}"
         );
@@ -290,7 +322,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
       bootstrapCoroutine = null;
     }
-
     private void Update()
     {
       if (bootstrapCoroutine != null)
@@ -306,11 +337,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       }
 
       UpdateStreamingSetIfNeeded();
-      ProcessGenerateQueue();
-      ProcessCompletedBuildResults();
       ProcessRenderQueue();
       TryBroadcastInitialTerrainReady();
-      ProcessBackgroundPreGeneration();
 
       if (logStreamingStats)
       {
@@ -324,22 +352,9 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
               $"Streaming: ActiveViews={worldRenderer.ActiveChunkViews.Count}, " +
               $"BlockDataChunks={world.Data.BlockChunks.Count}, " +
               $"DensityDataChunks={world.Data.DensityChunks.Count}, " +
-              $"PendingGenerate={pendingGenerateQueue.Count}, " +
               $"PendingRender={pendingRenderQueue.Count}, " +
-              $"KnownEmpty={knownEmptyChunks.Count}, " +
-              $"BlockTasks={buildQueue.ActiveTaskCount}, " +
-              $"DensityTasks={densityBuildQueue.ActiveTaskCount}"
+              $"KnownEmpty={knownEmptyChunks.Count}"
           );
-
-          if (viewer != null && world != null && world.Settings != null)
-          {
-            Vector3 p = viewer.position;
-            Debug.Log(world.Settings.DebugResolveBiomeAtWorldXZ(p.x, p.z));
-            Debug.Log(world.Settings.DebugResolveBiomeAtWorldXZ(p.x + 128.0f, p.z));
-            Debug.Log(world.Settings.DebugResolveBiomeAtWorldXZ(p.x - 128.0f, p.z));
-            Debug.Log(world.Settings.DebugResolveBiomeAtWorldXZ(p.x, p.z + 128.0f));
-            Debug.Log(world.Settings.DebugResolveBiomeAtWorldXZ(p.x, p.z - 128.0f));
-          }
         }
       }
     }
@@ -355,6 +370,26 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
       hasLastViewerChunkCoord = false;
       UpdateStreamingSetIfNeeded(force: true);
+    }
+
+    private bool EnsureChunkDataAvailable(Vector3Int chunkCoord)
+    {
+      if (HasChunkData(chunkCoord))
+      {
+        return true;
+      }
+
+      if (storage == null)
+      {
+        return false;
+      }
+
+      if (!storage.TryLoadChunk(chunkCoord))
+      {
+        return false;
+      }
+
+      return HasChunkData(chunkCoord);
     }
 
     private void UpdateStreamingSetIfNeeded(bool force = false)
@@ -379,13 +414,22 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       lastViewerChunkCoord = viewerChunkCoord;
       hasLastViewerChunkCoord = true;
 
+      if (logStreamingStats)
+      {
+        Debug.Log(
+            $"Streaming target. " +
+            $"ViewerWorld={viewerWorldPosition}, " +
+            $"ViewerChunk={viewerChunkCoord}, " +
+            $"SpawnTargetChunk={spawnTargetChunkCoord}"
+        );
+      }
+
       BuildChunkSet(
         viewerChunkCoord,
         Mathf.Max(1, world.Settings.ViewDistanceInChunks),
         desiredChunkCoords
       );
 
-      QueueMissingChunks(viewerChunkCoord);
       QueueGeneratedChunksForRender();
 
       BuildChunkSet(
@@ -827,19 +871,16 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       foreach (Vector3Int chunkCoord in dirtyChunks)
       {
         knownEmptyChunks.Remove(chunkCoord);
-        desiredChunkCoords.Add(chunkCoord);
-        forcedDensityRebuildChunks.Add(chunkCoord);
 
-        // Keep the currently rendered chunk/collider active until the rebuilt mesh is ready.
-        // Removing it immediately creates a temporary hole that the player can fall through.
-
-        if (pendingGenerateSet.Contains(chunkCoord))
+        if (!desiredChunkCoords.Contains(chunkCoord))
         {
-          continue;
+          desiredChunkCoords.Add(chunkCoord);
         }
 
-        pendingGenerateQueue.Enqueue(chunkCoord);
-        pendingGenerateSet.Add(chunkCoord);
+        // Re-render from existing generated/edited density data.
+        // Do not regenerate terrain data here.
+        worldRenderer.RemoveChunk(chunkCoord);
+        QueueRender(chunkCoord);
       }
     }
 
@@ -991,39 +1032,9 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         return sourceChunk.GetVoxel(localCoord.x, localCoord.y, localCoord.z);
       }
 
-      worldSnapshot.ResolveBiomeAtWorldXZ(
-        worldVoxelCoord.x,
-        worldVoxelCoord.z,
-        out TerrainGenerationProfileSnapshot profile,
-        out byte biomeId
-      );
-
-      TerrainSample sample = TerrainSampler.Sample(
-        profile,
-        biomeId,
-        new Vector3(
-            worldVoxelCoord.x * densityScale,
-            worldVoxelCoord.y * densityScale,
-            worldVoxelCoord.z * densityScale
-        )
-    );
-
-      ushort materialId = sample.Density > 0.0f
-          ? (ushort)Mathf.Clamp(sample.SolidMaterialId, 1, 65535)
-          : (ushort)0;
-
-      if (world.TryGetDensityOverrides(chunkCoord, out Dictionary<int, DensityVoxelOverride> overrides) &&
-          overrides != null)
-      {
-        int voxelIndex = VoxelMath.FlattenIndex(localCoord.x, localCoord.y, localCoord.z);
-
-        if (overrides.TryGetValue(voxelIndex, out DensityVoxelOverride densityOverride))
-        {
-          return new DensityVoxel(densityOverride.Density, densityOverride.MaterialId);
-        }
-      }
-
-      return new DensityVoxel(sample.Density, materialId);
+      // Outside the generated database is empty space.
+      // The streamer must not generate terrain while rendering.
+      return new DensityVoxel(0.0f, 0);
     }
 
     private void QueueRender(Vector3Int chunkCoord)
@@ -1097,8 +1108,19 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
           continue;
         }
 
-        if (!HasChunkData(chunkCoord))
+        if (pendingRenderSet.Contains(chunkCoord))
         {
+          continue;
+        }
+
+        if (knownEmptyChunks.Contains(chunkCoord))
+        {
+          continue;
+        }
+
+        if (!EnsureChunkDataAvailable(chunkCoord))
+        {
+          knownEmptyChunks.Add(chunkCoord);
           continue;
         }
 
@@ -1123,9 +1145,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         );
       }
 
-      int safeRadius = Mathf.Max(0, world.Settings.ViewDistanceInChunks);
       world.Settings.GetGenerationChunkBoundsXZ(
-          safeRadius,
           out int minChunkX,
           out int maxChunkX,
           out int minChunkZ,
@@ -1217,9 +1237,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         return;
       }
 
-      int safeRadius = Mathf.Max(0, world.Settings.ViewDistanceInChunks);
       world.Settings.GetGenerationChunkBoundsXZ(
-          safeRadius,
           out backgroundMinChunkX,
           out backgroundMaxChunkX,
           out backgroundMinChunkZ,
@@ -1393,9 +1411,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
     private int GetEstimatedPreGenerationChunkCount()
     {
-      int safeRadius = Mathf.Max(0, world.Settings.ViewDistanceInChunks);
       world.Settings.GetGenerationChunkBoundsXZ(
-          safeRadius,
           out int minChunkX,
           out int maxChunkX,
           out int minChunkZ,
@@ -1454,6 +1470,17 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
       knownEmptyChunks.Remove(chunkCoord);
 
+      if (logStreamingStats)
+      {
+        Debug.Log(
+            $"RenderDensityChunk. " +
+            $"Chunk={chunkCoord}, " +
+            $"Verts={mesh.vertexCount}, " +
+            $"Indices={mesh.GetIndexCount(0)}, " +
+            $"Collision={ShouldGenerateDensityCollision(chunkCoord)}"
+        );
+      }
+
       worldRenderer.RenderUnityMesh(
           chunkCoord,
           mesh,
@@ -1502,9 +1529,10 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
         worldRenderer.RemoveChunk(chunkCoord);
 
-        // Remove generated chunk data, but keep BlockVoxelOverridesByChunk.
-        // Overrides are the persistence/edit layer and must survive streaming unloads.
-        RemoveChunkData(chunkCoord);
+        if (evictCachedChunkDataOutsideKeepSet && storage != null)
+        {
+          RemoveChunkData(chunkCoord);
+        }
       }
     }
 
@@ -1549,7 +1577,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         return;
       }
 
-      if (worldRenderer.ActiveChunkViews.Count < initialSpawnRequiredRenderedChunks)
+      if (!worldRenderer.ActiveChunkViews.ContainsKey(spawnTargetChunkCoord))
       {
         return;
       }
@@ -1558,6 +1586,15 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       {
         return;
       }
+
+      Debug.Log(
+          $"Initial terrain ready. " +
+          $"SpawnPosition={spawnPosition}, " +
+          $"SpawnTargetChunk={spawnTargetChunkCoord}, " +
+          $"ActiveViews={worldRenderer.ActiveChunkViews.Count}, " +
+          $"BlockChunks={world.Data.BlockChunks.Count}, " +
+          $"DensityChunks={world.Data.DensityChunks.Count}"
+      );
 
       world.BroadcastInitialTerrainReady(spawnPosition);
       hasBroadcastInitialTerrainReady = true;

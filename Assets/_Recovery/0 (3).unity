@@ -413,7 +413,6 @@ GameObject:
   - component: {fileID: 1298388483}
   - component: {fileID: 1298388485}
   - component: {fileID: 1298388486}
-  - component: {fileID: 1298388487}
   m_Layer: 0
   m_Name: VoxelWorld
   m_TagString: Untagged
@@ -532,8 +531,8 @@ MonoBehaviour:
       UseErosion: 0
       ErosionRange: {x: 0.42, y: 1}
     UseFixedGenerationBounds: 0
-    GenerationMinChunkXZ: {x: -4, y: -4}
-    GenerationMaxChunkXZ: {x: 4, y: 4}
+    GenerationMinChunkXZ: {x: -128, y: -128}
+    GenerationMaxChunkXZ: {x: 128, y: 128}
 --- !u!114 &1298388479
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -660,22 +659,6 @@ MonoBehaviour:
   protectedCharacterController: {fileID: 1517188428}
   preventAddingInsideProtectedBounds: 1
   protectedBoundsPadding: 0.05
---- !u!114 &1298388487
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1298388476}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: d0f8d956959d42c4ab17f097bb6f16c2, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: CubusCore.Runtime::CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage.CubusWorldStorage
-  backend: 0
-  worldId: demo_world
-  autoSaveAfterGeneration: 1
-  autoLoadOnStart: 1
 --- !u!1 &1453617040
 GameObject:
   m_ObjectHideFlags: 0

@@ -3,6 +3,7 @@ using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Core;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Voxels;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming;
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -34,11 +35,88 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World
       }
     }
 
+    public IEnumerator<object> GenerateAsync(
+      WorldData worldData,
+      int chunksPerStep,
+      Action<float, string> onProgress
+    )
+    {
+      worldData.ClearGeneratedChunks();
+
+      settings.GetGenerationChunkBoundsXZ(
+          out int minChunkX,
+          out int maxChunkX,
+          out int minChunkZ,
+          out int maxChunkZ
+      );
+
+      int minChunkY;
+      int maxChunkY;
+
+      if (settings.TerrainSystem == TerrainSystem.Block)
+      {
+        settings.GetEffectiveBlockChunkYRange(out minChunkY, out maxChunkY);
+      }
+      else
+      {
+        settings.GetEffectiveDensityChunkYRange(out minChunkY, out maxChunkY);
+      }
+
+      int totalChunks =
+          (maxChunkX - minChunkX + 1) *
+          (maxChunkY - minChunkY + 1) *
+          (maxChunkZ - minChunkZ + 1);
+
+      totalChunks = Mathf.Max(1, totalChunks);
+
+      int generatedChunks = 0;
+      int generatedThisStep = 0;
+      int safeChunksPerStep = Mathf.Max(1, chunksPerStep);
+
+      for (int y = minChunkY; y <= maxChunkY; y++)
+      {
+        for (int z = minChunkZ; z <= maxChunkZ; z++)
+        {
+          for (int x = minChunkX; x <= maxChunkX; x++)
+          {
+            Vector3Int chunkCoord = new(x, y, z);
+
+            if (settings.TerrainSystem == TerrainSystem.Block)
+            {
+              BlockChunkData chunkData = new(chunkCoord);
+              GenerateBlockChunkData(chunkData);
+              worldData.BlockChunks[chunkCoord] = chunkData;
+            }
+            else
+            {
+              DensityChunkData chunkData = new(chunkCoord);
+              FillDensityChunkFromTerrainSampler(chunkData);
+              worldData.DensityChunks[chunkCoord] = chunkData;
+            }
+
+            generatedChunks++;
+            generatedThisStep++;
+
+            onProgress?.Invoke(
+                (float)generatedChunks / totalChunks,
+                $"Generated {generatedChunks}/{totalChunks} chunks. Current={chunkCoord}"
+            );
+
+            if (generatedThisStep >= safeChunksPerStep)
+            {
+              generatedThisStep = 0;
+              yield return null;
+            }
+          }
+        }
+      }
+
+      onProgress?.Invoke(1.0f, $"Generated {generatedChunks}/{totalChunks} chunks.");
+    }
+
     public void GenerateBlockWorld(WorldData worldData)
     {
-      int safeRadius = Mathf.Max(0, settings.ViewDistanceInChunks);
       settings.GetGenerationChunkBoundsXZ(
-          safeRadius,
           out int minChunkX,
           out int maxChunkX,
           out int minChunkZ,
@@ -57,11 +135,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World
             BlockChunkData chunkData = new(chunkCoord);
 
             GenerateBlockChunkData(chunkData);
-
-            if (chunkData.HasAnySolidVoxel())
-            {
-              worldData.BlockChunks.Add(chunkCoord, chunkData);
-            }
+            worldData.BlockChunks[chunkCoord] = chunkData;
           }
         }
       }
@@ -69,9 +143,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World
 
     public void GenerateSmoothDensityWorld(WorldData worldData)
     {
-      int safeRadius = Mathf.Max(0, settings.ViewDistanceInChunks);
       settings.GetGenerationChunkBoundsXZ(
-          safeRadius,
           out int minChunkX,
           out int maxChunkX,
           out int minChunkZ,
@@ -90,11 +162,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World
             DensityChunkData chunkData = new(chunkCoord);
 
             FillDensityChunkFromTerrainSampler(chunkData);
-
-            if (chunkData.HasAnySolidVoxel())
-            {
-              worldData.DensityChunks.Add(chunkCoord, chunkData);
-            }
+            worldData.DensityChunks[chunkCoord] = chunkData;
           }
         }
       }

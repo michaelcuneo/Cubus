@@ -4,8 +4,10 @@ using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Persistence;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Voxels;
+using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage;
 using System;
 using System.Collections.Generic;
+using System.Collections;
 using UnityEngine;
 
 namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World
@@ -22,6 +24,9 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World
 
     public bool IsWorldReady { get; private set; }
     public float GenerationProgress { get; private set; }
+
+    public bool IsGeneratingWorld { get; private set; }
+    public string GenerationStatus { get; private set; } = "Idle";
 
     public event Action<Vector3> OnInitialTerrainReady;
 
@@ -47,13 +52,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World
     [ContextMenu("Generate World")]
     public void GenerateWorld()
     {
-      WorldStreamer streamer = GetComponent<WorldStreamer>();
-      if (streamer != null && streamer.isActiveAndEnabled)
-      {
-        streamer.RegenerateStreamedWorld();
-        return;
-      }
-
       SyncBiomeMaterialLayersFromRules();
 
       if (!settings.TryValidateConfiguration(out string configError))
@@ -63,6 +61,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World
       }
 
       IsWorldReady = false;
+      IsInitialTerrainReady = false;
       GenerationProgress = 0.0f;
 
       WorldGenerator generator = new(settings);
@@ -73,20 +72,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World
       GenerationProgress = 1.0f;
       IsWorldReady = true;
 
-      if (FindInitialSpawnLocation(
-          Vector3.zero,
-          64.0f,
-          512,
-          512,
-          2.0f,
-          out Vector3 spawnLocation
-      ))
-      {
-        BroadcastInitialTerrainReady(spawnLocation);
-      }
-
       Debug.Log(
-          $"Cubus world generated. " +
+          $"Cubus world database generated. " +
           $"Mode={settings.TerrainSystem}, " +
           $"BlockChunks={worldData.BlockChunks.Count}, " +
           $"DensityChunks={worldData.DensityChunks.Count}, " +
@@ -94,6 +81,68 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World
       );
     }
 
+    public IEnumerator GenerateWorldAsync()
+    {
+      SyncBiomeMaterialLayersFromRules();
+
+      if (!settings.TryValidateConfiguration(out string configError))
+      {
+        Debug.LogError($"Cannot generate Cubus world due to invalid settings: {configError}");
+        yield break;
+      }
+
+      IsGeneratingWorld = true;
+      IsWorldReady = false;
+      IsInitialTerrainReady = false;
+      GenerationProgress = 0.0f;
+      GenerationStatus = "Preparing world database...";
+
+      WorldGenerator generator = new(settings);
+
+      IEnumerator routine = generator.GenerateAsync(
+          worldData,
+          1,
+          (progress, status) =>
+          {
+            GenerationProgress = Mathf.Clamp01(progress);
+            GenerationStatus = status;
+          }
+      );
+
+      while (routine.MoveNext())
+      {
+        yield return null;
+      }
+
+      ApplyBlockOverridesToGeneratedChunks();
+
+      GenerationProgress = 1.0f;
+      IsWorldReady = true;
+      IsGeneratingWorld = false;
+      GenerationStatus =
+          $"Complete. BlockChunks={worldData.BlockChunks.Count}, DensityChunks={worldData.DensityChunks.Count}";
+
+      CubusWorldStorage storage = GetComponent<CubusWorldStorage>();
+
+      if (storage != null)
+      {
+        storage.SaveAfterGenerationIfEnabled();
+      }
+
+      Debug.Log(
+          $"Cubus world database generated. " +
+          $"Mode={settings.TerrainSystem}, " +
+          $"BlockChunks={worldData.BlockChunks.Count}, " +
+          $"DensityChunks={worldData.DensityChunks.Count}"
+      );
+    }
+
+    public void MarkDatabaseLoaded()
+    {
+      IsWorldReady = true;
+      IsInitialTerrainReady = false;
+      GenerationProgress = 1.0f;
+    }
 
     [ContextMenu("Clear World")]
     public void ClearWorld()

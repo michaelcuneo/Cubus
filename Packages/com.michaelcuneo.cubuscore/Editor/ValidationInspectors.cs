@@ -1,6 +1,7 @@
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World;
+using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage;
 using UnityEditor;
 using UnityEngine;
 
@@ -9,6 +10,14 @@ namespace CubusCore.Editor
   [CustomEditor(typeof(CubusWorld))]
   public sealed class CubusWorldEditor : UnityEditor.Editor
   {
+    private System.Collections.IEnumerator generationRoutine;
+    private CubusWorld generatingWorld;
+
+    private void OnDisable()
+    {
+      StopGeneration();
+    }
+
     public override void OnInspectorGUI()
     {
       CubusWorld world = (CubusWorld)target;
@@ -25,6 +34,13 @@ namespace CubusCore.Editor
       EditorGUILayout.Space(6f);
       EditorGUILayout.LabelField("Generation", EditorStyles.boldLabel);
 
+      Rect progressRect = GUILayoutUtility.GetRect(18f, 18f);
+      EditorGUI.ProgressBar(
+          progressRect,
+          world.GenerationProgress,
+          $"{world.GenerationProgress * 100f:0.0}%"
+      );
+
       EditorGUILayout.HelpBox(
           $"Ready={world.IsWorldReady}, InitialTerrainReady={world.IsInitialTerrainReady}, Progress={(world.GenerationProgress * 100f):0}%",
           MessageType.Info
@@ -39,29 +55,94 @@ namespace CubusCore.Editor
       }
     }
 
-    private static void DrawGenerationActions(CubusWorld world, WorldStreamer streamer)
+    private void DrawGenerationActions(CubusWorld world, WorldStreamer streamer)
     {
       EditorGUILayout.Space(4f);
       EditorGUILayout.LabelField("Actions", EditorStyles.boldLabel);
 
       bool hasStreamer = streamer != null;
+      bool isGenerating = generationRoutine != null;
 
       if (hasStreamer && !EditorApplication.isPlaying)
       {
         EditorGUILayout.HelpBox(
-            "This world uses runtime streaming. Enter Play Mode to generate terrain, render the required chunks, and spawn into the initial terrain.",
+            "Generate World Database builds bounded world data only. Runtime streaming will render visible chunks from this database in Play Mode.",
+            MessageType.Info
+        );
+      }
+
+      CubusWorldStorage storage = world.GetComponent<CubusWorldStorage>();
+
+      if (storage != null)
+      {
+        if (GUILayout.Button("Save World Database"))
+        {
+          storage.SaveWorldDatabase();
+          EditorUtility.SetDirty(world);
+        }
+
+        if (GUILayout.Button("Load World Database"))
+        {
+          if (storage.LoadWorldDatabase())
+          {
+            EditorUtility.SetDirty(world);
+          }
+        }
+
+        if (GUILayout.Button("Delete World Database"))
+        {
+          storage.DeleteWorldDatabase();
+          EditorUtility.SetDirty(world);
+        }
+      }
+      else
+      {
+        EditorGUILayout.HelpBox(
+            "Add CubusWorldStorage to enable saving/loading generated world databases.",
             MessageType.Warning
         );
       }
 
-      using (new EditorGUI.DisabledScope(hasStreamer && !EditorApplication.isPlaying))
+      using (new EditorGUI.DisabledScope(isGenerating))
       {
-        if (GUILayout.Button(hasStreamer ? "Regenerate Streamed World" : "Generate World"))
+        if (GUILayout.Button("Generate World Database"))
         {
-          world.GenerateWorld();
-          EditorUtility.SetDirty(world);
+          StartGeneration(world);
         }
+      }
 
+      using (new EditorGUI.DisabledScope(!isGenerating))
+      {
+        if (GUILayout.Button("Cancel Generation"))
+        {
+          StopGeneration();
+        }
+      }
+
+      if (hasStreamer)
+      {
+        using (new EditorGUI.DisabledScope(!EditorApplication.isPlaying || isGenerating))
+        {
+          if (GUILayout.Button("Regenerate Streamed World"))
+          {
+            streamer.RegenerateStreamedWorld();
+            EditorUtility.SetDirty(world);
+          }
+        }
+      }
+      else
+      {
+        using (new EditorGUI.DisabledScope(isGenerating))
+        {
+          if (GUILayout.Button("Generate World"))
+          {
+            StartGeneration(world);
+          }
+        }
+      }
+
+      using (new EditorGUI.DisabledScope(isGenerating))
+      {
         if (GUILayout.Button("Clear World"))
         {
           world.ClearWorld();
@@ -78,9 +159,49 @@ namespace CubusCore.Editor
       if (hasStreamer)
       {
         EditorGUILayout.HelpBox(
-            "Spawn is triggered automatically by the runtime streamer once the initial terrain chunk is ready.",
+            "Spawn is triggered automatically by the runtime streamer once nearby generated world data has been rendered.",
             MessageType.Info
         );
+      }
+    }
+
+    private void StartGeneration(CubusWorld world)
+    {
+      StopGeneration();
+
+      generatingWorld = world;
+      generationRoutine = world.GenerateWorldAsync();
+
+      EditorApplication.update += TickGeneration;
+    }
+
+    private void StopGeneration()
+    {
+      if (generationRoutine != null)
+      {
+        EditorApplication.update -= TickGeneration;
+      }
+
+      generationRoutine = null;
+      generatingWorld = null;
+    }
+
+    private void TickGeneration()
+    {
+      if (generationRoutine == null || generatingWorld == null)
+      {
+        StopGeneration();
+        return;
+      }
+
+      bool keepGoing = generationRoutine.MoveNext();
+
+      EditorUtility.SetDirty(generatingWorld);
+      Repaint();
+
+      if (!keepGoing)
+      {
+        StopGeneration();
       }
     }
   }
@@ -195,9 +316,7 @@ namespace CubusCore.Editor
 
     private static int EstimateFixedBoundsChunkCount(WorldSettings settings)
     {
-      int safeRadius = Mathf.Max(0, settings.ViewDistanceInChunks);
       settings.GetGenerationChunkBoundsXZ(
-          safeRadius,
           out int minChunkX,
           out int maxChunkX,
           out int minChunkZ,
