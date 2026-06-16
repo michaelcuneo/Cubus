@@ -315,18 +315,18 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         count++;
         if (result == null || result.GenerationId != chunkLoadQueue.GenerationId) continue;
         Vector3Int c = result.ChunkCoord;
-        if (!desiredChunkCoords.Contains(c)) continue;
+        if (!desiredChunkCoords.Contains(c) && !keepChunkCoords.Contains(c)) continue;
 
         if (result.Loaded)
         {
           knownEmptyChunks.Remove(c);
           if (result.TerrainSystem == TerrainSystem.Block && result.BlockChunkData != null) world.Data.BlockChunks[c] = result.BlockChunkData;
           else if (result.TerrainSystem == TerrainSystem.SmoothDensity && result.DensityChunkData != null) world.Data.DensityChunks[c] = result.DensityChunkData;
-          if (HasChunkData(c)) QueueRender(c);
+          if (desiredChunkCoords.Contains(c) && HasChunkData(c)) QueueRender(c);
           continue;
         }
 
-        if (EnsureGeneratedChunkDataAvailable(c)) QueueRender(c);
+        if (desiredChunkCoords.Contains(c) && EnsureGeneratedChunkDataAvailable(c)) QueueRender(c);
       }
     }
 
@@ -343,10 +343,36 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
           count++; continue;
         }
         if (!world.Data.DensityChunks.TryGetValue(c, out DensityChunkData d) || d == null) continue;
+        if (!EnsureDensitySampleChunksAvailableForMesh(c)) { QueueRender(c); break; }
         if (densityBuildQueue.IsInFlight(c)) { QueueRender(c); break; }
         if (densityBuildQueue.ActiveTaskCount >= MaxAsyncChunkTasks) { QueueRender(c); break; }
         if (TryStartDensityMeshBuild(c, d)) count++;
       }
+    }
+
+    private bool EnsureDensitySampleChunksAvailableForMesh(Vector3Int root)
+    {
+      for (int i = 0; i < DensityMeshSampleChunkOffsets.Length; i++)
+      {
+        Vector3Int c = root + DensityMeshSampleChunkOffsets[i];
+
+        if (HasChunkData(c) || !world.Settings.IsInsideWorldBounds(c))
+        {
+          continue;
+        }
+
+        keepChunkCoords.Add(c);
+
+        if (chunkLoadQueue.IsInFlight(c) || pendingLoadSet.Contains(c))
+        {
+          return false;
+        }
+
+        QueueLoad(c);
+        return false;
+      }
+
+      return true;
     }
 
     private void ProcessCompletedBuildResults()
