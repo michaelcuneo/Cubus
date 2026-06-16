@@ -18,6 +18,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
     [SerializeField] private string worldId = "demo_world";
     [SerializeField] private bool autoSaveAfterGeneration = true;
     [SerializeField] private bool autoLoadOnStart = true;
+    [SerializeField] private bool autoLoadManifestOnlyOnStart = true;
 
     [Header("Diagnostics")]
     [SerializeField] private bool logCompressionStats = true;
@@ -42,7 +43,16 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
 
     private void Start()
     {
-      if (autoLoadOnStart)
+      if (!autoLoadOnStart)
+      {
+        return;
+      }
+
+      if (autoLoadManifestOnlyOnStart)
+      {
+        LoadWorldManifestOnly();
+      }
+      else
       {
         LoadWorldDatabase();
       }
@@ -217,19 +227,15 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
           switch (record.TerrainSystem)
           {
             case TerrainSystem.Block:
-              world.Data.BlockChunks[chunkCoord] =
-                  CubusChunkPayloadCodec.DecodeBlockChunk(record);
+              world.Data.BlockChunks[chunkCoord] = CubusChunkPayloadCodec.DecodeBlockChunk(record);
               break;
 
             case TerrainSystem.SmoothDensity:
-              world.Data.DensityChunks[chunkCoord] =
-                  CubusChunkPayloadCodec.DecodeDensityChunk(record);
+              world.Data.DensityChunks[chunkCoord] = CubusChunkPayloadCodec.DecodeDensityChunk(record);
               break;
 
             default:
-              Debug.LogWarning(
-                  $"Unsupported terrain system in chunk record. Chunk={chunkCoord}, Terrain={record.TerrainSystem}"
-              );
+              Debug.LogWarning($"Unsupported terrain system in chunk record. Chunk={chunkCoord}, Terrain={record.TerrainSystem}");
               break;
           }
 
@@ -238,9 +244,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
         }
         catch (Exception ex)
         {
-          Debug.LogWarning(
-              $"Failed to decode Cubus chunk during full load. WorldId={WorldId}, Chunk={chunkCoord}, Error={ex.Message}"
-          );
+          Debug.LogWarning($"Failed to decode Cubus chunk during full load. WorldId={WorldId}, Chunk={chunkCoord}, Error={ex.Message}");
         }
       }
 
@@ -363,24 +367,16 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
       switch (backend)
       {
         case WorldStorageBackend.LocalFile:
-          return new FileWorldChunkStore(
-              Path.Combine(Application.persistentDataPath, "CubusCore", "Worlds")
-          );
+          return new FileWorldChunkStore(Path.Combine(Application.persistentDataPath, "CubusCore", "Worlds"));
 
         case WorldStorageBackend.SpacetimeDb:
-          Debug.LogWarning(
-              "SpacetimeDB backend is selected, but the SpacetimeDB integration package is not installed. Falling back to local file storage."
-          );
-          return new FileWorldChunkStore(
-              Path.Combine(Application.persistentDataPath, "CubusCore", "Worlds")
-          );
+          Debug.LogWarning("SpacetimeDB backend is selected, but the SpacetimeDB integration package is not installed. Falling back to local file storage.");
+          return new FileWorldChunkStore(Path.Combine(Application.persistentDataPath, "CubusCore", "Worlds"));
 
         case WorldStorageBackend.Custom:
         default:
           Debug.LogWarning("Custom backend selected, but no custom store provider is assigned. Falling back to local file storage.");
-          return new FileWorldChunkStore(
-              Path.Combine(Application.persistentDataPath, "CubusCore", "Worlds")
-          );
+          return new FileWorldChunkStore(Path.Combine(Application.persistentDataPath, "CubusCore", "Worlds"));
       }
     }
 
@@ -394,12 +390,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
     {
       WorldSettings settings = world.Settings;
 
-      settings.GetGenerationChunkBoundsXZ(
-          out int minChunkX,
-          out int maxChunkX,
-          out int minChunkZ,
-          out int maxChunkZ
-      );
+      settings.GetGenerationChunkBoundsXZ(out int minChunkX, out int maxChunkX, out int minChunkZ, out int maxChunkZ);
 
       int minChunkY;
       int maxChunkY;
@@ -427,9 +418,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
         MaxChunkY = maxChunkY,
         MinChunkZ = minChunkZ,
         MaxChunkZ = maxChunkZ,
-        ChunkCount = settings.TerrainSystem == TerrainSystem.Block
-            ? world.Data.BlockChunks.Count
-            : world.Data.DensityChunks.Count,
+        ChunkCount = settings.TerrainSystem == TerrainSystem.Block ? world.Data.BlockChunks.Count : world.Data.DensityChunks.Count,
         UpdatedUnixTime = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
         CreatedUnixTime = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
       };
@@ -444,9 +433,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
 
       if (manifest.ChunkSize != VoxelConstants.ChunkSize)
       {
-        Debug.LogWarning(
-            $"Loaded world chunk size {manifest.ChunkSize} differs from runtime chunk size {VoxelConstants.ChunkSize}."
-        );
+        Debug.LogWarning($"Loaded world chunk size {manifest.ChunkSize} differs from runtime chunk size {VoxelConstants.ChunkSize}.");
       }
     }
 
