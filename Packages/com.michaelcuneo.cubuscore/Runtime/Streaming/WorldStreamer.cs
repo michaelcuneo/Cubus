@@ -284,10 +284,22 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         if (!world.Settings.IsInsideWorldBounds(c)) { knownEmptyChunks.Add(c); count++; continue; }
         if (chunkLoadQueue.IsInFlight(c)) { count++; continue; }
 
-        if (storage != null && storage.ActiveStore != null && chunkLoadQueue.TryStartLoad(storage.ActiveStore, storage.WorldId, c, MaxAsyncChunkTasks))
+        if (storage != null && storage.ActiveStore != null)
         {
-          count++;
-          continue;
+          if (chunkLoadQueue.ActiveTaskCount >= MaxAsyncChunkTasks)
+          {
+            QueueLoad(c);
+            break;
+          }
+
+          if (chunkLoadQueue.TryStartLoad(storage.ActiveStore, storage.WorldId, c, MaxAsyncChunkTasks))
+          {
+            count++;
+            continue;
+          }
+
+          QueueLoad(c);
+          break;
         }
 
         if (EnsureGeneratedChunkDataAvailable(c)) QueueRender(c);
