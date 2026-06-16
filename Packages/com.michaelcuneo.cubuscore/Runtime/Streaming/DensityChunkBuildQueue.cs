@@ -48,9 +48,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       }
     }
 
-    public bool TryStartBuild(
-        DensityChunkBuildRequest request,
-        int maxActiveTasks)
+    public bool TryStartBuild(DensityChunkBuildRequest request, int maxActiveTasks)
     {
       if (request == null)
       {
@@ -85,22 +83,15 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
         lock (completedResults)
         {
-          if (result != null)
+          completedResults.Enqueue(result ?? new DensityChunkBuildResult
           {
-            completedResults.Enqueue(result);
-          }
-          else
-          {
-            completedResults.Enqueue(new DensityChunkBuildResult
-            {
-              ChunkCoord = request.ChunkCoord,
-              ChunkData = null,
-              MeshData = null,
-              IsEmpty = true,
-              HasSurfaceCrossing = false,
-              GenerationId = request.GenerationId
-            });
-          }
+            ChunkCoord = request.ChunkCoord,
+            ChunkData = null,
+            MeshData = null,
+            IsEmpty = true,
+            HasSurfaceCrossing = false,
+            GenerationId = request.GenerationId
+          });
         }
       });
 
@@ -114,10 +105,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         if (completedResults.Count > 0)
         {
           result = completedResults.Dequeue();
-
           activeTaskCount = Mathf.Max(0, activeTaskCount - 1);
           inFlightChunkCoords.Remove(result.ChunkCoord);
-
           return true;
         }
       }
@@ -151,7 +140,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       request.ChunkDataSnapshots ??= new Dictionary<Vector3Int, DensityChunkData>();
       request.ChunkDataSnapshots[request.ChunkCoord] = chunkData;
 
-      MeshData meshData = MarchingCubesMesher.GenerateMeshData(
+      MeshData meshData = DensityMeshDataBuilder.Generate(
           request.ChunkCoord,
           request.WorldSnapshot,
           request.CellStep,
@@ -170,9 +159,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       };
     }
 
-    private static DensityVoxel SampleVoxelForBuild(
-    Vector3Int worldVoxelCoord,
-    DensityChunkBuildRequest request)
+    private static DensityVoxel SampleVoxelForBuild(Vector3Int worldVoxelCoord, DensityChunkBuildRequest request)
     {
       Vector3Int chunkCoord = VoxelMath.WorldVoxelToChunkCoord(worldVoxelCoord);
       Vector3Int localCoord = VoxelMath.WorldVoxelToLocalCoord(worldVoxelCoord);
