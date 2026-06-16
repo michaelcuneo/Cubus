@@ -80,15 +80,21 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
     private void Awake()
     {
-      world = GetComponent<CubusWorld>();
-      storage = GetComponent<CubusWorldStorage>();
-      worldRenderer = GetComponent<WorldRenderer>();
-      editTool = GetComponent<BlockEditTool>();
+      EnsureRuntimeReferences();
+    }
+
+    private bool EnsureRuntimeReferences()
+    {
+      world ??= GetComponent<CubusWorld>();
+      storage ??= GetComponent<CubusWorldStorage>();
+      worldRenderer ??= GetComponent<WorldRenderer>();
+      editTool ??= GetComponent<BlockEditTool>();
+      return world != null && worldRenderer != null && world.Settings != null;
     }
 
     private void OnEnable()
     {
-      editTool ??= GetComponent<BlockEditTool>();
+      EnsureRuntimeReferences();
       if (editTool != null) editTool.BlockChunksEdited += HandleBlockChunksEdited;
     }
 
@@ -99,6 +105,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
     private void Start()
     {
+      if (!EnsureRuntimeReferences()) return;
       if (viewer == null && Camera.main != null) viewer = Camera.main.transform;
       if (!world.Settings.TryValidateConfiguration(out string configError))
       {
@@ -112,8 +119,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     [ContextMenu("Regenerate Streamed World")]
     public void RegenerateStreamedWorld()
     {
-      world ??= GetComponent<CubusWorld>();
-      worldRenderer ??= GetComponent<WorldRenderer>();
+      if (!EnsureRuntimeReferences()) return;
       world.SyncBiomeMaterialLayersFromRules();
       StartBootstrap(true);
     }
@@ -126,6 +132,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
     private IEnumerator BootstrapRoutine(bool logRegenerateMessage)
     {
+      if (!EnsureRuntimeReferences()) yield break;
+
       if (!world.IsWorldReady)
       {
         if (storage == null || !storage.LoadWorldManifestOnly())
@@ -148,6 +156,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
     private void Update()
     {
+      if (!EnsureRuntimeReferences()) return;
       if (bootstrapCoroutine != null) return;
       if (world.Settings.TerrainSystem != TerrainSystem.Block && world.Settings.TerrainSystem != TerrainSystem.SmoothDensity) return;
       UpdateStreamingSetIfNeeded();
@@ -160,7 +169,9 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     [ContextMenu("Force Refresh Streaming Set")]
     public void ForceRefreshStreamingSet()
     {
+      if (!EnsureRuntimeReferences()) return;
       worldSnapshot = WorldGenerationSnapshot.FromSettings(world.Settings);
+      generator ??= new WorldGenerator(world.Settings);
       surfaceChunkYCache.Clear();
       buildQueue.IncrementGeneration();
       densityBuildQueue.IncrementGeneration();
@@ -366,16 +377,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
           worldSnapshot,
           1,
           true,
-          worldVoxel => SampleDensityForImmediateBuild(
-              worldVoxel,
-              snapshots,
-              minX,
-              maxX,
-              minY,
-              maxY,
-              minZ,
-              maxZ
-          )
+          worldVoxel => SampleDensityForImmediateBuild(worldVoxel, snapshots, minX, maxX, minY, maxY, minZ, maxZ)
       );
 
       if (meshData == null || meshData.IsEmpty)
@@ -391,31 +393,17 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       return true;
     }
 
-    private DensityVoxel SampleDensityForImmediateBuild(
-        Vector3Int worldVoxelCoord,
-        Dictionary<Vector3Int, DensityChunkData> snapshots,
-        int minX,
-        int maxX,
-        int minY,
-        int maxY,
-        int minZ,
-        int maxZ)
+    private DensityVoxel SampleDensityForImmediateBuild(Vector3Int worldVoxelCoord, Dictionary<Vector3Int, DensityChunkData> snapshots, int minX, int maxX, int minY, int maxY, int minZ, int maxZ)
     {
       Vector3Int chunkCoord = VoxelMath.WorldVoxelToChunkCoord(worldVoxelCoord);
       Vector3Int localCoord = VoxelMath.WorldVoxelToLocalCoord(worldVoxelCoord);
 
-      if (snapshots != null &&
-          snapshots.TryGetValue(chunkCoord, out DensityChunkData chunkData) &&
-          chunkData != null &&
-          chunkData.IsInBounds(localCoord.x, localCoord.y, localCoord.z))
+      if (snapshots != null && snapshots.TryGetValue(chunkCoord, out DensityChunkData chunkData) && chunkData != null && chunkData.IsInBounds(localCoord.x, localCoord.y, localCoord.z))
       {
         return chunkData.GetVoxel(localCoord.x, localCoord.y, localCoord.z);
       }
 
-      bool outsideGeneratedBounds =
-          chunkCoord.x < minX || chunkCoord.x > maxX ||
-          chunkCoord.y < minY || chunkCoord.y > maxY ||
-          chunkCoord.z < minZ || chunkCoord.z > maxZ;
+      bool outsideGeneratedBounds = chunkCoord.x < minX || chunkCoord.x > maxX || chunkCoord.y < minY || chunkCoord.y > maxY || chunkCoord.z < minZ || chunkCoord.z > maxZ;
 
       if (outsideGeneratedBounds)
       {
@@ -423,15 +411,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       }
 
       double scale = worldSnapshot.DensitySampleScale <= 0.0f ? 1.0 : worldSnapshot.DensitySampleScale;
-      TerrainSamplerBurst.Sample(
-          worldSnapshot.TerrainProfile,
-          worldVoxelCoord.x * scale,
-          worldVoxelCoord.z * scale,
-          worldVoxelCoord.y * scale,
-          out float density,
-          out int solidMaterialId
-      );
-
+      TerrainSamplerBurst.Sample(worldSnapshot.TerrainProfile, worldVoxelCoord.x * scale, worldVoxelCoord.z * scale, worldVoxelCoord.y * scale, out float density, out int solidMaterialId);
       ushort materialId = density > 0.0f ? (ushort)Mathf.Clamp(solidMaterialId, 1, 65535) : (ushort)0;
       return new DensityVoxel(density, materialId);
     }
@@ -467,7 +447,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
     public void RebuildDensityChunks(IEnumerable<Vector3Int> dirtyChunks)
     {
-      if (world.Settings.TerrainSystem != TerrainSystem.SmoothDensity) return;
+      if (!EnsureRuntimeReferences() || world.Settings.TerrainSystem != TerrainSystem.SmoothDensity) return;
       densityBuildQueue.IncrementGeneration();
 
       foreach (Vector3Int dirtyChunk in dirtyChunks)
