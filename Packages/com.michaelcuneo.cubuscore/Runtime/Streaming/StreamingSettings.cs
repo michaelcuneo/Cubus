@@ -21,15 +21,16 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
     [Header("Budgets")]
     [Min(4)]
-    public int ChunksGeneratedPerFrame = 8;
+    public int ChunksGeneratedPerFrame = 16;
 
     [Min(8)]
-    public int InitialChunksGeneratedPerFrame = 32;
+    public int InitialChunksGeneratedPerFrame = 64;
 
-    [Tooltip("Main-thread render budget. Smooth-density meshing is currently synchronous, so keep this low until density meshing is moved off the main thread.")]
-    [Min(1)]
-    public int ChunksRenderedPerFrame = 4;
+    [Tooltip("For smooth-density this now limits async mesh jobs started per frame, not main-thread marching-cubes builds.")]
+    [Min(4)]
+    public int ChunksRenderedPerFrame = 32;
 
+    [Tooltip("Maximum completed mesh data objects converted to Unity meshes per frame.")]
     [Min(4)]
     public int MeshAppliesPerFrame = 16;
 
