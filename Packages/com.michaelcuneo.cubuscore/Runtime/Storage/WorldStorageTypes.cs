@@ -21,7 +21,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
   public enum CubusChunkPayloadFormat : byte
   {
     BlockMaterialU16Raw = 1,
-    DensityF32MaterialU16Raw = 2
+    DensityF32MaterialU16Raw = 2,
+    DensityI16MaterialU16Rle = 3
   }
 
   [Serializable]
