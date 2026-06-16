@@ -11,11 +11,11 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     public int UnloadPaddingInChunks = 4;
 
     [Header("Vertical Around Surface")]
-    [Tooltip("Developer hint only. WorldStreamer clamps this to a safe minimum.")]
+    [Tooltip("Number of chunks below the sampled surface kept in the desired streaming set.")]
     [Min(0)]
     public int ChunksBelowSurface = 8;
 
-    [Tooltip("Developer hint only. WorldStreamer clamps this to a safe minimum.")]
+    [Tooltip("Number of chunks above the sampled surface kept in the desired streaming set.")]
     [Min(0)]
     public int ChunksAboveSurface = 8;
 
@@ -26,11 +26,12 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     [Min(8)]
     public int InitialChunksGeneratedPerFrame = 32;
 
+    [Tooltip("For smooth-density this is the number of synchronous density meshes allowed per frame. Keep high enough to reveal terrain quickly, low enough to avoid huge frame spikes.")]
     [Min(4)]
-    public int ChunksRenderedPerFrame = 16;
+    public int ChunksRenderedPerFrame = 32;
 
     [Min(4)]
-    public int MeshAppliesPerFrame = 16;
+    public int MeshAppliesPerFrame = 32;
 
     [Header("Async")]
     public bool UseAsyncGeneration = true;
