@@ -334,7 +334,12 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
       UpdateStreamingSetIfNeeded();
       ProcessGenerateQueue();
-      ProcessCompletedBuildResults();
+
+      if (world.Settings.TerrainSystem == TerrainSystem.Block)
+      {
+        ProcessCompletedBuildResults();
+      }
+
       ProcessRenderQueue();
       TryBroadcastInitialTerrainReady();
     }
@@ -1323,11 +1328,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
           continue;
         }
 
-        if (!TryStartDensityMeshBuild(chunkCoord, densityChunkData))
-        {
-          QueueRender(chunkCoord);
-        }
-
+        RenderDensityChunk(chunkCoord, densityChunkData);
         renderedThisFrame++;
       }
     }
