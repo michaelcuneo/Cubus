@@ -29,6 +29,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     private readonly HashSet<Vector3Int> pendingGenerateSet = new();
     private readonly Queue<Vector3Int> pendingRenderQueue = new();
     private readonly HashSet<Vector3Int> pendingRenderSet = new();
+    private readonly Queue<Vector3Int> pendingLoadQueue = new();
+    private readonly HashSet<Vector3Int> pendingLoadSet = new();
     private readonly HashSet<Vector3Int> knownEmptyChunks = new();
     private readonly HashSet<Vector3Int> forcedDensityRebuildChunks = new();
     private readonly Dictionary<Vector2Int, int> surfaceChunkYCache = new();
@@ -65,6 +67,9 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
     private int ChunksRenderedPerFrame =>
         Mathf.Clamp(settings != null ? settings.ChunksRenderedPerFrame : 16, 4, 64);
+
+    private int ChunksLoadedPerFrame =>
+        Mathf.Clamp(settings != null ? settings.ChunksGeneratedPerFrame : 8, 4, 64);
 
     private int MeshAppliesPerFrame =>
         Mathf.Clamp(settings != null ? settings.MeshAppliesPerFrame : 16, 4, 64);
@@ -334,6 +339,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
       UpdateStreamingSetIfNeeded();
       ProcessGenerateQueue();
+      ProcessLoadQueue();
 
       if (world.Settings.TerrainSystem == TerrainSystem.Block)
       {
@@ -598,6 +604,9 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
       pendingGenerateQueue.Clear();
       pendingGenerateSet.Clear();
+
+      pendingLoadQueue.Clear();
+      pendingLoadSet.Clear();
 
       pendingRenderQueue.Clear();
       pendingRenderSet.Clear();
@@ -1180,6 +1189,59 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       pendingRenderSet.Add(chunkCoord);
     }
 
+    private void QueueLoad(Vector3Int chunkCoord)
+    {
+      if (pendingLoadSet.Contains(chunkCoord))
+      {
+        return;
+      }
+
+      pendingLoadQueue.Enqueue(chunkCoord);
+      pendingLoadSet.Add(chunkCoord);
+    }
+
+    private void ProcessLoadQueue()
+    {
+      int loadedThisFrame = 0;
+
+      while (
+          pendingLoadQueue.Count > 0 &&
+          loadedThisFrame < ChunksLoadedPerFrame)
+      {
+        Vector3Int chunkCoord = pendingLoadQueue.Dequeue();
+        pendingLoadSet.Remove(chunkCoord);
+
+        if (!desiredChunkCoords.Contains(chunkCoord))
+        {
+          continue;
+        }
+
+        if (worldRenderer.HasChunkView(chunkCoord))
+        {
+          continue;
+        }
+
+        if (pendingRenderSet.Contains(chunkCoord))
+        {
+          continue;
+        }
+
+        if (knownEmptyChunks.Contains(chunkCoord))
+        {
+          continue;
+        }
+
+        if (!EnsureChunkDataAvailable(chunkCoord))
+        {
+          loadedThisFrame++;
+          continue;
+        }
+
+        QueueRender(chunkCoord);
+        loadedThisFrame++;
+      }
+    }
+
     private void ProcessRenderQueue()
     {
       int renderedThisFrame = 0;
@@ -1231,9 +1293,22 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
     private void QueueGeneratedChunksForRender()
     {
+      Vector3 viewerWorldPosition = viewer != null
+          ? viewer.position
+          : transform.TransformPoint(Vector3.zero);
+
+      Vector3Int viewerChunkCoord = WorldToSurfaceChunkCoord(viewerWorldPosition);
+
+      List<Vector3Int> candidates = new();
+
       foreach (Vector3Int chunkCoord in desiredChunkCoords)
       {
         if (worldRenderer.HasChunkView(chunkCoord))
+        {
+          continue;
+        }
+
+        if (pendingLoadSet.Contains(chunkCoord))
         {
           continue;
         }
@@ -1248,15 +1323,73 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
           continue;
         }
 
-        if (!EnsureChunkDataAvailable(chunkCoord))
+        if (HasChunkData(chunkCoord))
         {
+          candidates.Add(chunkCoord);
           continue;
         }
 
-        QueueRender(chunkCoord);
+        if (!world.Settings.IsInsideWorldBounds(chunkCoord))
+        {
+          knownEmptyChunks.Add(chunkCoord);
+          continue;
+        }
+
+        candidates.Add(chunkCoord);
+      }
+
+      candidates.Sort((a, b) =>
+      {
+        int aSurfaceY = GetSurfaceChunkYForColumn(
+            a.x,
+            a.z,
+            viewerChunkCoord.y * VoxelConstants.ChunkSize
+        );
+
+        int bSurfaceY = GetSurfaceChunkYForColumn(
+            b.x,
+            b.z,
+            viewerChunkCoord.y * VoxelConstants.ChunkSize
+        );
+
+        int aSurfaceDistance = Mathf.Abs(a.y - aSurfaceY);
+        int bSurfaceDistance = Mathf.Abs(b.y - bSurfaceY);
+
+        if (aSurfaceDistance != bSurfaceDistance)
+        {
+          return aSurfaceDistance.CompareTo(bSurfaceDistance);
+        }
+
+        int aDx = a.x - viewerChunkCoord.x;
+        int aDz = a.z - viewerChunkCoord.z;
+        int bDx = b.x - viewerChunkCoord.x;
+        int bDz = b.z - viewerChunkCoord.z;
+
+        int aHorizontalDistance = aDx * aDx + aDz * aDz;
+        int bHorizontalDistance = bDx * bDx + bDz * bDz;
+
+        if (aHorizontalDistance != bHorizontalDistance)
+        {
+          return aHorizontalDistance.CompareTo(bHorizontalDistance);
+        }
+
+        return Mathf.Abs(a.y - viewerChunkCoord.y)
+            .CompareTo(Mathf.Abs(b.y - viewerChunkCoord.y));
+      });
+
+      for (int i = 0; i < candidates.Count; i++)
+      {
+        Vector3Int chunkCoord = candidates[i];
+
+        if (HasChunkData(chunkCoord))
+        {
+          QueueRender(chunkCoord);
+          continue;
+        }
+
+        QueueLoad(chunkCoord);
       }
     }
-
     private IEnumerator PreGenerateSpawnRegionIfNeededAsync()
     {
       if (!world.Settings.UseFixedGenerationBounds)
