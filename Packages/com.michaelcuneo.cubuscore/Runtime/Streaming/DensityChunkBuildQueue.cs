@@ -1,5 +1,8 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Core;
+using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing;
+using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Voxels;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Chunks;
 using UnityEngine;
 
@@ -129,8 +132,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
       if (request.ChunkDataSnapshot != null)
       {
-        // Fast path: chunk was already loaded and edited on the main thread.
-        // Clone it and apply any overrides instead of regenerating terrain noise.
         chunkData = request.ChunkDataSnapshot.Clone();
 
         if (request.OverrideSnapshot != null && request.OverrideSnapshot.Count > 0)
@@ -147,18 +148,57 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         );
       }
 
-      bool hasSurfaceCrossing = chunkData != null && chunkData.HasSurfaceCrossing();
-      bool isEmpty = !hasSurfaceCrossing;
+      request.ChunkDataSnapshots ??= new Dictionary<Vector3Int, DensityChunkData>();
+      request.ChunkDataSnapshots[request.ChunkCoord] = chunkData;
+
+      MeshData meshData = MarchingCubesMesher.GenerateMeshData(
+          request.ChunkCoord,
+          request.WorldSnapshot,
+          request.CellStep,
+          request.FlipWinding,
+          worldVoxel => SampleVoxelForBuild(worldVoxel, request)
+      );
 
       return new DensityChunkBuildResult
       {
         ChunkCoord = request.ChunkCoord,
         ChunkData = chunkData,
-        MeshData = null,
-        IsEmpty = isEmpty,
-        HasSurfaceCrossing = hasSurfaceCrossing,
+        MeshData = meshData,
+        IsEmpty = meshData == null || meshData.IsEmpty,
+        HasSurfaceCrossing = meshData != null && !meshData.IsEmpty,
         GenerationId = request.GenerationId
       };
+    }
+
+    private static DensityVoxel SampleVoxelForBuild(
+    Vector3Int worldVoxelCoord,
+    DensityChunkBuildRequest request)
+    {
+      Vector3Int chunkCoord = VoxelMath.WorldVoxelToChunkCoord(worldVoxelCoord);
+      Vector3Int localCoord = VoxelMath.WorldVoxelToLocalCoord(worldVoxelCoord);
+
+      if (request.ChunkDataSnapshots != null &&
+          request.ChunkDataSnapshots.TryGetValue(chunkCoord, out DensityChunkData chunkData) &&
+          chunkData != null &&
+          chunkData.IsInBounds(localCoord.x, localCoord.y, localCoord.z))
+      {
+        return chunkData.GetVoxel(localCoord.x, localCoord.y, localCoord.z);
+      }
+
+      bool insideGeneratedBounds =
+          chunkCoord.x >= request.GeneratedMinChunkX &&
+          chunkCoord.x <= request.GeneratedMaxChunkX &&
+          chunkCoord.y >= request.GeneratedMinChunkY &&
+          chunkCoord.y <= request.GeneratedMaxChunkY &&
+          chunkCoord.z >= request.GeneratedMinChunkZ &&
+          chunkCoord.z <= request.GeneratedMaxChunkZ;
+
+      if (!insideGeneratedBounds)
+      {
+        return new DensityVoxel(1.0f, 1);
+      }
+
+      return DensityVoxel.Empty;
     }
   }
 }

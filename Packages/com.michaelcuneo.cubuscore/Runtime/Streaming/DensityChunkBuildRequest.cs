@@ -13,13 +13,16 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     public int CellStep = 1;
     public bool FlipWinding = true;
     public Dictionary<int, DensityVoxelOverride> OverrideSnapshot;
-
-    /// <summary>
-    /// When set, the build skips expensive terrain noise re-generation and
-    /// uses this pre-edited chunk data instead. Must be a snapshot copy —
-    /// never pass a live chunk reference to a background thread.
-    /// </summary>
     public DensityChunkData ChunkDataSnapshot;
+    public Dictionary<Vector3Int, DensityChunkData> ChunkDataSnapshots;
+
+    public int GeneratedMinChunkX;
+    public int GeneratedMaxChunkX;
+    public int GeneratedMinChunkY;
+    public int GeneratedMaxChunkY;
+    public int GeneratedMinChunkZ;
+    public int GeneratedMaxChunkZ;
+
   }
 
   public readonly struct DensityVoxelOverride

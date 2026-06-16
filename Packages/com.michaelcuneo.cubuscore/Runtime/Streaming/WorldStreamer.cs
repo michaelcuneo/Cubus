@@ -52,10 +52,10 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       Mathf.Max(2, settings != null ? settings.UnloadPaddingInChunks : 4);
 
     private int ChunksBelowSurface =>
-        Mathf.Max(0, settings != null ? settings.ChunksBelowSurface : 2);
+        Mathf.Max(8, settings != null ? settings.ChunksBelowSurface : 8);
 
     private int ChunksAboveSurface =>
-        Mathf.Max(0, settings != null ? settings.ChunksAboveSurface : 2);
+        Mathf.Max(8, settings != null ? settings.ChunksAboveSurface : 8);
 
     private int ChunksGeneratedPerFrame =>
         Mathf.Clamp(settings != null ? settings.ChunksGeneratedPerFrame : 8, 4, 64);
@@ -333,6 +333,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       }
 
       UpdateStreamingSetIfNeeded();
+      ProcessGenerateQueue();
+      ProcessCompletedBuildResults();
       ProcessRenderQueue();
       TryBroadcastInitialTerrainReady();
     }
@@ -1071,19 +1073,9 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
           continue;
         }
 
-        int vertexCount = result.MeshData != null ? result.MeshData.VertexCount : 0;
-        int triangleCount = result.MeshData != null ? result.MeshData.TriangleCount : 0;
-
-        if (result.ChunkData == null ||
-            result.IsEmpty ||
-            !result.HasSurfaceCrossing ||
-            !result.ChunkData.HasAnySolidVoxel() ||
-            !result.ChunkData.HasSurfaceCrossing())
+        if (result.ChunkData == null)
         {
-          knownEmptyChunks.Add(result.ChunkCoord);
-          world.Data.DensityChunks.Remove(result.ChunkCoord);
           worldRenderer.RemoveChunk(result.ChunkCoord);
-
           appliedThisFrame++;
           continue;
         }
@@ -1091,37 +1083,15 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         knownEmptyChunks.Remove(result.ChunkCoord);
         world.Data.DensityChunks[result.ChunkCoord] = result.ChunkData;
 
-        int cellStep = GetDensityCellStepForChunk(result.ChunkCoord);
-        float densityScale = Mathf.Max(0.001f, worldSnapshot.DensitySampleScale);
-
-        Mesh mesh = MarchingCubesMesher.GenerateMeshDirect(
-            result.ChunkCoord,
-            worldSnapshot,
-            cellStep,
-            true,
-            worldVoxel => SampleDensityForMeshing(
-                worldVoxel,
-                result.ChunkCoord,
-                result.ChunkData,
-                densityScale
-            )
-        );
-
-        if (mesh == null ||
-            mesh.vertexCount == 0 ||
-            mesh.subMeshCount == 0 ||
-            mesh.GetIndexCount(0) == 0)
+        if (result.MeshData == null || result.MeshData.IsEmpty)
         {
-          knownEmptyChunks.Add(result.ChunkCoord);
-          world.Data.DensityChunks.Remove(result.ChunkCoord);
-
           worldRenderer.RemoveChunk(result.ChunkCoord);
-
           appliedThisFrame++;
           continue;
         }
 
-        knownEmptyChunks.Remove(result.ChunkCoord);
+        Mesh mesh = result.MeshData.ToUnityMeshFast();
+        MeshDataPool.Return(result.MeshData);
 
         worldRenderer.RenderUnityMesh(
             result.ChunkCoord,
@@ -1133,6 +1103,109 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
         appliedThisFrame++;
       }
+    }
+
+    private static readonly Vector3Int[] DensityMeshSampleChunkOffsets =
+    {
+      new(0, 0, 0),
+      new(1, 0, 0),
+      new(0, 1, 0),
+      new(0, 0, 1),
+      new(1, 1, 0),
+      new(1, 0, 1),
+      new(0, 1, 1),
+      new(1, 1, 1)
+    };
+
+    private Dictionary<Vector3Int, DensityChunkData> CreateDensityMeshChunkSnapshots(
+        Vector3Int rootChunkCoord,
+        DensityChunkData rootChunkData)
+    {
+      Dictionary<Vector3Int, DensityChunkData> snapshots = new();
+
+      for (int i = 0; i < DensityMeshSampleChunkOffsets.Length; i++)
+      {
+        Vector3Int chunkCoord = rootChunkCoord + DensityMeshSampleChunkOffsets[i];
+
+        DensityChunkData sourceChunk = null;
+
+        if (chunkCoord == rootChunkCoord)
+        {
+          sourceChunk = rootChunkData;
+        }
+        else if (!world.Data.DensityChunks.TryGetValue(chunkCoord, out sourceChunk) ||
+                 sourceChunk == null)
+        {
+          if (world.Settings.IsInsideWorldBounds(chunkCoord) &&
+              world.Settings.IsInsideGeneratedBounds(chunkCoord) &&
+              storage != null &&
+              storage.TryLoadChunk(chunkCoord))
+          {
+            world.Data.DensityChunks.TryGetValue(chunkCoord, out sourceChunk);
+          }
+        }
+
+        if (sourceChunk != null)
+        {
+          snapshots[chunkCoord] = sourceChunk.Clone();
+        }
+      }
+
+      return snapshots;
+    }
+
+    private bool TryStartDensityMeshBuild(
+      Vector3Int chunkCoord,
+      DensityChunkData chunkData
+    )
+    {
+      if (chunkData == null)
+      {
+        return false;
+      }
+
+      if (densityBuildQueue.IsInFlight(chunkCoord))
+      {
+        return true;
+      }
+
+      if (densityBuildQueue.ActiveTaskCount >= MaxAsyncChunkTasks)
+      {
+        return false;
+      }
+
+      world.Settings.GetGenerationChunkBoundsXZ(
+          out int minChunkX,
+          out int maxChunkX,
+          out int minChunkZ,
+          out int maxChunkZ
+      );
+
+      world.Settings.GetEffectiveDensityChunkYRange(
+          out int minChunkY,
+          out int maxChunkY
+      );
+
+      DensityChunkBuildRequest request = new()
+      {
+        ChunkCoord = chunkCoord,
+        GenerationId = densityBuildQueue.GenerationId,
+        WorldSnapshot = worldSnapshot,
+        CellStep = GetDensityCellStepForChunk(chunkCoord),
+        FlipWinding = true,
+        OverrideSnapshot = world.CreateDensityOverrideSnapshot(chunkCoord),
+        ChunkDataSnapshot = chunkData.Clone(),
+        ChunkDataSnapshots = CreateDensityMeshChunkSnapshots(chunkCoord, chunkData),
+
+        GeneratedMinChunkX = minChunkX,
+        GeneratedMaxChunkX = maxChunkX,
+        GeneratedMinChunkY = minChunkY,
+        GeneratedMaxChunkY = maxChunkY,
+        GeneratedMinChunkZ = minChunkZ,
+        GeneratedMaxChunkZ = maxChunkZ
+      };
+
+      return densityBuildQueue.TryStartBuild(request, MaxAsyncChunkTasks);
     }
 
     private DensityVoxel SampleDensityForMeshing(
@@ -1250,7 +1323,11 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
           continue;
         }
 
-        RenderDensityChunk(chunkCoord, densityChunkData);
+        if (!TryStartDensityMeshBuild(chunkCoord, densityChunkData))
+        {
+          QueueRender(chunkCoord);
+        }
+
         renderedThisFrame++;
       }
     }
