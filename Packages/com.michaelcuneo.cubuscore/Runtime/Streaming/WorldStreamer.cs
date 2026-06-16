@@ -7,6 +7,7 @@ using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain;
+using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Voxels;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World;
 using UnityEngine;
 
@@ -349,6 +350,97 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       return snapshots;
     }
 
+    private bool TryRebuildDensityMeshImmediate(Vector3Int chunkCoord)
+    {
+      if (!world.Data.DensityChunks.TryGetValue(chunkCoord, out DensityChunkData chunkData) || chunkData == null)
+      {
+        return false;
+      }
+
+      world.Settings.GetGenerationChunkBoundsXZ(out int minX, out int maxX, out int minZ, out int maxZ);
+      world.Settings.GetEffectiveDensityChunkYRange(out int minY, out int maxY);
+      Dictionary<Vector3Int, DensityChunkData> snapshots = CreateDensityMeshChunkSnapshots(chunkCoord, chunkData);
+
+      MeshData meshData = DensityMeshDataBuilder.Generate(
+          chunkCoord,
+          worldSnapshot,
+          1,
+          true,
+          worldVoxel => SampleDensityForImmediateBuild(
+              worldVoxel,
+              snapshots,
+              minX,
+              maxX,
+              minY,
+              maxY,
+              minZ,
+              maxZ
+          )
+      );
+
+      if (meshData == null || meshData.IsEmpty)
+      {
+        ReturnMeshData(meshData);
+        worldRenderer.RemoveChunk(chunkCoord);
+        return true;
+      }
+
+      Mesh mesh = meshData.ToUnityMeshFast();
+      MeshDataPool.Return(meshData);
+      worldRenderer.RenderUnityMesh(chunkCoord, mesh, true);
+      return true;
+    }
+
+    private DensityVoxel SampleDensityForImmediateBuild(
+        Vector3Int worldVoxelCoord,
+        Dictionary<Vector3Int, DensityChunkData> snapshots,
+        int minX,
+        int maxX,
+        int minY,
+        int maxY,
+        int minZ,
+        int maxZ)
+    {
+      Vector3Int chunkCoord = VoxelMath.WorldVoxelToChunkCoord(worldVoxelCoord);
+      Vector3Int localCoord = VoxelMath.WorldVoxelToLocalCoord(worldVoxelCoord);
+
+      if (snapshots != null &&
+          snapshots.TryGetValue(chunkCoord, out DensityChunkData chunkData) &&
+          chunkData != null &&
+          chunkData.IsInBounds(localCoord.x, localCoord.y, localCoord.z))
+      {
+        return chunkData.GetVoxel(localCoord.x, localCoord.y, localCoord.z);
+      }
+
+      bool outsideGeneratedBounds =
+          chunkCoord.x < minX || chunkCoord.x > maxX ||
+          chunkCoord.y < minY || chunkCoord.y > maxY ||
+          chunkCoord.z < minZ || chunkCoord.z > maxZ;
+
+      if (outsideGeneratedBounds)
+      {
+        return chunkCoord.y > maxY ? DensityVoxel.Empty : new DensityVoxel(1.0f, 1);
+      }
+
+      double scale = worldSnapshot.DensitySampleScale <= 0.0f ? 1.0 : worldSnapshot.DensitySampleScale;
+      TerrainSamplerBurst.Sample(
+          worldSnapshot.TerrainProfile,
+          worldVoxelCoord.x * scale,
+          worldVoxelCoord.z * scale,
+          worldVoxelCoord.y * scale,
+          out float density,
+          out int solidMaterialId
+      );
+
+      ushort materialId = density > 0.0f ? (ushort)Mathf.Clamp(solidMaterialId, 1, 65535) : (ushort)0;
+      return new DensityVoxel(density, materialId);
+    }
+
+    private static void ReturnMeshData(MeshData meshData)
+    {
+      if (meshData != null) MeshDataPool.Return(meshData);
+    }
+
     private bool EnsureChunkDataAvailable(Vector3Int c)
     {
       if (HasChunkData(c)) return true;
@@ -386,7 +478,11 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
           if (!world.Settings.IsInsideWorldBounds(c)) continue;
           knownEmptyChunks.Remove(c);
           desiredChunkCoords.Add(c);
-          QueueRender(c);
+
+          if (!TryRebuildDensityMeshImmediate(c))
+          {
+            QueueRender(c);
+          }
         }
       }
     }
