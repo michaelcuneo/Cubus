@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Core;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain;
+using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage;
 using UnityEngine;
 
 namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World
@@ -48,6 +49,14 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World
 
     public Vector2Int GenerationMinChunkXZ = new(-4, -4);
     public Vector2Int GenerationMaxChunkXZ = new(4, 4);
+
+    [Header("World Bounds")]
+    public bool UseWorldBounds = true;
+    public Vector2Int WorldMinChunkXZ = new(-1024, -1024);
+    public Vector2Int WorldMaxChunkXZ = new(1024, 1024);
+
+    [Header("Missing Chunk Policy")]
+    public MissingChunkPolicy MissingChunkPolicy = MissingChunkPolicy.TreatAsEmpty;
 
     public TerrainGenerationProfile GetActiveGenerationProfile()
     {
@@ -581,6 +590,39 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World
       {
         (minY, maxY) = (maxY, minY);
       }
+    }
+
+    public bool IsInsideWorldBounds(Vector3Int chunkCoord)
+    {
+      if (!UseWorldBounds)
+      {
+        return true;
+      }
+
+      int minX = Mathf.Min(WorldMinChunkXZ.x, WorldMaxChunkXZ.x);
+      int maxX = Mathf.Max(WorldMinChunkXZ.x, WorldMaxChunkXZ.x);
+      int minZ = Mathf.Min(WorldMinChunkXZ.y, WorldMaxChunkXZ.y);
+      int maxZ = Mathf.Max(WorldMinChunkXZ.y, WorldMaxChunkXZ.y);
+
+      return chunkCoord.x >= minX &&
+             chunkCoord.x <= maxX &&
+             chunkCoord.z >= minZ &&
+             chunkCoord.z <= maxZ;
+    }
+
+    public bool IsInsideGeneratedBounds(Vector3Int chunkCoord)
+    {
+      GetGenerationChunkBoundsXZ(
+          out int minChunkX,
+          out int maxChunkX,
+          out int minChunkZ,
+          out int maxChunkZ
+      );
+
+      return chunkCoord.x >= minChunkX &&
+             chunkCoord.x <= maxChunkX &&
+             chunkCoord.z >= minChunkZ &&
+             chunkCoord.z <= maxChunkZ;
     }
   }
 }

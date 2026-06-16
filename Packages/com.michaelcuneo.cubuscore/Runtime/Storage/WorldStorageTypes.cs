@@ -11,6 +11,13 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
     Custom = 2
   }
 
+  public enum MissingChunkPolicy
+  {
+    TreatAsEmpty = 0,
+    GenerateLocally = 1,
+    RequestFromAuthority = 2,
+  }
+
   public enum CubusChunkPayloadFormat : byte
   {
     BlockMaterialU16Raw = 1,

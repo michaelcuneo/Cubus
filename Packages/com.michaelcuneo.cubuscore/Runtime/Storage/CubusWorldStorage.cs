@@ -41,6 +41,41 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
       }
     }
 
+    public bool SaveChunk(Vector3Int chunkCoord)
+    {
+      EnsureStore();
+
+      switch (world.Settings.TerrainSystem)
+      {
+        case TerrainSystem.Block:
+          if (!world.Data.BlockChunks.TryGetValue(chunkCoord, out BlockChunkData blockChunk) ||
+              blockChunk == null)
+          {
+            return false;
+          }
+
+          activeStore.SaveChunk(
+              CubusChunkPayloadCodec.EncodeBlockChunk(WorldId, chunkCoord, blockChunk)
+          );
+
+          return true;
+
+        case TerrainSystem.SmoothDensity:
+        default:
+          if (!world.Data.DensityChunks.TryGetValue(chunkCoord, out DensityChunkData densityChunk) ||
+              densityChunk == null)
+          {
+            return false;
+          }
+
+          activeStore.SaveChunk(
+              CubusChunkPayloadCodec.EncodeDensityChunk(WorldId, chunkCoord, densityChunk)
+          );
+
+          return true;
+      }
+    }
+
     public void SaveWorldDatabase()
     {
       EnsureStore();
@@ -83,6 +118,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
         return false;
       }
 
+      loadedManifest = manifest;
       ApplyManifest(manifest);
 
       world.Data.ClearGeneratedChunks();
@@ -151,16 +187,27 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
         return false;
       }
 
-      switch (record.TerrainSystem)
+      try
       {
-        case TerrainSystem.Block:
-          world.Data.BlockChunks[chunkCoord] = CubusChunkPayloadCodec.DecodeBlockChunk(record);
-          return true;
+        switch (record.TerrainSystem)
+        {
+          case TerrainSystem.Block:
+            world.Data.BlockChunks[chunkCoord] = CubusChunkPayloadCodec.DecodeBlockChunk(record);
+            return true;
 
-        case TerrainSystem.SmoothDensity:
-        default:
-          world.Data.DensityChunks[chunkCoord] = CubusChunkPayloadCodec.DecodeDensityChunk(record);
-          return true;
+          case TerrainSystem.SmoothDensity:
+            world.Data.DensityChunks[chunkCoord] = CubusChunkPayloadCodec.DecodeDensityChunk(record);
+            return true;
+
+          default:
+            Debug.LogWarning($"Unsupported terrain system in chunk record. Chunk={chunkCoord}, Terrain={record.TerrainSystem}");
+            return false;
+        }
+      }
+      catch (Exception ex)
+      {
+        Debug.LogWarning($"Failed to decode Cubus chunk. WorldId={WorldId}, Chunk={chunkCoord}, Error={ex.Message}");
+        return false;
       }
     }
 

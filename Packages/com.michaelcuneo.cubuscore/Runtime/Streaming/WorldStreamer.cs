@@ -389,6 +389,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
              chunkCoord.z <= manifest.MaxChunkZ;
     }
 
+    private readonly HashSet<Vector3Int> pendingAuthorityChunkRequests = new();
+
     private bool EnsureChunkDataAvailable(Vector3Int chunkCoord)
     {
       if (HasChunkData(chunkCoord))
@@ -396,23 +398,128 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         return true;
       }
 
-      if (!IsInsideGeneratedBounds(chunkCoord))
+      if (!world.Settings.IsInsideWorldBounds(chunkCoord))
       {
         knownEmptyChunks.Add(chunkCoord);
         return false;
       }
 
-      if (storage == null)
+      if (storage != null && storage.TryLoadChunk(chunkCoord))
       {
+        knownEmptyChunks.Remove(chunkCoord);
+        return HasChunkData(chunkCoord);
+      }
+
+      switch (world.Settings.MissingChunkPolicy)
+      {
+        case MissingChunkPolicy.TreatAsEmpty:
+          knownEmptyChunks.Add(chunkCoord);
+          return false;
+
+        case MissingChunkPolicy.GenerateLocally:
+          return GenerateMissingChunkLocally(chunkCoord);
+
+        case MissingChunkPolicy.RequestFromAuthority:
+          RequestChunkFromAuthority(chunkCoord);
+          return false;
+
+        default:
+          knownEmptyChunks.Add(chunkCoord);
+          return false;
+      }
+    }
+
+    private bool GenerateMissingChunkLocally(Vector3Int chunkCoord)
+    {
+      if (!world.Settings.IsInsideWorldBounds(chunkCoord))
+      {
+        knownEmptyChunks.Add(chunkCoord);
         return false;
       }
 
-      if (!storage.TryLoadChunk(chunkCoord))
+      generator ??= new WorldGenerator(world.Settings);
+
+      switch (world.Settings.TerrainSystem)
       {
-        return false;
+        case TerrainSystem.Block:
+          {
+            BlockChunkData chunkData = new(chunkCoord);
+            generator.GenerateBlockChunkData(chunkData);
+            world.Data.BlockChunks[chunkCoord] = chunkData;
+
+            storage?.SaveChunk(chunkCoord);
+
+            if (!chunkData.HasAnySolidVoxel())
+            {
+              return false;
+            }
+
+            knownEmptyChunks.Remove(chunkCoord);
+            return true;
+          }
+
+        case TerrainSystem.SmoothDensity:
+        default:
+          {
+            DensityChunkData chunkData = new(chunkCoord);
+            generator.FillDensityChunkFromTerrainSampler(chunkData);
+            world.Data.DensityChunks[chunkCoord] = chunkData;
+
+            storage?.SaveChunk(chunkCoord);
+
+            if (!chunkData.HasSurfaceCrossing())
+            {
+              return false;
+            }
+
+            knownEmptyChunks.Remove(chunkCoord);
+            return true;
+          }
+      }
+    }
+
+    private void RequestChunkFromAuthority(Vector3Int chunkCoord)
+    {
+      if (pendingAuthorityChunkRequests.Contains(chunkCoord))
+      {
+        return;
       }
 
-      return HasChunkData(chunkCoord);
+      pendingAuthorityChunkRequests.Add(chunkCoord);
+
+      if (storage != null &&
+          storage.ActiveStore is IAuthoritativeWorldChunkStore authoritativeStore &&
+          authoritativeStore.CanRequestChunks)
+      {
+        authoritativeStore.RequestChunk(storage.WorldId, chunkCoord);
+        return;
+      }
+
+      Debug.LogWarning(
+          $"Missing chunk requires authority, but no authoritative chunk store is available. Chunk={chunkCoord}"
+      );
+    }
+
+    public void HandleAuthoritativeChunkReceived(WorldChunkRecord record)
+    {
+      pendingAuthorityChunkRequests.Remove(record.ChunkCoord);
+
+      switch (record.TerrainSystem)
+      {
+        case TerrainSystem.Block:
+          world.Data.BlockChunks[record.ChunkCoord] =
+              CubusChunkPayloadCodec.DecodeBlockChunk(record);
+          break;
+
+        case TerrainSystem.SmoothDensity:
+        default:
+          world.Data.DensityChunks[record.ChunkCoord] =
+              CubusChunkPayloadCodec.DecodeDensityChunk(record);
+          break;
+      }
+
+      knownEmptyChunks.Remove(record.ChunkCoord);
+      QueueRender(record.ChunkCoord);
     }
 
     private void UpdateStreamingSetIfNeeded(bool force = false)
