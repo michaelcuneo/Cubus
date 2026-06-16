@@ -130,16 +130,32 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
           continue;
         }
 
-        switch (record.TerrainSystem)
+        try
         {
-          case TerrainSystem.Block:
-            world.Data.BlockChunks[chunkCoord] = CubusChunkPayloadCodec.DecodeBlockChunk(record);
-            break;
+          switch (record.TerrainSystem)
+          {
+            case TerrainSystem.Block:
+              world.Data.BlockChunks[chunkCoord] =
+                  CubusChunkPayloadCodec.DecodeBlockChunk(record);
+              break;
 
-          case TerrainSystem.SmoothDensity:
-          default:
-            world.Data.DensityChunks[chunkCoord] = CubusChunkPayloadCodec.DecodeDensityChunk(record);
-            break;
+            case TerrainSystem.SmoothDensity:
+              world.Data.DensityChunks[chunkCoord] =
+                  CubusChunkPayloadCodec.DecodeDensityChunk(record);
+              break;
+
+            default:
+              Debug.LogWarning(
+                  $"Unsupported terrain system in chunk record. Chunk={chunkCoord}, Terrain={record.TerrainSystem}"
+              );
+              break;
+          }
+        }
+        catch (Exception ex)
+        {
+          Debug.LogWarning(
+              $"Failed to decode Cubus chunk during full load. WorldId={WorldId}, Chunk={chunkCoord}, Error={ex.Message}"
+          );
         }
       }
 
