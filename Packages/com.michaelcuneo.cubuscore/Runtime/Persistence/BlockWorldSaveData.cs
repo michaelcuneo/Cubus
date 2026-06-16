@@ -7,7 +7,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Persistence
   [Serializable]
   public sealed class BlockWorldSaveData
   {
-    public int SaveVersion = 1;
+    public int SaveVersion = WorldSaveFormat.CurrentBlockWorldSaveVersion;
     public int ChunkSize;
     public float VoxelSize;
     public List<SavedBlockChunk> SavedBlockChunks = new();
