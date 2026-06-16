@@ -575,7 +575,13 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
     private void TryBroadcastInitialTerrainReady()
     {
-      if (hasBroadcastInitialTerrainReady || worldRenderer.ActiveChunkViews.Count < initialSpawnRequiredRenderedChunks) return;
+      if (hasBroadcastInitialTerrainReady) return;
+      if (!worldRenderer.HasChunkView(spawnTargetChunkCoord))
+      {
+        QueueSpawnTargetForRender();
+        return;
+      }
+      if (worldRenderer.ActiveChunkViews.Count < initialSpawnRequiredRenderedChunks) return;
       Vector3 spawn = transform.TransformPoint(new Vector3((spawnTargetChunkCoord.x * VoxelConstants.ChunkSize + 8) * world.Settings.VoxelSize, (spawnTargetChunkCoord.y * VoxelConstants.ChunkSize + initialSpawnClearance) * world.Settings.VoxelSize, (spawnTargetChunkCoord.z * VoxelConstants.ChunkSize + 8) * world.Settings.VoxelSize));
       world.BroadcastInitialTerrainReady(spawn);
       hasBroadcastInitialTerrainReady = true;
