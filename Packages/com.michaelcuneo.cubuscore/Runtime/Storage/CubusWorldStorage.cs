@@ -1,10 +1,12 @@
 using System;
+using System.Diagnostics;
 using System.IO;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Chunks;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Core;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World;
 using UnityEngine;
+using Debug = UnityEngine.Debug;
 
 namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
 {
@@ -19,6 +21,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
 
     [Header("Diagnostics")]
     [SerializeField] private bool logCompressionStats = true;
+    [SerializeField] private bool logTimingStats = true;
     [SerializeField] private bool logSingleChunkCompressionStats = false;
 
     private CubusWorld world;
@@ -48,6 +51,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
     public bool SaveChunk(Vector3Int chunkCoord)
     {
       EnsureStore();
+      StorageTimingStats timingStats = new();
+      Stopwatch totalWatch = Stopwatch.StartNew();
 
       switch (world.Settings.TerrainSystem)
       {
@@ -58,9 +63,21 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
             return false;
           }
 
+          Stopwatch encodeBlockWatch = Stopwatch.StartNew();
           WorldChunkRecord blockRecord = CubusChunkPayloadCodec.EncodeBlockChunk(WorldId, chunkCoord, blockChunk);
+          encodeBlockWatch.Stop();
+          timingStats.EncodeTicks += encodeBlockWatch.ElapsedTicks;
+
+          Stopwatch writeBlockWatch = Stopwatch.StartNew();
           activeStore.SaveChunk(blockRecord);
+          writeBlockWatch.Stop();
+          timingStats.WriteTicks += writeBlockWatch.ElapsedTicks;
+          timingStats.Chunks = 1;
+
+          totalWatch.Stop();
+          timingStats.TotalTicks = totalWatch.ElapsedTicks;
           LogSingleChunkCompressionIfEnabled("Saved", blockRecord);
+          LogTimingStatsIfEnabled("Saved chunk", timingStats);
           return true;
 
         case TerrainSystem.SmoothDensity:
@@ -71,9 +88,21 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
             return false;
           }
 
+          Stopwatch encodeDensityWatch = Stopwatch.StartNew();
           WorldChunkRecord densityRecord = CubusChunkPayloadCodec.EncodeDensityChunk(WorldId, chunkCoord, densityChunk);
+          encodeDensityWatch.Stop();
+          timingStats.EncodeTicks += encodeDensityWatch.ElapsedTicks;
+
+          Stopwatch writeDensityWatch = Stopwatch.StartNew();
           activeStore.SaveChunk(densityRecord);
+          writeDensityWatch.Stop();
+          timingStats.WriteTicks += writeDensityWatch.ElapsedTicks;
+          timingStats.Chunks = 1;
+
+          totalWatch.Stop();
+          timingStats.TotalTicks = totalWatch.ElapsedTicks;
           LogSingleChunkCompressionIfEnabled("Saved", densityRecord);
+          LogTimingStatsIfEnabled("Saved chunk", timingStats);
           return true;
       }
     }
@@ -81,9 +110,14 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
     public void SaveWorldDatabase()
     {
       EnsureStore();
+      Stopwatch totalWatch = Stopwatch.StartNew();
+      StorageTimingStats timingStats = new();
 
+      Stopwatch manifestWatch = Stopwatch.StartNew();
       WorldManifest manifest = CreateManifest();
       activeStore.SaveWorldManifest(manifest);
+      manifestWatch.Stop();
+      timingStats.ManifestTicks += manifestWatch.ElapsedTicks;
 
       CompressionStats compressionStats = new();
 
@@ -92,9 +126,18 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
         case TerrainSystem.Block:
           foreach (var pair in world.Data.BlockChunks)
           {
+            Stopwatch encodeWatch = Stopwatch.StartNew();
             WorldChunkRecord record = CubusChunkPayloadCodec.EncodeBlockChunk(WorldId, pair.Key, pair.Value);
+            encodeWatch.Stop();
+            timingStats.EncodeTicks += encodeWatch.ElapsedTicks;
+
             compressionStats.Add(record);
+
+            Stopwatch writeWatch = Stopwatch.StartNew();
             activeStore.SaveChunk(record);
+            writeWatch.Stop();
+            timingStats.WriteTicks += writeWatch.ElapsedTicks;
+            timingStats.Chunks++;
           }
           break;
 
@@ -102,12 +145,24 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
         default:
           foreach (var pair in world.Data.DensityChunks)
           {
+            Stopwatch encodeWatch = Stopwatch.StartNew();
             WorldChunkRecord record = CubusChunkPayloadCodec.EncodeDensityChunk(WorldId, pair.Key, pair.Value);
+            encodeWatch.Stop();
+            timingStats.EncodeTicks += encodeWatch.ElapsedTicks;
+
             compressionStats.Add(record);
+
+            Stopwatch writeWatch = Stopwatch.StartNew();
             activeStore.SaveChunk(record);
+            writeWatch.Stop();
+            timingStats.WriteTicks += writeWatch.ElapsedTicks;
+            timingStats.Chunks++;
           }
           break;
       }
+
+      totalWatch.Stop();
+      timingStats.TotalTicks = totalWatch.ElapsedTicks;
 
       Debug.Log(
           $"Saved Cubus world database. WorldId={WorldId}, Backend={backend}, " +
@@ -115,13 +170,21 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
       );
 
       LogCompressionStatsIfEnabled("Saved", compressionStats);
+      LogTimingStatsIfEnabled("Saved", timingStats);
     }
 
     public bool LoadWorldDatabase()
     {
       EnsureStore();
+      Stopwatch totalWatch = Stopwatch.StartNew();
+      StorageTimingStats timingStats = new();
 
-      if (!activeStore.TryLoadWorldManifest(WorldId, out WorldManifest manifest))
+      Stopwatch manifestWatch = Stopwatch.StartNew();
+      bool hasManifest = activeStore.TryLoadWorldManifest(WorldId, out WorldManifest manifest);
+      manifestWatch.Stop();
+      timingStats.ManifestTicks += manifestWatch.ElapsedTicks;
+
+      if (!hasManifest)
       {
         return false;
       }
@@ -134,15 +197,23 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
 
       foreach (Vector3Int chunkCoord in activeStore.EnumerateChunkCoords(WorldId))
       {
-        if (!activeStore.TryLoadChunk(WorldId, chunkCoord, out WorldChunkRecord record))
+        Stopwatch readWatch = Stopwatch.StartNew();
+        bool loaded = activeStore.TryLoadChunk(WorldId, chunkCoord, out WorldChunkRecord record);
+        readWatch.Stop();
+        timingStats.ReadTicks += readWatch.ElapsedTicks;
+
+        if (!loaded)
         {
           continue;
         }
 
         compressionStats.Add(record);
+        timingStats.Chunks++;
 
         try
         {
+          Stopwatch decodeWatch = Stopwatch.StartNew();
+
           switch (record.TerrainSystem)
           {
             case TerrainSystem.Block:
@@ -161,6 +232,9 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
               );
               break;
           }
+
+          decodeWatch.Stop();
+          timingStats.DecodeTicks += decodeWatch.ElapsedTicks;
         }
         catch (Exception ex)
         {
@@ -171,6 +245,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
       }
 
       world.MarkDatabaseLoaded();
+      totalWatch.Stop();
+      timingStats.TotalTicks = totalWatch.ElapsedTicks;
 
       Debug.Log(
           $"Loaded Cubus world database. WorldId={WorldId}, Backend={backend}, " +
@@ -178,12 +254,14 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
       );
 
       LogCompressionStatsIfEnabled("Loaded", compressionStats);
+      LogTimingStatsIfEnabled("Loaded", timingStats);
       return true;
     }
 
     public bool LoadWorldManifestOnly()
     {
       EnsureStore();
+      Stopwatch totalWatch = Stopwatch.StartNew();
 
       if (!activeStore.TryLoadWorldManifest(WorldId, out WorldManifest manifest))
       {
@@ -196,6 +274,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
       world.Data.ClearGeneratedChunks();
       world.MarkDatabaseLoaded();
 
+      totalWatch.Stop();
+
       Debug.Log(
           $"Loaded Cubus world manifest. WorldId={WorldId}, Backend={backend}, " +
           $"Mode={manifest.TerrainSystem}, Chunks={manifest.ChunkCount}, " +
@@ -203,36 +283,58 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
           $"({manifest.MaxChunkX},{manifest.MaxChunkY},{manifest.MaxChunkZ})"
       );
 
+      if (logTimingStats)
+      {
+        Debug.Log($"Cubus chunk storage timing Loaded manifest. Total={FormatMilliseconds(totalWatch.ElapsedTicks)}");
+      }
+
       return true;
     }
 
     public bool TryLoadChunk(Vector3Int chunkCoord)
     {
       EnsureStore();
+      StorageTimingStats timingStats = new();
+      Stopwatch totalWatch = Stopwatch.StartNew();
 
-      if (!activeStore.TryLoadChunk(WorldId, chunkCoord, out WorldChunkRecord record))
+      Stopwatch readWatch = Stopwatch.StartNew();
+      bool loaded = activeStore.TryLoadChunk(WorldId, chunkCoord, out WorldChunkRecord record);
+      readWatch.Stop();
+      timingStats.ReadTicks += readWatch.ElapsedTicks;
+
+      if (!loaded)
       {
         return false;
       }
 
+      timingStats.Chunks = 1;
       LogSingleChunkCompressionIfEnabled("Loaded", record);
 
       try
       {
+        Stopwatch decodeWatch = Stopwatch.StartNew();
+
         switch (record.TerrainSystem)
         {
           case TerrainSystem.Block:
             world.Data.BlockChunks[chunkCoord] = CubusChunkPayloadCodec.DecodeBlockChunk(record);
-            return true;
+            break;
 
           case TerrainSystem.SmoothDensity:
             world.Data.DensityChunks[chunkCoord] = CubusChunkPayloadCodec.DecodeDensityChunk(record);
-            return true;
+            break;
 
           default:
             Debug.LogWarning($"Unsupported terrain system in chunk record. Chunk={chunkCoord}, Terrain={record.TerrainSystem}");
             return false;
         }
+
+        decodeWatch.Stop();
+        timingStats.DecodeTicks += decodeWatch.ElapsedTicks;
+        totalWatch.Stop();
+        timingStats.TotalTicks = totalWatch.ElapsedTicks;
+        LogTimingStatsIfEnabled("Loaded chunk", timingStats);
+        return true;
       }
       catch (Exception ex)
       {
@@ -385,6 +487,22 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
       );
     }
 
+    private void LogTimingStatsIfEnabled(string operation, StorageTimingStats stats)
+    {
+      if (!logTimingStats || stats.Chunks <= 0)
+      {
+        return;
+      }
+
+      Debug.Log(
+          $"Cubus chunk storage timing {operation}. " +
+          $"Chunks={stats.Chunks}, Total={FormatMilliseconds(stats.TotalTicks)}, " +
+          $"Manifest={FormatMilliseconds(stats.ManifestTicks)}, Encode={FormatMilliseconds(stats.EncodeTicks)}, " +
+          $"Write={FormatMilliseconds(stats.WriteTicks)}, Read={FormatMilliseconds(stats.ReadTicks)}, " +
+          $"Decode={FormatMilliseconds(stats.DecodeTicks)}"
+      );
+    }
+
     private static int GetEstimatedRawPayloadBytes(TerrainSystem terrainSystem)
     {
       return terrainSystem == TerrainSystem.Block
@@ -408,6 +526,23 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
       }
 
       return $"{bytes} B";
+    }
+
+    private static string FormatMilliseconds(long ticks)
+    {
+      double milliseconds = ticks * 1000.0 / Stopwatch.Frequency;
+      return $"{milliseconds:0.00} ms";
+    }
+
+    private struct StorageTimingStats
+    {
+      public int Chunks;
+      public long TotalTicks;
+      public long ManifestTicks;
+      public long EncodeTicks;
+      public long WriteTicks;
+      public long ReadTicks;
+      public long DecodeTicks;
     }
 
     private struct CompressionStats
