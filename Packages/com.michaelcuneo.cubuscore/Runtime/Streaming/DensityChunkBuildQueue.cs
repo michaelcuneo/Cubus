@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Core;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing;
+using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Voxels;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Chunks;
 using UnityEngine;
@@ -180,11 +181,31 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
           chunkCoord.z >= request.GeneratedMinChunkZ &&
           chunkCoord.z <= request.GeneratedMaxChunkZ;
 
-      // Unknown scalar field at a seam must not be treated as empty. Empty creates artificial
-      // marching-cubes caps across chunk boundaries, which shows up as a giant flat roof.
-      // Treat missing samples as solid so the chunk waits for a real neighbour mesh instead
-      // of inventing an exposed surface.
-      return new DensityVoxel(1.0f, 1);
+      if (!insideGeneratedBounds)
+      {
+        return new DensityVoxel(1.0f, 1);
+      }
+
+      double scale = request.WorldSnapshot.DensitySampleScale <= 0.0f
+          ? 1.0
+          : request.WorldSnapshot.DensitySampleScale;
+
+      // Keep this fallback consistent with MarchingCubesMesher's direct procedural path.
+      // TerrainSampler maps voxel y/z as: terrainY = worldZ, terrainZ = worldY.
+      TerrainSamplerBurst.Sample(
+          request.WorldSnapshot.TerrainProfile,
+          worldVoxelCoord.x * scale,
+          worldVoxelCoord.z * scale,
+          worldVoxelCoord.y * scale,
+          out float density,
+          out int solidMaterialId
+      );
+
+      ushort materialId = density > 0.0f
+          ? (ushort)Mathf.Clamp(solidMaterialId, 1, 65535)
+          : (ushort)0;
+
+      return new DensityVoxel(density, materialId);
     }
   }
 }
