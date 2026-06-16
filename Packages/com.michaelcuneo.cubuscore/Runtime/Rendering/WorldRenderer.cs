@@ -51,6 +51,9 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
     private CubusWorld world;
     private ChunkPool chunkPool;
 
+    private Vector3Int lastCollisionViewerChunkCoord;
+    private bool hasLastCollisionViewerChunkCoord;
+
     public IReadOnlyDictionary<Vector3Int, ChunkView> ActiveChunkViews => activeChunkViews;
 
     private void Awake()
@@ -67,20 +70,35 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
         return;
       }
 
-      timeSinceLastCollisionUpdate += Time.deltaTime;
-
-      if (timeSinceLastCollisionUpdate < collisionUpdateInterval)
+      if (collisionViewer == null || world == null)
       {
         return;
       }
 
-      timeSinceLastCollisionUpdate = 0.0f;
+      float voxelSize = Mathf.Max(0.0001f, world.Settings.VoxelSize);
+      Vector3 localViewerPosition = transform.InverseTransformPoint(collisionViewer.position);
+
+      Vector3Int viewerChunkCoord = new(
+          VoxelMath.FloorDiv(Mathf.FloorToInt(localViewerPosition.x / voxelSize), VoxelConstants.ChunkSize),
+          VoxelMath.FloorDiv(Mathf.FloorToInt(localViewerPosition.y / voxelSize), VoxelConstants.ChunkSize),
+          VoxelMath.FloorDiv(Mathf.FloorToInt(localViewerPosition.z / voxelSize), VoxelConstants.ChunkSize)
+      );
+
+      if (hasLastCollisionViewerChunkCoord && viewerChunkCoord == lastCollisionViewerChunkCoord)
+      {
+        return;
+      }
+
+      lastCollisionViewerChunkCoord = viewerChunkCoord;
+      hasLastCollisionViewerChunkCoord = true;
+
       RefreshChunkCollision();
     }
 
     public void SetCollisionViewer(Transform viewer)
     {
       collisionViewer = viewer;
+      hasLastCollisionViewerChunkCoord = false;
       RefreshChunkCollision();
     }
 
@@ -444,6 +462,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
       }
 
       activeChunkViews.Clear();
+      hasLastCollisionViewerChunkCoord = false;
     }
 
     public bool HasChunkView(Vector3Int chunkCoord)
