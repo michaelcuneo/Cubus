@@ -17,6 +17,10 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
     [SerializeField] private bool autoSaveAfterGeneration = true;
     [SerializeField] private bool autoLoadOnStart = true;
 
+    [Header("Diagnostics")]
+    [SerializeField] private bool logCompressionStats = true;
+    [SerializeField] private bool logSingleChunkCompressionStats = false;
+
     private CubusWorld world;
     private IWorldChunkStore activeStore;
 
@@ -54,10 +58,9 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
             return false;
           }
 
-          activeStore.SaveChunk(
-              CubusChunkPayloadCodec.EncodeBlockChunk(WorldId, chunkCoord, blockChunk)
-          );
-
+          WorldChunkRecord blockRecord = CubusChunkPayloadCodec.EncodeBlockChunk(WorldId, chunkCoord, blockChunk);
+          activeStore.SaveChunk(blockRecord);
+          LogSingleChunkCompressionIfEnabled("Saved", blockRecord);
           return true;
 
         case TerrainSystem.SmoothDensity:
@@ -68,10 +71,9 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
             return false;
           }
 
-          activeStore.SaveChunk(
-              CubusChunkPayloadCodec.EncodeDensityChunk(WorldId, chunkCoord, densityChunk)
-          );
-
+          WorldChunkRecord densityRecord = CubusChunkPayloadCodec.EncodeDensityChunk(WorldId, chunkCoord, densityChunk);
+          activeStore.SaveChunk(densityRecord);
+          LogSingleChunkCompressionIfEnabled("Saved", densityRecord);
           return true;
       }
     }
@@ -83,12 +85,15 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
       WorldManifest manifest = CreateManifest();
       activeStore.SaveWorldManifest(manifest);
 
+      CompressionStats compressionStats = new();
+
       switch (world.Settings.TerrainSystem)
       {
         case TerrainSystem.Block:
           foreach (var pair in world.Data.BlockChunks)
           {
             WorldChunkRecord record = CubusChunkPayloadCodec.EncodeBlockChunk(WorldId, pair.Key, pair.Value);
+            compressionStats.Add(record);
             activeStore.SaveChunk(record);
           }
           break;
@@ -98,6 +103,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
           foreach (var pair in world.Data.DensityChunks)
           {
             WorldChunkRecord record = CubusChunkPayloadCodec.EncodeDensityChunk(WorldId, pair.Key, pair.Value);
+            compressionStats.Add(record);
             activeStore.SaveChunk(record);
           }
           break;
@@ -107,6 +113,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
           $"Saved Cubus world database. WorldId={WorldId}, Backend={backend}, " +
           $"BlockChunks={world.Data.BlockChunks.Count}, DensityChunks={world.Data.DensityChunks.Count}"
       );
+
+      LogCompressionStatsIfEnabled("Saved", compressionStats);
     }
 
     public bool LoadWorldDatabase()
@@ -122,6 +130,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
       ApplyManifest(manifest);
 
       world.Data.ClearGeneratedChunks();
+      CompressionStats compressionStats = new();
 
       foreach (Vector3Int chunkCoord in activeStore.EnumerateChunkCoords(WorldId))
       {
@@ -129,6 +138,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
         {
           continue;
         }
+
+        compressionStats.Add(record);
 
         try
         {
@@ -166,6 +177,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
           $"BlockChunks={world.Data.BlockChunks.Count}, DensityChunks={world.Data.DensityChunks.Count}"
       );
 
+      LogCompressionStatsIfEnabled("Loaded", compressionStats);
       return true;
     }
 
@@ -202,6 +214,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
       {
         return false;
       }
+
+      LogSingleChunkCompressionIfEnabled("Loaded", record);
 
       try
       {
@@ -321,26 +335,116 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
 
     private void ApplyManifest(WorldManifest manifest)
     {
-      WorldSettings settings = world.Settings;
-
-      settings.TerrainSystem = manifest.TerrainSystem;
-      settings.VoxelSize = Mathf.Max(0.01f, manifest.VoxelSize);
-      settings.UseFixedGenerationBounds = true;
-      settings.GenerationMinChunkXZ = new Vector2Int(manifest.MinChunkX, manifest.MinChunkZ);
-      settings.GenerationMaxChunkXZ = new Vector2Int(manifest.MaxChunkX, manifest.MaxChunkZ);
-
-      switch (manifest.TerrainSystem)
+      if (manifest == null)
       {
-        case TerrainSystem.Block:
-          settings.BlockMinChunkY = manifest.MinChunkY;
-          settings.BlockMaxChunkY = manifest.MaxChunkY;
-          break;
+        return;
+      }
 
-        case TerrainSystem.SmoothDensity:
-        default:
-          settings.DensityMinChunkY = manifest.MinChunkY;
-          settings.DensityMaxChunkY = manifest.MaxChunkY;
-          break;
+      if (manifest.ChunkSize != VoxelConstants.ChunkSize)
+      {
+        Debug.LogWarning(
+            $"Loaded world chunk size {manifest.ChunkSize} differs from runtime chunk size {VoxelConstants.ChunkSize}."
+        );
+      }
+    }
+
+    private void LogSingleChunkCompressionIfEnabled(string operation, WorldChunkRecord record)
+    {
+      if (!logCompressionStats || !logSingleChunkCompressionStats)
+      {
+        return;
+      }
+
+      int rawBytes = GetEstimatedRawPayloadBytes(record.TerrainSystem);
+      int payloadBytes = record.PayloadBytes?.Length ?? 0;
+      float ratio = rawBytes > 0 ? payloadBytes / (float)rawBytes : 0.0f;
+
+      Debug.Log(
+          $"Cubus chunk payload {operation}. Chunk={record.ChunkCoord}, Terrain={record.TerrainSystem}, " +
+          $"Format={record.PayloadFormat}, Version={record.PayloadVersion}, Payload={FormatBytes(payloadBytes)}, " +
+          $"Raw={FormatBytes(rawBytes)}, Ratio={ratio:P1}"
+      );
+    }
+
+    private void LogCompressionStatsIfEnabled(string operation, CompressionStats stats)
+    {
+      if (!logCompressionStats || stats.TotalChunks <= 0)
+      {
+        return;
+      }
+
+      float ratio = stats.RawBytes > 0 ? stats.PayloadBytes / (float)stats.RawBytes : 0.0f;
+      long savedBytes = Math.Max(0L, stats.RawBytes - stats.PayloadBytes);
+
+      Debug.Log(
+          $"Cubus chunk payload stats {operation}. " +
+          $"Chunks={stats.TotalChunks}, Block={stats.BlockChunks}, Density={stats.DensityChunks}, " +
+          $"Raw={FormatBytes(stats.RawBytes)}, Payload={FormatBytes(stats.PayloadBytes)}, " +
+          $"Saved={FormatBytes(savedBytes)}, Ratio={ratio:P1}, " +
+          $"DensityRaw={stats.DensityRawChunks}, DensityCompressed={stats.DensityCompressedChunks}"
+      );
+    }
+
+    private static int GetEstimatedRawPayloadBytes(TerrainSystem terrainSystem)
+    {
+      return terrainSystem == TerrainSystem.Block
+          ? VoxelConstants.ChunkVolume * sizeof(ushort)
+          : VoxelConstants.ChunkVolume * (sizeof(float) + sizeof(ushort));
+    }
+
+    private static string FormatBytes(long bytes)
+    {
+      const double kib = 1024.0;
+      const double mib = 1024.0 * 1024.0;
+
+      if (bytes >= mib)
+      {
+        return $"{bytes / mib:0.00} MiB";
+      }
+
+      if (bytes >= kib)
+      {
+        return $"{bytes / kib:0.00} KiB";
+      }
+
+      return $"{bytes} B";
+    }
+
+    private struct CompressionStats
+    {
+      public int TotalChunks;
+      public int BlockChunks;
+      public int DensityChunks;
+      public int DensityRawChunks;
+      public int DensityCompressedChunks;
+      public long RawBytes;
+      public long PayloadBytes;
+
+      public void Add(WorldChunkRecord record)
+      {
+        TotalChunks++;
+        PayloadBytes += record.PayloadBytes?.Length ?? 0;
+        RawBytes += GetEstimatedRawPayloadBytes(record.TerrainSystem);
+
+        if (record.TerrainSystem == TerrainSystem.Block)
+        {
+          BlockChunks++;
+          return;
+        }
+
+        if (record.TerrainSystem == TerrainSystem.SmoothDensity)
+        {
+          DensityChunks++;
+
+          if (record.PayloadFormat == CubusChunkPayloadFormat.DensityF32MaterialU16Raw)
+          {
+            DensityRawChunks++;
+          }
+          else if (record.PayloadFormat == CubusChunkPayloadFormat.DensityI16MaterialU16Rle)
+          {
+            DensityCompressedChunks++;
+          }
+        }
       }
     }
   }
