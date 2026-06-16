@@ -13,11 +13,11 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     [Header("Vertical Around Surface")]
     [Tooltip("Developer hint only. WorldStreamer clamps this to a safe minimum.")]
     [Min(0)]
-    public int ChunksBelowSurface = 2;
+    public int ChunksBelowSurface = 8;
 
     [Tooltip("Developer hint only. WorldStreamer clamps this to a safe minimum.")]
     [Min(0)]
-    public int ChunksAboveSurface = 2;
+    public int ChunksAboveSurface = 8;
 
     [Header("Budgets")]
     [Min(4)]
