@@ -173,16 +173,25 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         return chunkData.GetVoxel(localCoord.x, localCoord.y, localCoord.z);
       }
 
-      bool insideGeneratedBounds =
-          chunkCoord.x >= request.GeneratedMinChunkX &&
-          chunkCoord.x <= request.GeneratedMaxChunkX &&
-          chunkCoord.y >= request.GeneratedMinChunkY &&
-          chunkCoord.y <= request.GeneratedMaxChunkY &&
-          chunkCoord.z >= request.GeneratedMinChunkZ &&
-          chunkCoord.z <= request.GeneratedMaxChunkZ;
+      bool outsideGeneratedBounds =
+          chunkCoord.x < request.GeneratedMinChunkX ||
+          chunkCoord.x > request.GeneratedMaxChunkX ||
+          chunkCoord.y < request.GeneratedMinChunkY ||
+          chunkCoord.y > request.GeneratedMaxChunkY ||
+          chunkCoord.z < request.GeneratedMinChunkZ ||
+          chunkCoord.z > request.GeneratedMaxChunkZ;
 
-      if (!insideGeneratedBounds)
+      if (outsideGeneratedBounds)
       {
+        // Do not seal the upper scalar-field boundary with solid density. That creates the
+        // giant flat roof seen over every streamed density region.
+        if (chunkCoord.y > request.GeneratedMaxChunkY)
+        {
+          return DensityVoxel.Empty;
+        }
+
+        // Keep the lower / horizontal world edges solid so the generated field does not open
+        // visible side holes at the finite world boundary.
         return new DensityVoxel(1.0f, 1);
       }
 
@@ -190,8 +199,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
           ? 1.0
           : request.WorldSnapshot.DensitySampleScale;
 
-      // Keep this fallback consistent with MarchingCubesMesher's direct procedural path.
-      // TerrainSampler maps voxel y/z as: terrainY = worldZ, terrainZ = worldY.
       TerrainSamplerBurst.Sample(
           request.WorldSnapshot.TerrainProfile,
           worldVoxelCoord.x * scale,
