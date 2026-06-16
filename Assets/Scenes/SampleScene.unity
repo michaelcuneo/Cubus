@@ -450,7 +450,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: CubusCore.Runtime::CubusCore.World.CubusWorld
   settings:
     TerrainSystem: 1
-    ViewDistanceInChunks: 8
+    ViewDistanceInChunks: 6
     VoxelSize: 1
     BlockMinChunkY: -1
     BlockMaxChunkY: 2
@@ -577,16 +577,15 @@ MonoBehaviour:
   viewer: {fileID: 1517188426}
   settings:
     UnloadPaddingInChunks: 2
-    ChunksBelowSurface: 24
-    ChunksAboveSurface: 24
+    ChunksBelowSurface: 2
+    ChunksAboveSurface: 2
     ChunksGeneratedPerFrame: 16
     InitialChunksGeneratedPerFrame: 64
-    ChunksRenderedPerFrame: 32
-    MeshAppliesPerFrame: 32
+    ChunksRenderedPerFrame: 64
+    MeshAppliesPerFrame: 64
     UseAsyncGeneration: 1
     MaxAsyncChunkTasks: 8
   initialSpawnRequiredRenderedChunks: 1
-  logStreamingStats: 1
   useIncrementalPreGeneration: 0
   preGenerationChunksPerFrame: 8
   spawnFirstRadiusInChunks: 0
