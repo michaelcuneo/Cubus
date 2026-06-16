@@ -1733,7 +1733,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       worldRenderer.RenderUnityMesh(
           chunkCoord,
           mesh,
-          ShouldGenerateDensityCollision(chunkCoord)
+          chunkCoord == spawnTargetChunkCoord && !hasBroadcastInitialTerrainReady
       );
     }
 
