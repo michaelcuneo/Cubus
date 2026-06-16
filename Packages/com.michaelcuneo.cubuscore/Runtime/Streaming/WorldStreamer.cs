@@ -64,6 +64,12 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       new(1, 1, 0), new(1, 0, 1), new(0, 1, 1), new(1, 1, 1)
     };
 
+    private static readonly Vector3Int[] DensityEditAffectedChunkOffsets =
+    {
+      new(0, 0, 0), new(-1, 0, 0), new(0, -1, 0), new(0, 0, -1),
+      new(-1, -1, 0), new(-1, 0, -1), new(0, -1, -1), new(-1, -1, -1)
+    };
+
     public void SetViewer(Transform newViewer)
     {
       viewer = newViewer;
@@ -276,7 +282,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
           count++; continue;
         }
         if (!world.Data.DensityChunks.TryGetValue(c, out DensityChunkData d) || d == null) continue;
-        if (densityBuildQueue.IsInFlight(c)) continue;
+        if (densityBuildQueue.IsInFlight(c)) { QueueRender(c); break; }
         if (densityBuildQueue.ActiveTaskCount >= MaxAsyncChunkTasks) { QueueRender(c); break; }
         if (TryStartDensityMeshBuild(c, d)) count++;
       }
@@ -369,7 +375,20 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
     public void RebuildDensityChunks(IEnumerable<Vector3Int> dirtyChunks)
     {
-      foreach (Vector3Int c in dirtyChunks) { knownEmptyChunks.Remove(c); worldRenderer.RemoveChunk(c); desiredChunkCoords.Add(c); QueueRender(c); }
+      if (world.Settings.TerrainSystem != TerrainSystem.SmoothDensity) return;
+      densityBuildQueue.IncrementGeneration();
+
+      foreach (Vector3Int dirtyChunk in dirtyChunks)
+      {
+        for (int i = 0; i < DensityEditAffectedChunkOffsets.Length; i++)
+        {
+          Vector3Int c = dirtyChunk + DensityEditAffectedChunkOffsets[i];
+          if (!world.Settings.IsInsideWorldBounds(c)) continue;
+          knownEmptyChunks.Remove(c);
+          desiredChunkCoords.Add(c);
+          QueueRender(c);
+        }
+      }
     }
 
     private void HandleBlockChunksEdited(IReadOnlyCollection<Vector3Int> dirtyChunks)
