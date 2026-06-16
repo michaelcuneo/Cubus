@@ -161,6 +161,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       if (bootstrapCoroutine != null) return;
       if (world.Settings.TerrainSystem != TerrainSystem.Block && world.Settings.TerrainSystem != TerrainSystem.SmoothDensity) return;
       UpdateStreamingSetIfNeeded();
+      PrioritizePendingQueues();
       ProcessLoadQueue();
       ProcessCompletedChunkLoads();
       ProcessRenderQueue();
@@ -273,14 +274,42 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     private void QueueLoad(Vector3Int chunkCoord) { if (pendingLoadSet.Add(chunkCoord)) pendingLoadQueue.Enqueue(chunkCoord); }
     private void QueueRender(Vector3Int chunkCoord) { if (pendingRenderSet.Add(chunkCoord)) pendingRenderQueue.Enqueue(chunkCoord); }
 
+    private void PrioritizePendingQueues()
+    {
+      if (!hasLastViewerChunkCoord) return;
+      PrioritizeQueue(pendingLoadQueue, pendingLoadSet, true);
+      PrioritizeQueue(pendingRenderQueue, pendingRenderSet, false);
+    }
+
+    private void PrioritizeQueue(Queue<Vector3Int> queue, HashSet<Vector3Int> membership, bool allowKeepOnlyChunks)
+    {
+      if (queue.Count < 2) return;
+
+      List<Vector3Int> items = new(queue.Count);
+      while (queue.Count > 0)
+      {
+        Vector3Int c = queue.Dequeue();
+        if (!membership.Contains(c)) continue;
+        if (!desiredChunkCoords.Contains(c) && !(allowKeepOnlyChunks && keepChunkCoords.Contains(c))) continue;
+        items.Add(c);
+      }
+
+      items.Sort((a, b) => CompareChunkPriority(a, b, lastViewerChunkCoord));
+
+      for (int i = 0; i < items.Count; i++)
+      {
+        queue.Enqueue(items[i]);
+      }
+    }
+
     private void ProcessLoadQueue()
     {
       int count = 0;
       while (pendingLoadQueue.Count > 0 && count < ChunksLoadedPerFrame)
       {
         Vector3Int c = pendingLoadQueue.Dequeue(); pendingLoadSet.Remove(c);
-        if (!desiredChunkCoords.Contains(c) || worldRenderer.HasChunkView(c) || knownEmptyChunks.Contains(c)) { count++; continue; }
-        if (HasChunkData(c)) { QueueRender(c); count++; continue; }
+        if ((!desiredChunkCoords.Contains(c) && !keepChunkCoords.Contains(c)) || worldRenderer.HasChunkView(c) || knownEmptyChunks.Contains(c)) { count++; continue; }
+        if (HasChunkData(c)) { if (desiredChunkCoords.Contains(c)) QueueRender(c); count++; continue; }
         if (!world.Settings.IsInsideWorldBounds(c)) { knownEmptyChunks.Add(c); count++; continue; }
         if (chunkLoadQueue.IsInFlight(c)) { count++; continue; }
 
@@ -302,7 +331,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
           break;
         }
 
-        if (EnsureGeneratedChunkDataAvailable(c)) QueueRender(c);
+        if (desiredChunkCoords.Contains(c) && EnsureGeneratedChunkDataAvailable(c)) QueueRender(c);
         count++;
       }
     }
