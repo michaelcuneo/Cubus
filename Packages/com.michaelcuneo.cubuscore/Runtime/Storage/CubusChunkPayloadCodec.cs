@@ -20,7 +20,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
     {
       Empty = 0,
       Solid = 1,
-      MixedRle = 2
+      MixedRle = 2,
+      Uniform = 3
     }
 
     public static bool CanDecodeBlockChunk(WorldChunkRecord record, out string error)
@@ -155,15 +156,11 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
       using MemoryStream stream = new();
       using BinaryWriter writer = new(stream);
 
-      if (!hasSolid)
+      if (TryGetUniformDensityValue(voxels, out short uniformDensity, out ushort uniformMaterialId))
       {
-        writer.Write((byte)DensityCompressedKind.Empty);
-      }
-      else if (!hasSurface)
-      {
-        ushort materialId = FindFirstSolidMaterial(voxels);
-        writer.Write((byte)DensityCompressedKind.Solid);
-        writer.Write(materialId);
+        writer.Write((byte)DensityCompressedKind.Uniform);
+        writer.Write(uniformDensity);
+        writer.Write(uniformMaterialId);
       }
       else
       {
@@ -250,6 +247,14 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
           ReadDensityRle(reader, voxels);
           break;
 
+        case DensityCompressedKind.Uniform:
+          {
+            short densityQ = reader.ReadInt16();
+            ushort materialId = reader.ReadUInt16();
+            FillUniformDensity(voxels, densityQ, materialId);
+            break;
+          }
+
         default:
           throw new InvalidDataException($"Unknown compressed density payload kind {kind}.");
       }
@@ -268,14 +273,14 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
       while (index < voxels.Length)
       {
         short density = QuantizeDensity(voxels[index].Density);
-        ushort materialId = density > 0 ? NormalizeMaterial(voxels[index].MaterialId) : (ushort)0;
+        ushort materialId = NormalizeDensityMaterial(density, voxels[index].MaterialId);
         ushort length = 1;
         index++;
 
         while (index < voxels.Length && length < ushort.MaxValue)
         {
           short nextDensity = QuantizeDensity(voxels[index].Density);
-          ushort nextMaterialId = nextDensity > 0 ? NormalizeMaterial(voxels[index].MaterialId) : (ushort)0;
+          ushort nextMaterialId = NormalizeDensityMaterial(nextDensity, voxels[index].MaterialId);
 
           if (nextDensity != density || nextMaterialId != materialId)
           {
@@ -327,6 +332,44 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
       }
     }
 
+    private static bool TryGetUniformDensityValue(DensityVoxel[] voxels, out short density, out ushort materialId)
+    {
+      if (voxels == null || voxels.Length == 0)
+      {
+        density = 0;
+        materialId = 0;
+        return false;
+      }
+
+      density = QuantizeDensity(voxels[0].Density);
+      materialId = NormalizeDensityMaterial(density, voxels[0].MaterialId);
+
+      for (int i = 1; i < voxels.Length; i++)
+      {
+        short nextDensity = QuantizeDensity(voxels[i].Density);
+        ushort nextMaterialId = NormalizeDensityMaterial(nextDensity, voxels[i].MaterialId);
+
+        if (nextDensity != density || nextMaterialId != materialId)
+        {
+          return false;
+        }
+      }
+
+      return true;
+    }
+
+    private static void FillUniformDensity(DensityVoxel[] voxels, short densityQ, ushort materialId)
+    {
+      float density = DequantizeDensity(densityQ);
+      ushort normalizedMaterialId = density > 0.0f ? NormalizeMaterial(materialId) : (ushort)0;
+      DensityVoxel voxel = new(density, normalizedMaterialId);
+
+      for (int i = 0; i < voxels.Length; i++)
+      {
+        voxels[i] = voxel;
+      }
+    }
+
     private static short QuantizeDensity(float density)
     {
       return (short)Mathf.Clamp(
@@ -341,17 +384,9 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
       return density / DensityQuantizationScale;
     }
 
-    private static ushort FindFirstSolidMaterial(DensityVoxel[] voxels)
+    private static ushort NormalizeDensityMaterial(short density, ushort materialId)
     {
-      for (int i = 0; i < voxels.Length; i++)
-      {
-        if (voxels[i].Density > 0.0f && voxels[i].MaterialId != 0)
-        {
-          return voxels[i].MaterialId;
-        }
-      }
-
-      return 1;
+      return density > 0 ? NormalizeMaterial(materialId) : (ushort)0;
     }
 
     private static ushort NormalizeMaterial(ushort materialId)
