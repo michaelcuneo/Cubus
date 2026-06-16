@@ -26,12 +26,12 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     [Min(8)]
     public int InitialChunksGeneratedPerFrame = 32;
 
-    [Tooltip("For smooth-density this is the number of synchronous density meshes allowed per frame. Keep high enough to reveal terrain quickly, low enough to avoid huge frame spikes.")]
-    [Min(4)]
-    public int ChunksRenderedPerFrame = 32;
+    [Tooltip("Main-thread render budget. Smooth-density meshing is currently synchronous, so keep this low until density meshing is moved off the main thread.")]
+    [Min(1)]
+    public int ChunksRenderedPerFrame = 4;
 
     [Min(4)]
-    public int MeshAppliesPerFrame = 32;
+    public int MeshAppliesPerFrame = 16;
 
     [Header("Async")]
     public bool UseAsyncGeneration = true;
