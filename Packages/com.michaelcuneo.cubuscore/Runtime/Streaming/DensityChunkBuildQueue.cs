@@ -180,12 +180,11 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
           chunkCoord.z >= request.GeneratedMinChunkZ &&
           chunkCoord.z <= request.GeneratedMaxChunkZ;
 
-      if (!insideGeneratedBounds)
-      {
-        return new DensityVoxel(1.0f, 1);
-      }
-
-      return DensityVoxel.Empty;
+      // Unknown scalar field at a seam must not be treated as empty. Empty creates artificial
+      // marching-cubes caps across chunk boundaries, which shows up as a giant flat roof.
+      // Treat missing samples as solid so the chunk waits for a real neighbour mesh instead
+      // of inventing an exposed surface.
+      return new DensityVoxel(1.0f, 1);
     }
   }
 }
