@@ -25,6 +25,13 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     [SerializeField] private float initialSpawnClearance = 2.0f;
     [SerializeField] private bool evictCachedChunkDataOutsideKeepSet = true;
 
+    [Header("Initial Streaming Stage")]
+    [SerializeField] private bool useInitialStreamingStage = true;
+    [SerializeField][Min(0)] private int initialStreamingRadiusInChunks = 1;
+    [SerializeField][Min(0)] private int initialChunksBelowSurface = 1;
+    [SerializeField][Min(0)] private int initialChunksAboveSurface = 1;
+    [SerializeField][Min(0)] private int initialKeepPaddingInChunks = 1;
+
     private readonly HashSet<Vector3Int> desiredChunkCoords = new();
     private readonly HashSet<Vector3Int> keepChunkCoords = new();
     private readonly Queue<Vector3Int> pendingLoadQueue = new();
@@ -55,6 +62,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     public bool HasLastViewerChunkCoord => hasLastViewerChunkCoord;
     public Vector3Int SpawnTargetChunkCoord => spawnTargetChunkCoord;
     public bool HasBroadcastInitialTerrainReady => hasBroadcastInitialTerrainReady;
+    public bool IsInitialStreamingStageActive => UseInitialStreamingStageNow;
     public int DesiredChunkCount => desiredChunkCoords.Count;
     public int KeepChunkCount => keepChunkCoords.Count;
     public int PendingLoadCount => pendingLoadQueue.Count;
@@ -70,9 +78,15 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     public IReadOnlyCollection<Vector3Int> PendingRenderCoords => pendingRenderSet;
     public IReadOnlyCollection<Vector3Int> KnownEmptyChunks => knownEmptyChunks;
 
+    private bool UseInitialStreamingStageNow => useInitialStreamingStage && !hasBroadcastInitialTerrainReady;
+    private int ActiveDesiredRadiusInChunks => UseInitialStreamingStageNow ? Mathf.Max(0, initialStreamingRadiusInChunks) : Mathf.Max(1, world.Settings.ViewDistanceInChunks);
+    private int ActiveKeepRadiusInChunks => ActiveDesiredRadiusInChunks + (UseInitialStreamingStageNow ? Mathf.Max(0, initialKeepPaddingInChunks) : UnloadPaddingInChunks);
+    private int ActiveChunksBelowSurface => UseInitialStreamingStageNow ? Mathf.Max(0, initialChunksBelowSurface) : ChunksBelowSurface;
+    private int ActiveChunksAboveSurface => UseInitialStreamingStageNow ? Mathf.Max(0, initialChunksAboveSurface) : ChunksAboveSurface;
+
     private int UnloadPaddingInChunks => Mathf.Max(2, settings != null ? settings.UnloadPaddingInChunks : 4);
-    private int ChunksBelowSurface => Mathf.Max(8, settings != null ? settings.ChunksBelowSurface : 8);
-    private int ChunksAboveSurface => Mathf.Max(8, settings != null ? settings.ChunksAboveSurface : 8);
+    private int ChunksBelowSurface => Mathf.Max(0, settings != null ? settings.ChunksBelowSurface : 8);
+    private int ChunksAboveSurface => Mathf.Max(0, settings != null ? settings.ChunksAboveSurface : 8);
     private int ChunksLoadedPerFrame => Mathf.Clamp(settings != null ? settings.ChunksGeneratedPerFrame : 8, 4, 64);
     private int ChunksRenderedPerFrame => Mathf.Clamp(settings != null ? settings.ChunksRenderedPerFrame : 32, 4, 128);
     private int MeshAppliesPerFrame => Mathf.Clamp(settings != null ? settings.MeshAppliesPerFrame : 32, 4, 128);
@@ -220,14 +234,14 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       if (!force && hasLastViewerChunkCoord && viewerChunkCoord == lastViewerChunkCoord) return;
       lastViewerChunkCoord = viewerChunkCoord;
       hasLastViewerChunkCoord = true;
-      BuildChunkSet(viewerChunkCoord, Mathf.Max(1, world.Settings.ViewDistanceInChunks), desiredChunkCoords);
-      BuildChunkSet(viewerChunkCoord, Mathf.Max(1, world.Settings.ViewDistanceInChunks) + UnloadPaddingInChunks, keepChunkCoords);
+      BuildChunkSet(viewerChunkCoord, ActiveDesiredRadiusInChunks, ActiveChunksBelowSurface, ActiveChunksAboveSurface, desiredChunkCoords);
+      BuildChunkSet(viewerChunkCoord, ActiveKeepRadiusInChunks, ActiveChunksBelowSurface, ActiveChunksAboveSurface, keepChunkCoords);
       QueueGeneratedChunksForRender(viewerChunkCoord);
       QueueSpawnTargetForRender();
       UnloadOutsideKeepSet();
     }
 
-    private void BuildChunkSet(Vector3Int viewerChunkCoord, int horizontalRadius, HashSet<Vector3Int> targetSet)
+    private void BuildChunkSet(Vector3Int viewerChunkCoord, int horizontalRadius, int chunksBelowSurface, int chunksAboveSurface, HashSet<Vector3Int> targetSet)
     {
       targetSet.Clear();
       for (int z = -horizontalRadius; z <= horizontalRadius; z++)
@@ -236,8 +250,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         int chunkX = viewerChunkCoord.x + x;
         int chunkZ = viewerChunkCoord.z + z;
         int surfaceChunkY = GetSurfaceChunkYForColumn(chunkX, chunkZ, viewerChunkCoord.y * VoxelConstants.ChunkSize);
-        int minY = surfaceChunkY - ChunksBelowSurface;
-        int maxY = surfaceChunkY + ChunksAboveSurface;
+        int minY = surfaceChunkY - chunksBelowSurface;
+        int maxY = surfaceChunkY + chunksAboveSurface;
         if (world.Settings.TerrainSystem == TerrainSystem.Block)
         {
           world.Settings.GetEffectiveBlockChunkYRange(out int generatedMinY, out int generatedMaxY);
@@ -633,6 +647,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       Vector3 spawn = CalculateInitialSpawnLocation();
       world.BroadcastInitialTerrainReady(spawn);
       hasBroadcastInitialTerrainReady = true;
+      ForceRefreshStreamingSet();
     }
 
     private Vector3 CalculateInitialSpawnLocation()
