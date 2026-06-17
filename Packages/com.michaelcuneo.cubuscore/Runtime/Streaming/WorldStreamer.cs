@@ -447,19 +447,27 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
     private bool EnsureDensitySampleChunksAvailableForMesh(Vector3Int root)
     {
+      bool allSampleChunksAvailable = true;
+
       for (int i = 0; i < DensityMeshSampleChunkOffsets.Length; i++)
       {
         Vector3Int c = root + DensityMeshSampleChunkOffsets[i];
 
-        if (HasChunkData(c) || !world.Settings.IsInsideWorldBounds(c)) continue;
+        if (HasChunkData(c) || !world.Settings.IsInsideWorldBounds(c))
+        {
+          continue;
+        }
 
+        allSampleChunksAvailable = false;
         keepChunkCoords.Add(c);
-        if (chunkLoadQueue.IsInFlight(c) || pendingLoadSet.Contains(c)) return false;
-        QueueLoad(c);
-        return false;
+
+        if (!chunkLoadQueue.IsInFlight(c) && !pendingLoadSet.Contains(c))
+        {
+          QueueLoad(c);
+        }
       }
 
-      return true;
+      return allSampleChunksAvailable;
     }
 
     private void ProcessCompletedBuildResults()
