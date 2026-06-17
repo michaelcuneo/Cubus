@@ -16,7 +16,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Validation
     [SerializeField] private bool validateOnStart;
     [SerializeField] private bool logMissingChunks;
     [SerializeField] private bool logRenderedChunksOutsideKeepSet;
-    [SerializeField, Min(0)] private int toleratedMissingDesiredRenderableChunks = 0;
+    [SerializeField, Min(0)] private int toleratedUnqueuedMissingDesiredRenderableChunks = 0;
     [SerializeField, Min(0)] private int toleratedRenderedChunksOutsideKeepSet = 0;
 
     public bool LastValidationPassed { get; private set; }
@@ -70,6 +70,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Validation
       WorldSettings settings = sourceWorld.Settings;
       HashSet<Vector3Int> desiredSet = new(sourceStreamer.DesiredChunkCoords);
       HashSet<Vector3Int> keepSet = new(sourceStreamer.KeepChunkCoords);
+      HashSet<Vector3Int> pendingLoadSet = new(sourceStreamer.PendingLoadCoords);
+      HashSet<Vector3Int> pendingRenderSet = new(sourceStreamer.PendingRenderCoords);
       HashSet<Vector3Int> knownEmptySet = new(sourceStreamer.KnownEmptyChunks);
 
       int desiredChunks = desiredSet.Count;
@@ -79,7 +81,11 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Validation
       int desiredRenderableChunks = 0;
       int renderedDesiredChunks = 0;
       int missingDesiredDataChunks = 0;
+      int missingDesiredDataPendingLoadChunks = 0;
+      int unqueuedMissingDesiredDataChunks = 0;
       int missingDesiredRenderableChunks = 0;
+      int missingDesiredRenderablePendingRenderChunks = 0;
+      int unqueuedMissingDesiredRenderableChunks = 0;
       int activeRenderedChunks = sourceRenderer.ActiveChunkViews.Count;
       int renderedOutsideDesiredSet = 0;
       int renderedOutsideKeepSet = 0;
@@ -88,6 +94,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Validation
       foreach (Vector3Int chunkCoord in desiredSet)
       {
         bool isKnownEmpty = knownEmptySet.Contains(chunkCoord);
+        bool isPendingLoad = pendingLoadSet.Contains(chunkCoord);
+        bool isPendingRender = pendingRenderSet.Contains(chunkCoord);
         bool hasChunkData = HasChunkData(settings.TerrainSystem, chunkCoord);
         bool hasRenderedView = sourceRenderer.HasChunkView(chunkCoord);
         bool shouldRender = HasRenderableSurface(settings.TerrainSystem, chunkCoord, hasChunkData);
@@ -103,9 +111,18 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Validation
         else
         {
           missingDesiredDataChunks++;
-          if (logMissingChunks)
+
+          if (isPendingLoad)
           {
-            Debug.LogWarning($"Desired streaming chunk has no data and is not marked known-empty. Chunk={chunkCoord}", this);
+            missingDesiredDataPendingLoadChunks++;
+          }
+          else
+          {
+            unqueuedMissingDesiredDataChunks++;
+            if (logMissingChunks)
+            {
+              Debug.LogWarning($"Desired streaming chunk has no data, is not known-empty, and is not pending load. Chunk={chunkCoord}", this);
+            }
           }
         }
 
@@ -115,9 +132,18 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Validation
           if (!hasRenderedView)
           {
             missingDesiredRenderableChunks++;
-            if (logMissingChunks)
+
+            if (isPendingRender)
             {
-              Debug.LogWarning($"Desired renderable chunk is missing a rendered ChunkView. Chunk={chunkCoord}", this);
+              missingDesiredRenderablePendingRenderChunks++;
+            }
+            else
+            {
+              unqueuedMissingDesiredRenderableChunks++;
+              if (logMissingChunks)
+              {
+                Debug.LogWarning($"Desired renderable chunk is missing a rendered ChunkView and is not pending render. Chunk={chunkCoord}", this);
+              }
             }
           }
         }
@@ -167,7 +193,11 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Validation
         $"DesiredRenderableChunks={desiredRenderableChunks}, " +
         $"RenderedDesiredChunks={renderedDesiredChunks}, " +
         $"MissingDesiredDataChunks={missingDesiredDataChunks}, " +
+        $"MissingDesiredDataPendingLoadChunks={missingDesiredDataPendingLoadChunks}, " +
+        $"UnqueuedMissingDesiredDataChunks={unqueuedMissingDesiredDataChunks}, " +
         $"MissingDesiredRenderableChunks={missingDesiredRenderableChunks}, " +
+        $"MissingDesiredRenderablePendingRenderChunks={missingDesiredRenderablePendingRenderChunks}, " +
+        $"UnqueuedMissingDesiredRenderableChunks={unqueuedMissingDesiredRenderableChunks}, " +
         $"ActiveRenderedChunks={activeRenderedChunks}, " +
         $"RenderedOutsideDesiredSet={renderedOutsideDesiredSet}, " +
         $"RenderedOutsideKeepSet={renderedOutsideKeepSet}, " +
@@ -180,10 +210,10 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Validation
         $"ActiveChunkLoadTasks={sourceStreamer.ActiveChunkLoadTaskCount}, " +
         $"ActiveDensityBuildTasks={sourceStreamer.ActiveDensityBuildTaskCount}";
 
-      if (missingDesiredRenderableChunks > toleratedMissingDesiredRenderableChunks)
+      if (unqueuedMissingDesiredRenderableChunks > toleratedUnqueuedMissingDesiredRenderableChunks)
       {
         return Fail(
-          $"Streaming coverage validation suspicious: missing desired renderable chunks exceeded tolerance. {diagnostics}",
+          $"Streaming coverage validation suspicious: unqueued missing desired renderable chunks exceeded tolerance. {diagnostics}",
           out message
         );
       }
