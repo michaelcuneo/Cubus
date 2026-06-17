@@ -51,6 +51,22 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     private bool hasBroadcastInitialTerrainReady;
 
     public StreamingSettings Settings => settings;
+    public Vector3Int LastViewerChunkCoord => lastViewerChunkCoord;
+    public bool HasLastViewerChunkCoord => hasLastViewerChunkCoord;
+    public Vector3Int SpawnTargetChunkCoord => spawnTargetChunkCoord;
+    public bool HasBroadcastInitialTerrainReady => hasBroadcastInitialTerrainReady;
+    public int DesiredChunkCount => desiredChunkCoords.Count;
+    public int KeepChunkCount => keepChunkCoords.Count;
+    public int PendingLoadCount => pendingLoadQueue.Count;
+    public int PendingRenderCount => pendingRenderQueue.Count;
+    public int PendingLoadSetCount => pendingLoadSet.Count;
+    public int PendingRenderSetCount => pendingRenderSet.Count;
+    public int KnownEmptyChunkCount => knownEmptyChunks.Count;
+    public int ActiveChunkLoadTaskCount => chunkLoadQueue.ActiveTaskCount;
+    public int ActiveDensityBuildTaskCount => densityBuildQueue.ActiveTaskCount;
+    public IReadOnlyCollection<Vector3Int> DesiredChunkCoords => desiredChunkCoords;
+    public IReadOnlyCollection<Vector3Int> KeepChunkCoords => keepChunkCoords;
+    public IReadOnlyCollection<Vector3Int> KnownEmptyChunks => knownEmptyChunks;
 
     private int UnloadPaddingInChunks => Mathf.Max(2, settings != null ? settings.UnloadPaddingInChunks : 4);
     private int ChunksBelowSurface => Mathf.Max(8, settings != null ? settings.ChunksBelowSurface : 8);
