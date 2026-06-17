@@ -66,6 +66,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     public int ActiveDensityBuildTaskCount => densityBuildQueue.ActiveTaskCount;
     public IReadOnlyCollection<Vector3Int> DesiredChunkCoords => desiredChunkCoords;
     public IReadOnlyCollection<Vector3Int> KeepChunkCoords => keepChunkCoords;
+    public IReadOnlyCollection<Vector3Int> PendingLoadCoords => pendingLoadSet;
+    public IReadOnlyCollection<Vector3Int> PendingRenderCoords => pendingRenderSet;
     public IReadOnlyCollection<Vector3Int> KnownEmptyChunks => knownEmptyChunks;
 
     private int UnloadPaddingInChunks => Mathf.Max(2, settings != null ? settings.UnloadPaddingInChunks : 4);
