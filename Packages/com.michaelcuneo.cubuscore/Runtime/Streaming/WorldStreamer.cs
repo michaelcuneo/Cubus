@@ -503,13 +503,30 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     private Dictionary<Vector3Int, DensityChunkData> CreateDensityMeshChunkSnapshots(Vector3Int root, DensityChunkData rootData)
     {
       Dictionary<Vector3Int, DensityChunkData> snapshots = new();
+      generator ??= new WorldGenerator(world.Settings);
+
       for (int i = 0; i < DensityMeshSampleChunkOffsets.Length; i++)
       {
         Vector3Int c = root + DensityMeshSampleChunkOffsets[i];
         DensityChunkData source = c == root ? rootData : null;
-        if (source == null) world.Data.DensityChunks.TryGetValue(c, out source);
-        if (source != null) snapshots[c] = source.Clone();
+
+        if (source == null)
+        {
+          world.Data.DensityChunks.TryGetValue(c, out source);
+        }
+
+        if (source == null && world.Settings.IsInsideWorldBounds(c))
+        {
+          source = new DensityChunkData(c);
+          generator.FillDensityChunkFromTerrainSampler(source);
+        }
+
+        if (source != null)
+        {
+          snapshots[c] = source.Clone();
+        }
       }
+
       return snapshots;
     }
 
