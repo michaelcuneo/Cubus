@@ -420,12 +420,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
           continue;
         }
 
-        if (!EnsureDensitySampleChunksAvailableForMesh(c))
-        {
-          QueueRender(c);
-          continue;
-        }
-
         if (densityBuildQueue.IsInFlight(c))
         {
           QueueRender(c);
