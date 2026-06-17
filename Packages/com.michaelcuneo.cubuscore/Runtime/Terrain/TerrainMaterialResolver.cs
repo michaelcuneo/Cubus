@@ -56,7 +56,29 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain
     {
       double effectiveDepth = depthBelowSurface;
 
-      if (depthBelowSurface <= 4.0)
+      if (depthBelowSurface <= 2.25)
+      {
+        double surfacePatchNoise = FractalNoise01(
+            horizontalX * 0.045,
+            horizontalZ * 0.045,
+            17.31
+        );
+
+        // Near-surface terrain used to resolve almost every visible voxel to the
+        // first material layer, which made both block and density terrain render
+        // as one material. Push deterministic surface patches into deeper layers
+        // so dirt, stone/clay/sandstone, and biome-specific strata are actually
+        // visible on generated terrain instead of only inside cuts.
+        if (surfacePatchNoise > 0.82)
+        {
+          effectiveDepth = 32.0 + depthBelowSurface;
+        }
+        else if (surfacePatchNoise > 0.52)
+        {
+          effectiveDepth = 8.0 + depthBelowSurface;
+        }
+      }
+      else if (depthBelowSurface <= 5.0)
       {
         double exposedSubsurfaceNoise = FractalNoise01(
             horizontalX * 0.075,
@@ -64,10 +86,10 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain
             verticalY * 0.025 + 19.17
         );
 
-        if (exposedSubsurfaceNoise > 0.58)
+        if (exposedSubsurfaceNoise > 0.48)
         {
-          double t = Clamp01((exposedSubsurfaceNoise - 0.58) / 0.42);
-          effectiveDepth += SmoothStep(t) * 18.0;
+          double t = Clamp01((exposedSubsurfaceNoise - 0.48) / 0.52);
+          effectiveDepth += 6.0 + SmoothStep(t) * 22.0;
         }
       }
 
@@ -80,7 +102,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain
         double verticalY,
         double depthBelowSurface)
     {
-      if (depthBelowSurface < 10.0)
+      if (depthBelowSurface < 7.0)
       {
         return 0;
       }
@@ -91,7 +113,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain
           horizontalZ * 0.052 + 83.31
       );
 
-      if (verticalY < 96.0 && ironVein > 0.865)
+      if (verticalY < 128.0 && ironVein > 0.835)
       {
         return IronstoneOreMaterialId;
       }
@@ -102,7 +124,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain
           horizontalZ * 0.037 - 27.0
       );
 
-      if (verticalY < 48.0 && novaVein > 0.925)
+      if (verticalY < 64.0 && novaVein > 0.90)
       {
         return NovaOreMaterialId;
       }
