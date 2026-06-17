@@ -194,8 +194,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       if (world.Settings.TerrainSystem != TerrainSystem.Block && world.Settings.TerrainSystem != TerrainSystem.SmoothDensity) return;
       UpdateStreamingSetIfNeeded();
       PrioritizePendingQueues();
-      ProcessLoadQueue();
       ProcessCompletedChunkLoads();
+      ProcessLoadQueue();
       ProcessRenderQueue();
       ProcessCompletedBuildResults();
       TryBroadcastInitialTerrainReady();
@@ -333,13 +333,36 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     private void ProcessLoadQueue()
     {
       int count = 0;
-      while (pendingLoadQueue.Count > 0 && count < ChunksLoadedPerFrame)
+      int scanned = 0;
+      int maxScans = Mathf.Max(ChunksLoadedPerFrame * 8, pendingLoadQueue.Count);
+
+      while (pendingLoadQueue.Count > 0 && count < ChunksLoadedPerFrame && scanned < maxScans)
       {
-        Vector3Int c = pendingLoadQueue.Dequeue(); pendingLoadSet.Remove(c);
-        if ((!desiredChunkCoords.Contains(c) && !keepChunkCoords.Contains(c)) || worldRenderer.HasChunkView(c) || knownEmptyChunks.Contains(c)) { count++; continue; }
-        if (HasChunkData(c)) { if (desiredChunkCoords.Contains(c)) QueueRender(c); count++; continue; }
-        if (!world.Settings.IsInsideWorldBounds(c)) { knownEmptyChunks.Add(c); count++; continue; }
-        if (chunkLoadQueue.IsInFlight(c)) { count++; continue; }
+        scanned++;
+        Vector3Int c = pendingLoadQueue.Dequeue();
+        pendingLoadSet.Remove(c);
+
+        if ((!desiredChunkCoords.Contains(c) && !keepChunkCoords.Contains(c)) || worldRenderer.HasChunkView(c) || knownEmptyChunks.Contains(c))
+        {
+          continue;
+        }
+
+        if (HasChunkData(c))
+        {
+          if (desiredChunkCoords.Contains(c)) QueueRender(c);
+          continue;
+        }
+
+        if (!world.Settings.IsInsideWorldBounds(c))
+        {
+          knownEmptyChunks.Add(c);
+          continue;
+        }
+
+        if (chunkLoadQueue.IsInFlight(c))
+        {
+          continue;
+        }
 
         if (storage != null && storage.ActiveStore != null)
         {
@@ -359,8 +382,11 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
           break;
         }
 
-        if (desiredChunkCoords.Contains(c) && EnsureGeneratedChunkDataAvailable(c)) QueueRender(c);
-        count++;
+        if (desiredChunkCoords.Contains(c) && EnsureGeneratedChunkDataAvailable(c))
+        {
+          QueueRender(c);
+          count++;
+        }
       }
     }
 
