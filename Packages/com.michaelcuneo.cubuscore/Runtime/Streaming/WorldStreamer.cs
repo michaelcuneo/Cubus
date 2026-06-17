@@ -390,20 +390,58 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     private void ProcessRenderQueue()
     {
       int count = 0;
-      while (pendingRenderQueue.Count > 0 && count < ChunksRenderedPerFrame)
+      int scanned = 0;
+      int maxScans = Mathf.Max(ChunksRenderedPerFrame * 4, pendingRenderQueue.Count);
+
+      while (pendingRenderQueue.Count > 0 && count < ChunksRenderedPerFrame && scanned < maxScans)
       {
-        Vector3Int c = pendingRenderQueue.Dequeue(); pendingRenderSet.Remove(c);
-        if (!desiredChunkCoords.Contains(c)) continue;
+        scanned++;
+        Vector3Int c = pendingRenderQueue.Dequeue();
+        pendingRenderSet.Remove(c);
+
+        if (!desiredChunkCoords.Contains(c))
+        {
+          continue;
+        }
+
         if (world.Settings.TerrainSystem == TerrainSystem.Block)
         {
-          if (world.Data.BlockChunks.TryGetValue(c, out BlockChunkData b) && b != null && b.HasAnySolidVoxel()) worldRenderer.RenderBlockChunk(c, b);
-          count++; continue;
+          if (world.Data.BlockChunks.TryGetValue(c, out BlockChunkData b) && b != null && b.HasAnySolidVoxel())
+          {
+            worldRenderer.RenderBlockChunk(c, b);
+          }
+
+          count++;
+          continue;
         }
-        if (!world.Data.DensityChunks.TryGetValue(c, out DensityChunkData d) || d == null) continue;
-        if (!EnsureDensitySampleChunksAvailableForMesh(c)) { QueueRender(c); break; }
-        if (densityBuildQueue.IsInFlight(c)) { QueueRender(c); break; }
-        if (densityBuildQueue.ActiveTaskCount >= MaxAsyncChunkTasks) { QueueRender(c); break; }
-        if (TryStartDensityMeshBuild(c, d)) count++;
+
+        if (!world.Data.DensityChunks.TryGetValue(c, out DensityChunkData d) || d == null)
+        {
+          continue;
+        }
+
+        if (!EnsureDensitySampleChunksAvailableForMesh(c))
+        {
+          QueueRender(c);
+          continue;
+        }
+
+        if (densityBuildQueue.IsInFlight(c))
+        {
+          QueueRender(c);
+          continue;
+        }
+
+        if (densityBuildQueue.ActiveTaskCount >= MaxAsyncChunkTasks)
+        {
+          QueueRender(c);
+          break;
+        }
+
+        if (TryStartDensityMeshBuild(c, d))
+        {
+          count++;
+        }
       }
     }
 
