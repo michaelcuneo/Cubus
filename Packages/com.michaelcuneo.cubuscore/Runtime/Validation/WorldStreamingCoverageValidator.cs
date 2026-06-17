@@ -1,9 +1,8 @@
 using System.Collections.Generic;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Chunks;
-using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Core;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering;
+using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain;
-using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Voxels;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World;
 using UnityEngine;
 
@@ -13,14 +12,12 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Validation
   {
     [SerializeField] private CubusWorld sourceWorld;
     [SerializeField] private WorldRenderer sourceRenderer;
-    [SerializeField] private Transform viewer;
+    [SerializeField] private WorldStreamer sourceStreamer;
     [SerializeField] private bool validateOnStart;
     [SerializeField] private bool logMissingChunks;
-    [SerializeField] private bool logRenderedChunksOutsideExpectedSet;
-    [SerializeField, Min(0)] private int horizontalRadiusOverride = 0;
-    [SerializeField, Min(0)] private int chunksBelowSurface = 1;
-    [SerializeField, Min(0)] private int chunksAboveSurface = 1;
-    [SerializeField, Min(0)] private int toleratedMissingSurfaceChunks = 0;
+    [SerializeField] private bool logRenderedChunksOutsideKeepSet;
+    [SerializeField, Min(0)] private int toleratedMissingDesiredRenderableChunks = 0;
+    [SerializeField, Min(0)] private int toleratedRenderedChunksOutsideKeepSet = 0;
 
     public bool LastValidationPassed { get; private set; }
     public string LastValidationMessage { get; private set; } = "Not run.";
@@ -60,126 +57,141 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Validation
         return Fail("Streaming coverage validation failed: no WorldRenderer was found.", out message);
       }
 
+      if (sourceStreamer == null)
+      {
+        return Fail("Streaming coverage validation failed: no WorldStreamer was found. This validator needs the streamer diagnostic sets.", out message);
+      }
+
       if (sourceWorld.Settings == null)
       {
         return Fail("Streaming coverage validation failed: CubusWorld has no WorldSettings.", out message);
       }
 
-      Transform referenceTransform = viewer != null ? viewer : Camera.main != null ? Camera.main.transform : null;
-      Vector3 referencePosition = referenceTransform != null
-        ? referenceTransform.position
-        : sourceWorld.SuggestedSpawnLocation;
-
       WorldSettings settings = sourceWorld.Settings;
-      float voxelSize = Mathf.Max(0.0001f, settings.VoxelSize);
-      Vector3 localReference = sourceRenderer.transform.InverseTransformPoint(referencePosition);
-      Vector3 voxelReference = localReference / voxelSize;
+      HashSet<Vector3Int> desiredSet = new(sourceStreamer.DesiredChunkCoords);
+      HashSet<Vector3Int> keepSet = new(sourceStreamer.KeepChunkCoords);
+      HashSet<Vector3Int> knownEmptySet = new(sourceStreamer.KnownEmptyChunks);
 
-      Vector3Int viewerChunkCoord = new(
-        VoxelMath.FloorDiv(Mathf.FloorToInt(voxelReference.x), VoxelConstants.ChunkSize),
-        VoxelMath.FloorDiv(Mathf.FloorToInt(voxelReference.y), VoxelConstants.ChunkSize),
-        VoxelMath.FloorDiv(Mathf.FloorToInt(voxelReference.z), VoxelConstants.ChunkSize)
-      );
+      int desiredChunks = desiredSet.Count;
+      int keepChunks = keepSet.Count;
+      int desiredChunksWithData = 0;
+      int desiredKnownEmptyChunks = 0;
+      int desiredRenderableChunks = 0;
+      int renderedDesiredChunks = 0;
+      int missingDesiredDataChunks = 0;
+      int missingDesiredRenderableChunks = 0;
+      int activeRenderedChunks = sourceRenderer.ActiveChunkViews.Count;
+      int renderedOutsideDesiredSet = 0;
+      int renderedOutsideKeepSet = 0;
+      int renderedKnownEmptyChunks = 0;
 
-      int horizontalRadius = horizontalRadiusOverride > 0
-        ? horizontalRadiusOverride
-        : Mathf.Max(1, settings.ViewDistanceInChunks);
-
-      WorldGenerator generator = new(settings);
-      HashSet<Vector3Int> expected = new();
-      int expectedSurfaceBandChunks = 0;
-      int expectedRenderableSurfaceChunks = 0;
-      int missingDataChunks = 0;
-      int missingRenderedSurfaceChunks = 0;
-      int renderedExpectedChunks = 0;
-      int renderedUnexpectedChunks = 0;
-
-      for (int dz = -horizontalRadius; dz <= horizontalRadius; dz++)
+      foreach (Vector3Int chunkCoord in desiredSet)
       {
-        for (int dx = -horizontalRadius; dx <= horizontalRadius; dx++)
+        bool isKnownEmpty = knownEmptySet.Contains(chunkCoord);
+        bool hasChunkData = HasChunkData(settings.TerrainSystem, chunkCoord);
+        bool hasRenderedView = sourceRenderer.HasChunkView(chunkCoord);
+        bool shouldRender = HasRenderableSurface(settings.TerrainSystem, chunkCoord, hasChunkData);
+
+        if (hasChunkData)
         {
-          int chunkX = viewerChunkCoord.x + dx;
-          int chunkZ = viewerChunkCoord.z + dz;
-          int surfaceChunkY = generator.GetSurfaceChunkYForChunkColumn(new Vector2Int(chunkX, chunkZ));
-          int minY = surfaceChunkY - chunksBelowSurface;
-          int maxY = surfaceChunkY + chunksAboveSurface;
-
-          ClampYRangeToSettings(settings, ref minY, ref maxY);
-
-          for (int y = minY; y <= maxY; y++)
+          desiredChunksWithData++;
+        }
+        else if (isKnownEmpty)
+        {
+          desiredKnownEmptyChunks++;
+        }
+        else
+        {
+          missingDesiredDataChunks++;
+          if (logMissingChunks)
           {
-            Vector3Int chunkCoord = new(chunkX, y, chunkZ);
-            if (!settings.IsInsideWorldBounds(chunkCoord))
+            Debug.LogWarning($"Desired streaming chunk has no data and is not marked known-empty. Chunk={chunkCoord}", this);
+          }
+        }
+
+        if (shouldRender)
+        {
+          desiredRenderableChunks++;
+          if (!hasRenderedView)
+          {
+            missingDesiredRenderableChunks++;
+            if (logMissingChunks)
             {
-              continue;
-            }
-
-            expected.Add(chunkCoord);
-            expectedSurfaceBandChunks++;
-
-            bool hasChunkData = HasChunkData(settings.TerrainSystem, chunkCoord);
-            bool hasRenderedView = sourceRenderer.HasChunkView(chunkCoord);
-            bool shouldRender = HasRenderableSurface(settings.TerrainSystem, chunkCoord, hasChunkData);
-
-            if (!hasChunkData)
-            {
-              missingDataChunks++;
-              if (logMissingChunks)
-              {
-                Debug.LogWarning($"Expected streaming chunk has no data yet. Chunk={chunkCoord}", this);
-              }
-            }
-
-            if (shouldRender)
-            {
-              expectedRenderableSurfaceChunks++;
-              if (!hasRenderedView)
-              {
-                missingRenderedSurfaceChunks++;
-                if (logMissingChunks)
-                {
-                  Debug.LogWarning($"Renderable streaming chunk is missing a rendered ChunkView. Chunk={chunkCoord}", this);
-                }
-              }
-            }
-
-            if (hasRenderedView)
-            {
-              renderedExpectedChunks++;
+              Debug.LogWarning($"Desired renderable chunk is missing a rendered ChunkView. Chunk={chunkCoord}", this);
             }
           }
+        }
+
+        if (hasRenderedView)
+        {
+          renderedDesiredChunks++;
         }
       }
 
       foreach (KeyValuePair<Vector3Int, ChunkView> pair in sourceRenderer.ActiveChunkViews)
       {
-        if (!expected.Contains(pair.Key))
+        if (!desiredSet.Contains(pair.Key))
         {
-          renderedUnexpectedChunks++;
-          if (logRenderedChunksOutsideExpectedSet)
+          renderedOutsideDesiredSet++;
+        }
+
+        if (!keepSet.Contains(pair.Key))
+        {
+          renderedOutsideKeepSet++;
+          if (logRenderedChunksOutsideKeepSet)
           {
-            Debug.Log($"Rendered chunk is outside validator expected set. Chunk={pair.Key}", pair.Value);
+            Debug.LogWarning($"Rendered chunk is outside the streamer's keep set. Chunk={pair.Key}", pair.Value);
+          }
+        }
+
+        if (knownEmptySet.Contains(pair.Key))
+        {
+          renderedKnownEmptyChunks++;
+          if (logRenderedChunksOutsideKeepSet)
+          {
+            Debug.LogWarning($"Rendered chunk is marked known-empty by streamer. Chunk={pair.Key}", pair.Value);
           }
         }
       }
 
       string diagnostics =
         $"Streaming coverage report. " +
-        $"ViewerChunk={viewerChunkCoord}, " +
-        $"Radius={horizontalRadius}, " +
-        $"YBand=-{chunksBelowSurface}/+{chunksAboveSurface}, " +
-        $"ExpectedSurfaceBandChunks={expectedSurfaceBandChunks}, " +
-        $"ExpectedRenderableSurfaceChunks={expectedRenderableSurfaceChunks}, " +
-        $"RenderedExpectedChunks={renderedExpectedChunks}, " +
-        $"ActiveRenderedChunks={sourceRenderer.ActiveChunkViews.Count}, " +
-        $"MissingDataChunks={missingDataChunks}, " +
-        $"MissingRenderedSurfaceChunks={missingRenderedSurfaceChunks}, " +
-        $"RenderedUnexpectedChunks={renderedUnexpectedChunks}";
+        $"HasLastViewerChunk={sourceStreamer.HasLastViewerChunkCoord}, " +
+        $"LastViewerChunk={sourceStreamer.LastViewerChunkCoord}, " +
+        $"SpawnTargetChunk={sourceStreamer.SpawnTargetChunkCoord}, " +
+        $"InitialTerrainReady={sourceStreamer.HasBroadcastInitialTerrainReady}, " +
+        $"DesiredChunks={desiredChunks}, " +
+        $"KeepChunks={keepChunks}, " +
+        $"DesiredChunksWithData={desiredChunksWithData}, " +
+        $"DesiredKnownEmptyChunks={desiredKnownEmptyChunks}, " +
+        $"DesiredRenderableChunks={desiredRenderableChunks}, " +
+        $"RenderedDesiredChunks={renderedDesiredChunks}, " +
+        $"MissingDesiredDataChunks={missingDesiredDataChunks}, " +
+        $"MissingDesiredRenderableChunks={missingDesiredRenderableChunks}, " +
+        $"ActiveRenderedChunks={activeRenderedChunks}, " +
+        $"RenderedOutsideDesiredSet={renderedOutsideDesiredSet}, " +
+        $"RenderedOutsideKeepSet={renderedOutsideKeepSet}, " +
+        $"RenderedKnownEmptyChunks={renderedKnownEmptyChunks}, " +
+        $"PendingLoad={sourceStreamer.PendingLoadCount}, " +
+        $"PendingRender={sourceStreamer.PendingRenderCount}, " +
+        $"PendingLoadSet={sourceStreamer.PendingLoadSetCount}, " +
+        $"PendingRenderSet={sourceStreamer.PendingRenderSetCount}, " +
+        $"KnownEmpty={sourceStreamer.KnownEmptyChunkCount}, " +
+        $"ActiveChunkLoadTasks={sourceStreamer.ActiveChunkLoadTaskCount}, " +
+        $"ActiveDensityBuildTasks={sourceStreamer.ActiveDensityBuildTaskCount}";
 
-      if (missingRenderedSurfaceChunks > toleratedMissingSurfaceChunks)
+      if (missingDesiredRenderableChunks > toleratedMissingDesiredRenderableChunks)
       {
         return Fail(
-          $"Streaming coverage validation suspicious: missing rendered surface chunks exceeded tolerance. {diagnostics}",
+          $"Streaming coverage validation suspicious: missing desired renderable chunks exceeded tolerance. {diagnostics}",
+          out message
+        );
+      }
+
+      if (renderedOutsideKeepSet > toleratedRenderedChunksOutsideKeepSet)
+      {
+        return Fail(
+          $"Streaming coverage validation suspicious: rendered chunks outside streamer keep set exceeded tolerance. {diagnostics}",
           out message
         );
       }
@@ -202,14 +214,29 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Validation
         sourceRenderer = GetComponent<WorldRenderer>();
       }
 
+      if (sourceStreamer == null)
+      {
+        sourceStreamer = GetComponent<WorldStreamer>();
+      }
+
       if (sourceWorld == null && sourceRenderer != null)
       {
         sourceWorld = sourceRenderer.GetComponent<CubusWorld>();
       }
 
+      if (sourceWorld == null && sourceStreamer != null)
+      {
+        sourceWorld = sourceStreamer.GetComponent<CubusWorld>();
+      }
+
       if (sourceRenderer == null && sourceWorld != null)
       {
         sourceRenderer = sourceWorld.GetComponent<WorldRenderer>();
+      }
+
+      if (sourceStreamer == null && sourceWorld != null)
+      {
+        sourceStreamer = sourceWorld.GetComponent<WorldStreamer>();
       }
     }
 
@@ -243,21 +270,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Validation
                  densityChunk != null &&
                  densityChunk.HasSurfaceCrossing();
       }
-    }
-
-    private static void ClampYRangeToSettings(WorldSettings settings, ref int minY, ref int maxY)
-    {
-      if (settings.TerrainSystem == TerrainSystem.Block)
-      {
-        settings.GetEffectiveBlockChunkYRange(out int generatedMinY, out int generatedMaxY);
-        minY = Mathf.Max(minY, generatedMinY);
-        maxY = Mathf.Min(maxY, generatedMaxY);
-        return;
-      }
-
-      settings.GetEffectiveDensityChunkYRange(out int densityMinY, out int densityMaxY);
-      minY = Mathf.Max(minY, densityMinY);
-      maxY = Mathf.Min(maxY, densityMaxY);
     }
 
     private bool Fail(string failureMessage, out string message)
