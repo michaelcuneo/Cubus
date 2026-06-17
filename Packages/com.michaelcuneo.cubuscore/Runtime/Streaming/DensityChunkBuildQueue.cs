@@ -191,22 +191,44 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         }
 
         // Keep the lower / horizontal world edges solid so the generated field does not open
-        // visible side holes at the finite world boundary.
-        return new DensityVoxel(1.0f, 1);
+        // visible side holes at the finite world boundary. Use the biome material at this
+        // world coordinate instead of hard-coding material 1, otherwise boundary faces become
+        // green regardless of the actual biome.
+        return SampleGeneratedVoxel(worldVoxelCoord, request.WorldSnapshot, forcedDensity: 1.0f);
       }
 
-      double scale = request.WorldSnapshot.DensitySampleScale <= 0.0f
+      return SampleGeneratedVoxel(worldVoxelCoord, request.WorldSnapshot, forcedDensity: null);
+    }
+
+    private static DensityVoxel SampleGeneratedVoxel(
+        Vector3Int worldVoxelCoord,
+        WorldGenerationSnapshot snapshot,
+        float? forcedDensity)
+    {
+      double scale = snapshot.DensitySampleScale <= 0.0f
           ? 1.0
-          : request.WorldSnapshot.DensitySampleScale;
+          : snapshot.DensitySampleScale;
+
+      snapshot.ResolveBiomeAtWorldXZ(
+          worldVoxelCoord.x,
+          worldVoxelCoord.z,
+          out TerrainGenerationProfileSnapshot profile,
+          out _
+      );
 
       TerrainSamplerBurst.Sample(
-          request.WorldSnapshot.TerrainProfile,
+          profile,
           worldVoxelCoord.x * scale,
           worldVoxelCoord.z * scale,
           worldVoxelCoord.y * scale,
           out float density,
           out int solidMaterialId
       );
+
+      if (forcedDensity.HasValue)
+      {
+        density = forcedDensity.Value;
+      }
 
       ushort materialId = density > 0.0f
           ? (ushort)Mathf.Clamp(solidMaterialId, 1, 65535)
