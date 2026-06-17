@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 5a9d1fd91e6b47e1ab91ac3a5a090d72
+ShaderImporter:
+  externalObjects: {}
+  defaultTextures:
+  - _Atlas: {instanceID: 0}
+  - _TopLookup: {instanceID: 0}
+  - _SideLookup: {instanceID: 0}
+  - _BottomLookup: {instanceID: 0}
+  - _PropsLookup: {instanceID: 0}
+  nonModifiableTextures: []
+  preprocessorOverride: 0
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
