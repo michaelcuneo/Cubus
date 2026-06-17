@@ -144,17 +144,16 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain
 
       density = (float)d;
 
-      if (density <= 0.0f)
-      {
-        solidMaterialId = 0;
-        return;
-      }
-
-      float depthBelowSurface = (float)surfaceHeight - (float)wz;
-      solidMaterialId = ClampMat(profile.GetMaterialId(depthBelowSurface));
+      solidMaterialId = TerrainMaterialResolver.ResolveSolidMaterial(
+          profile,
+          wx,
+          wy,
+          wz,
+          density,
+          (float)surfaceHeight
+      );
     }
 
-    private static int ClampMat(int v) => Mathf.Clamp(v, 1, 65535);
     private static double Clamp01(double v) => Clamp(v, 0.0, 1.0);
     private static double Clamp(double v, double min, double max) => v < min ? min : (v > max ? max : v);
     private static double SmoothStep(double t) => t * t * (3.0 - 2.0 * t);
