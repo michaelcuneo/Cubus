@@ -203,18 +203,14 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain
       float density,
       float surfaceHeight)
     {
-      if (density <= 0.0f)
-      {
-        return 0;
-      }
-
-      float depthBelowSurface = surfaceHeight - worldVoxelPosition.y;
-      return ClampMaterialId(profileSnapshot.GetMaterialId(depthBelowSurface));
-    }
-
-    private static int ClampMaterialId(int value)
-    {
-      return Mathf.Clamp(value, 1, 65535);
+      return TerrainMaterialResolver.ResolveSolidMaterial(
+          profileSnapshot,
+          worldVoxelPosition.x,
+          worldVoxelPosition.z,
+          worldVoxelPosition.y,
+          density,
+          surfaceHeight
+      );
     }
 
     private static double Clamp01(double value)
