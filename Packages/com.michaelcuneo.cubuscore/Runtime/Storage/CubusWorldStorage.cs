@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.IO;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Chunks;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Core;
+using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World;
 using UnityEngine;
@@ -44,6 +45,11 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
     private void Start()
     {
       if (!autoLoadOnStart)
+      {
+        return;
+      }
+
+      if (GetComponent<WorldStreamer>() != null)
       {
         return;
       }
