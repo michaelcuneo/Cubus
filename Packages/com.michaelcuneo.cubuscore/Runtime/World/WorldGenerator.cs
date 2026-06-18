@@ -16,6 +16,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World
     public WorldGenerator(WorldSettings settings)
     {
       this.settings = settings;
+      StreamingGenerationContext.Set(settings);
     }
 
     public void Generate(WorldData worldData)
