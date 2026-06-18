@@ -113,7 +113,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         {
           ChunkCoord = chunkCoord,
           GenerationId = generationId,
-          Loaded = false
+          Loaded = true,
+          IsMissingFromStorage = true
         };
       }
 
@@ -149,6 +150,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     public Vector3Int ChunkCoord;
     public int GenerationId;
     public bool Loaded;
+    public bool IsMissingFromStorage;
     public TerrainSystem TerrainSystem;
     public BlockChunkData BlockChunkData;
     public DensityChunkData DensityChunkData;
