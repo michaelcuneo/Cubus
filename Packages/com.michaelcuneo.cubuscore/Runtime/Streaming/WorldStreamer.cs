@@ -26,8 +26,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     [SerializeField] private bool evictCachedChunkDataOutsideKeepSet = true;
 
     [Header("Initial Streaming Stage")]
+    [SerializeField] [Min(0)] private int initialStreamingRadiusInChunks = 1;
     [SerializeField] private bool useInitialStreamingStage = true;
-    [SerializeField][Min(0)] private int initialStreamingRadiusInChunks = 1;
     [SerializeField][Min(0)] private int initialChunksBelowSurface = 1;
     [SerializeField][Min(0)] private int initialChunksAboveSurface = 1;
     [SerializeField][Min(0)] private int initialKeepPaddingInChunks = 1;
@@ -608,7 +608,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     {
       if (HasChunkData(c)) return true;
       if (!world.Settings.IsInsideWorldBounds(c)) { knownEmptyChunks.Add(c); return false; }
-      if (world.Settings.MissingChunkPolicy != MissingChunkPolicy.GenerateLocally) { knownEmptyChunks.Add(c); return false; }
+
       generator ??= new WorldGenerator(world.Settings);
       if (world.Settings.TerrainSystem == TerrainSystem.Block)
       {
