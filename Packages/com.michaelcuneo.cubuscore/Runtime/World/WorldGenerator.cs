@@ -179,6 +179,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World
     {
       FillBlockChunkFromTerrainSampler(chunkData, overrides);
     }
+
     public int GetSurfaceChunkYForChunkColumn(Vector2Int chunkColumn)
     {
       const int size = VoxelConstants.ChunkSize;
@@ -193,7 +194,16 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World
       );
 
       int surfaceVoxelY = Mathf.FloorToInt(sample.SurfaceHeight);
-      return VoxelMath.FloorDiv(surfaceVoxelY, size);
+      int surfaceChunkY = VoxelMath.FloorDiv(surfaceVoxelY, size);
+
+      if (settings.TerrainSystem == TerrainSystem.Block)
+      {
+        settings.GetEffectiveBlockChunkYRange(out int minChunkY, out int maxChunkY);
+        return Mathf.Clamp(surfaceChunkY, minChunkY, maxChunkY);
+      }
+
+      settings.GetEffectiveDensityChunkYRange(out int densityMinChunkY, out int densityMaxChunkY);
+      return Mathf.Clamp(surfaceChunkY, densityMinChunkY, densityMaxChunkY);
     }
 
     private void FillBlockChunkFromTerrainSampler(
