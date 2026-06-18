@@ -28,13 +28,18 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
 
     private CubusWorld world;
     private IWorldChunkStore activeStore;
-
     private WorldManifest loadedManifest;
+    private bool storageReadsDisabledForTerrainSystem;
+
     public bool HasLoadedManifest => loadedManifest != null;
     public WorldManifest LoadedManifest => loadedManifest;
-
     public string WorldId => string.IsNullOrWhiteSpace(worldId) ? "demo_world" : worldId.Trim();
-    public IWorldChunkStore ActiveStore => activeStore;
+
+    // The streamer uses ActiveStore for lazy chunk reads. When the saved manifest belongs
+    // to another terrain system, returning the raw store lets block mode load density
+    // records (or vice versa), after which the streamer never generates replacement chunks.
+    // Hide the store for reads until a compatible world is saved or loaded.
+    public IWorldChunkStore ActiveStore => storageReadsDisabledForTerrainSystem ? null : activeStore;
 
     private void Awake()
     {
@@ -73,8 +78,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
       switch (world.Settings.TerrainSystem)
       {
         case TerrainSystem.Block:
-          if (!world.Data.BlockChunks.TryGetValue(chunkCoord, out BlockChunkData blockChunk) ||
-              blockChunk == null)
+          if (!world.Data.BlockChunks.TryGetValue(chunkCoord, out BlockChunkData blockChunk) || blockChunk == null)
           {
             return false;
           }
@@ -90,6 +94,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
           timingStats.WriteTicks += writeBlockWatch.ElapsedTicks;
           timingStats.Chunks = 1;
 
+          storageReadsDisabledForTerrainSystem = false;
           totalWatch.Stop();
           timingStats.TotalTicks = totalWatch.ElapsedTicks;
           LogSingleChunkCompressionIfEnabled("Saved", blockRecord);
@@ -98,8 +103,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
 
         case TerrainSystem.SmoothDensity:
         default:
-          if (!world.Data.DensityChunks.TryGetValue(chunkCoord, out DensityChunkData densityChunk) ||
-              densityChunk == null)
+          if (!world.Data.DensityChunks.TryGetValue(chunkCoord, out DensityChunkData densityChunk) || densityChunk == null)
           {
             return false;
           }
@@ -115,6 +119,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
           timingStats.WriteTicks += writeDensityWatch.ElapsedTicks;
           timingStats.Chunks = 1;
 
+          storageReadsDisabledForTerrainSystem = false;
           totalWatch.Stop();
           timingStats.TotalTicks = totalWatch.ElapsedTicks;
           LogSingleChunkCompressionIfEnabled("Saved", densityRecord);
@@ -146,7 +151,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
             WorldChunkRecord record = CubusChunkPayloadCodec.EncodeBlockChunk(WorldId, pair.Key, pair.Value);
             encodeWatch.Stop();
             timingStats.EncodeTicks += encodeWatch.ElapsedTicks;
-
             compressionStats.Add(record);
 
             Stopwatch writeWatch = Stopwatch.StartNew();
@@ -165,7 +169,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
             WorldChunkRecord record = CubusChunkPayloadCodec.EncodeDensityChunk(WorldId, pair.Key, pair.Value);
             encodeWatch.Stop();
             timingStats.EncodeTicks += encodeWatch.ElapsedTicks;
-
             compressionStats.Add(record);
 
             Stopwatch writeWatch = Stopwatch.StartNew();
@@ -177,6 +180,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
           break;
       }
 
+      storageReadsDisabledForTerrainSystem = false;
+      loadedManifest = manifest;
       totalWatch.Stop();
       timingStats.TotalTicks = totalWatch.ElapsedTicks;
 
@@ -200,12 +205,13 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
       manifestWatch.Stop();
       timingStats.ManifestTicks += manifestWatch.ElapsedTicks;
 
-      if (!hasManifest)
+      if (!hasManifest || !CanUseManifestForCurrentTerrainSystem(manifest, "database"))
       {
         return false;
       }
 
       loadedManifest = manifest;
+      storageReadsDisabledForTerrainSystem = false;
       ApplyManifest(manifest);
 
       world.Data.ClearGeneratedChunks();
@@ -218,7 +224,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
         readWatch.Stop();
         timingStats.ReadTicks += readWatch.ElapsedTicks;
 
-        if (!loaded)
+        if (!loaded || record.TerrainSystem != world.Settings.TerrainSystem)
         {
           continue;
         }
@@ -273,12 +279,14 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
       EnsureStore();
       Stopwatch totalWatch = Stopwatch.StartNew();
 
-      if (!activeStore.TryLoadWorldManifest(WorldId, out WorldManifest manifest))
+      if (!activeStore.TryLoadWorldManifest(WorldId, out WorldManifest manifest) ||
+          !CanUseManifestForCurrentTerrainSystem(manifest, "manifest"))
       {
         return false;
       }
 
       loadedManifest = manifest;
+      storageReadsDisabledForTerrainSystem = false;
       ApplyManifest(manifest);
 
       world.Data.ClearGeneratedChunks();
@@ -304,6 +312,11 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
     public bool TryLoadChunk(Vector3Int chunkCoord)
     {
       EnsureStore();
+      if (storageReadsDisabledForTerrainSystem)
+      {
+        return false;
+      }
+
       StorageTimingStats timingStats = new();
       Stopwatch totalWatch = Stopwatch.StartNew();
 
@@ -312,7 +325,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
       readWatch.Stop();
       timingStats.ReadTicks += readWatch.ElapsedTicks;
 
-      if (!loaded)
+      if (!loaded || record.TerrainSystem != world.Settings.TerrainSystem)
       {
         return false;
       }
@@ -357,6 +370,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
     {
       EnsureStore();
       activeStore.DeleteWorld(WorldId);
+      loadedManifest = null;
+      storageReadsDisabledForTerrainSystem = false;
       Debug.Log($"Deleted Cubus world database. WorldId={WorldId}, Backend={backend}");
     }
 
@@ -395,12 +410,10 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
     private WorldManifest CreateManifest()
     {
       WorldSettings settings = world.Settings;
-
       settings.GetGenerationChunkBoundsXZ(out int minChunkX, out int maxChunkX, out int minChunkZ, out int maxChunkZ);
 
       int minChunkY;
       int maxChunkY;
-
       if (settings.TerrainSystem == TerrainSystem.Block)
       {
         settings.GetEffectiveBlockChunkYRange(out minChunkY, out maxChunkY);
@@ -410,6 +423,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
         settings.GetEffectiveDensityChunkYRange(out minChunkY, out maxChunkY);
       }
 
+      long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
       return new WorldManifest
       {
         SchemaVersion = 1,
@@ -425,9 +439,37 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
         MinChunkZ = minChunkZ,
         MaxChunkZ = maxChunkZ,
         ChunkCount = settings.TerrainSystem == TerrainSystem.Block ? world.Data.BlockChunks.Count : world.Data.DensityChunks.Count,
-        UpdatedUnixTime = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
-        CreatedUnixTime = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
+        UpdatedUnixTime = now,
+        CreatedUnixTime = now
       };
+    }
+
+    private bool CanUseManifestForCurrentTerrainSystem(WorldManifest manifest, string loadKind)
+    {
+      if (manifest == null)
+      {
+        return false;
+      }
+
+      TerrainSystem runtimeTerrainSystem = world != null && world.Settings != null
+          ? world.Settings.TerrainSystem
+          : manifest.TerrainSystem;
+
+      if (manifest.TerrainSystem == runtimeTerrainSystem)
+      {
+        return true;
+      }
+
+      loadedManifest = null;
+      storageReadsDisabledForTerrainSystem = true;
+
+      Debug.LogWarning(
+          $"Ignoring Cubus world {loadKind}. WorldId={WorldId}, Backend={backend}, " +
+          $"SavedMode={manifest.TerrainSystem}, RuntimeMode={runtimeTerrainSystem}. " +
+          "Generate or save the world in the active terrain mode to replace the stored manifest."
+      );
+
+      return false;
     }
 
     private void ApplyManifest(WorldManifest manifest)
