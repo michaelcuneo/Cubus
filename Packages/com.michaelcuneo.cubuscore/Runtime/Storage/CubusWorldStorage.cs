@@ -463,10 +463,16 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
       loadedManifest = null;
       storageReadsDisabledForTerrainSystem = true;
 
+      if (world != null && world.Settings != null && world.Settings.MissingChunkPolicy == MissingChunkPolicy.TreatAsEmpty)
+      {
+        world.Settings.MissingChunkPolicy = MissingChunkPolicy.GenerateLocally;
+      }
+
       Debug.LogWarning(
           $"Ignoring Cubus world {loadKind}. WorldId={WorldId}, Backend={backend}, " +
           $"SavedMode={manifest.TerrainSystem}, RuntimeMode={runtimeTerrainSystem}. " +
-          "Generate or save the world in the active terrain mode to replace the stored manifest."
+          "Runtime missing chunk policy was set to GenerateLocally so streamed chunks can be regenerated in the active terrain mode. " +
+          "Save the world in the active terrain mode to replace the stored manifest."
       );
 
       return false;
