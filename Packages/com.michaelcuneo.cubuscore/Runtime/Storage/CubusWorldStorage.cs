@@ -205,7 +205,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
       manifestWatch.Stop();
       timingStats.ManifestTicks += manifestWatch.ElapsedTicks;
 
-      if (!hasManifest || !CanUseManifestForCurrentTerrainSystem(manifest, "database"))
+      if (!hasManifest || !CanUseManifestForCurrentSettings(manifest, "database"))
       {
         return false;
       }
@@ -280,7 +280,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
       Stopwatch totalWatch = Stopwatch.StartNew();
 
       if (!activeStore.TryLoadWorldManifest(WorldId, out WorldManifest manifest) ||
-          !CanUseManifestForCurrentTerrainSystem(manifest, "manifest"))
+          !CanUseManifestForCurrentSettings(manifest, "manifest"))
       {
         return false;
       }
@@ -440,7 +440,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
       };
     }
 
-    private bool CanUseManifestForCurrentTerrainSystem(WorldManifest manifest, string loadKind)
+    private bool CanUseManifestForCurrentSettings(WorldManifest manifest, string loadKind)
     {
       if (manifest == null)
       {
@@ -451,27 +451,80 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
           ? world.Settings.TerrainSystem
           : manifest.TerrainSystem;
 
-      if (manifest.TerrainSystem == runtimeTerrainSystem)
+      if (manifest.TerrainSystem != runtimeTerrainSystem)
+      {
+        loadedManifest = null;
+        storageReadsDisabledForTerrainSystem = true;
+
+        if (world != null && world.Settings != null && world.Settings.MissingChunkPolicy == MissingChunkPolicy.TreatAsEmpty)
+        {
+          world.Settings.MissingChunkPolicy = MissingChunkPolicy.GenerateLocally;
+        }
+
+        Debug.LogWarning(
+            $"Ignoring Cubus world {loadKind}. WorldId={WorldId}, Backend={backend}, " +
+            $"SavedMode={manifest.TerrainSystem}, RuntimeMode={runtimeTerrainSystem}. " +
+            "Runtime missing chunk policy was set to GenerateLocally so streamed chunks can be regenerated in the active terrain mode. " +
+            "Save the world in the active terrain mode to replace the stored manifest."
+        );
+
+        return false;
+      }
+
+      if (!ManifestMatchesCurrentGenerationBounds(manifest, out long expectedChunkCount))
+      {
+        loadedManifest = null;
+        storageReadsDisabledForTerrainSystem = false;
+
+        Debug.LogWarning(
+            $"Ignoring stale Cubus world {loadKind}. WorldId={WorldId}, Backend={backend}, " +
+            $"SavedBounds=({manifest.MinChunkX},{manifest.MinChunkY},{manifest.MinChunkZ}) -> " +
+            $"({manifest.MaxChunkX},{manifest.MaxChunkY},{manifest.MaxChunkZ}), " +
+            $"SavedChunks={manifest.ChunkCount}, ExpectedChunks={expectedChunkCount}. " +
+            "The world will be regenerated from current WorldSettings."
+        );
+
+        return false;
+      }
+
+      return true;
+    }
+
+    private bool ManifestMatchesCurrentGenerationBounds(WorldManifest manifest, out long expectedChunkCount)
+    {
+      expectedChunkCount = 0L;
+
+      if (world == null || world.Settings == null)
       {
         return true;
       }
 
-      loadedManifest = null;
-      storageReadsDisabledForTerrainSystem = true;
-
-      if (world != null && world.Settings != null && world.Settings.MissingChunkPolicy == MissingChunkPolicy.TreatAsEmpty)
-      {
-        world.Settings.MissingChunkPolicy = MissingChunkPolicy.GenerateLocally;
-      }
-
-      Debug.LogWarning(
-          $"Ignoring Cubus world {loadKind}. WorldId={WorldId}, Backend={backend}, " +
-          $"SavedMode={manifest.TerrainSystem}, RuntimeMode={runtimeTerrainSystem}. " +
-          "Runtime missing chunk policy was set to GenerateLocally so streamed chunks can be regenerated in the active terrain mode. " +
-          "Save the world in the active terrain mode to replace the stored manifest."
+      world.Settings.GetEffectiveGenerationChunkBounds3D(
+        out int minChunkX,
+        out int maxChunkX,
+        out int minChunkY,
+        out int maxChunkY,
+        out int minChunkZ,
+        out int maxChunkZ
       );
 
-      return false;
+      expectedChunkCount = CountChunks(minChunkX, maxChunkX, minChunkY, maxChunkY, minChunkZ, maxChunkZ);
+
+      return manifest.MinChunkX == minChunkX &&
+             manifest.MaxChunkX == maxChunkX &&
+             manifest.MinChunkY == minChunkY &&
+             manifest.MaxChunkY == maxChunkY &&
+             manifest.MinChunkZ == minChunkZ &&
+             manifest.MaxChunkZ == maxChunkZ &&
+             manifest.ChunkCount >= expectedChunkCount;
+    }
+
+    private static long CountChunks(int minX, int maxX, int minY, int maxY, int minZ, int maxZ)
+    {
+      long sizeX = Mathf.Max(0, maxX - minX + 1);
+      long sizeY = Mathf.Max(0, maxY - minY + 1);
+      long sizeZ = Mathf.Max(0, maxZ - minZ + 1);
+      return sizeX * sizeY * sizeZ;
     }
 
     private void ApplyManifest(WorldManifest manifest)
