@@ -174,25 +174,21 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Validation
       int minZ = -safeRadius;
       int maxZ = safeRadius;
 
+      activeSettings.GetEffectiveGenerationChunkBounds3D(
+        out int boundMinX,
+        out int boundMaxX,
+        out int minY,
+        out int maxY,
+        out int boundMinZ,
+        out int boundMaxZ
+      );
+
       if (activeSettings.UseFixedGenerationBounds)
       {
-        activeSettings.GetGenerationChunkBoundsXZ(out int boundMinX, out int boundMaxX, out int boundMinZ, out int boundMaxZ);
         minX = Mathf.Max(minX, boundMinX);
         maxX = Mathf.Min(maxX, boundMaxX);
         minZ = Mathf.Max(minZ, boundMinZ);
         maxZ = Mathf.Min(maxZ, boundMaxZ);
-      }
-
-      int minY;
-      int maxY;
-
-      if (activeSettings.TerrainSystem == TerrainSystem.Block)
-      {
-        activeSettings.GetEffectiveBlockChunkYRange(out minY, out maxY);
-      }
-      else
-      {
-        activeSettings.GetEffectiveDensityChunkYRange(out minY, out maxY);
       }
 
       for (int y = minY; y <= maxY; y++)
@@ -202,7 +198,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Validation
           for (int x = minX; x <= maxX; x++)
           {
             Vector3Int coord = new(x, y, z);
-            if (activeSettings.IsInsideWorldBounds(coord))
+            if (activeSettings.IsInsideEffectiveWorldBounds3D(coord))
             {
               coords.Add(coord);
             }
