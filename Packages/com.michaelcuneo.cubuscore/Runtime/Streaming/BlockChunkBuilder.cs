@@ -32,10 +32,24 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
       hasAnySolidVoxel = false;
 
+      int chunkMinWorldY = chunkCoord.y * size;
+
       for (int z = 0; z < size; z++)
       {
         for (int x = 0; x < size; x++)
         {
+          Vector3Int columnBaseWorldVoxel = chunkData.LocalToWorldVoxel(x, 0, z);
+          TerrainSample columnSample = BiomeTerrainSampler.Sample(
+              snapshot,
+              new Vector3Int(columnBaseWorldVoxel.x, 0, columnBaseWorldVoxel.z),
+              1.0f
+          );
+
+          if (chunkMinWorldY > Mathf.FloorToInt(columnSample.SurfaceHeight))
+          {
+            continue;
+          }
+
           for (int y = 0; y < size; y++)
           {
             Vector3Int worldVoxel = chunkData.LocalToWorldVoxel(x, y, z);
