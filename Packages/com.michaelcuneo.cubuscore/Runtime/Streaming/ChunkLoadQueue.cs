@@ -38,20 +38,9 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
     public bool TryStartLoad(IWorldChunkStore store, string worldId, Vector3Int chunkCoord, int maxActiveTasks)
     {
-      if (store == null || string.IsNullOrWhiteSpace(worldId))
-      {
-        return false;
-      }
-
-      if (activeTaskCount >= maxActiveTasks)
-      {
-        return false;
-      }
-
-      if (inFlightChunkCoords.Contains(chunkCoord))
-      {
-        return false;
-      }
+      if (store == null || string.IsNullOrWhiteSpace(worldId)) return false;
+      if (activeTaskCount >= maxActiveTasks) return false;
+      if (inFlightChunkCoords.Contains(chunkCoord)) return false;
 
       int requestGeneration = generationId;
       inFlightChunkCoords.Add(chunkCoord);
@@ -67,17 +56,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         }
         else
         {
-          if (task.Exception != null)
-          {
-            Debug.LogException(task.Exception);
-          }
-
-          result = new ChunkLoadResult
-          {
-            ChunkCoord = chunkCoord,
-            GenerationId = requestGeneration,
-            Loaded = false
-          };
+          if (task.Exception != null) Debug.LogException(task.Exception);
+          result = new ChunkLoadResult { ChunkCoord = chunkCoord, GenerationId = requestGeneration, Loaded = false };
         }
 
         lock (completedResults)
@@ -110,52 +90,49 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     {
       if (!store.TryLoadChunk(worldId, chunkCoord, out WorldChunkRecord record))
       {
-        if (StreamingGenerationContext.TryGetBlockSnapshot(out WorldGenerationSnapshot snapshot))
+        if (StreamingGenerationContext.TryGet(out TerrainSystem mode, out WorldGenerationSnapshot snapshot))
         {
-          return new ChunkLoadResult
+          ChunkLoadResult result = new()
           {
             ChunkCoord = chunkCoord,
             GenerationId = generationId,
             Loaded = true,
             IsMissingFromStorage = true,
-            TerrainSystem = TerrainSystem.Block,
-            BlockChunkData = BlockChunkBuilder.GenerateChunkData(chunkCoord, snapshot, null)
+            TerrainSystem = mode
           };
+
+          if (mode == TerrainSystem.Block)
+          {
+            result.BlockChunkData = BlockChunkBuilder.GenerateChunkData(chunkCoord, snapshot, null);
+            return result;
+          }
+
+          if (mode == TerrainSystem.SmoothDensity)
+          {
+            result.DensityChunkData = DensityChunkBuilder.GenerateChunkData(chunkCoord, snapshot, null);
+            return result;
+          }
         }
 
-        return new ChunkLoadResult
-        {
-          ChunkCoord = chunkCoord,
-          GenerationId = generationId,
-          Loaded = false,
-          IsMissingFromStorage = true
-        };
+        return new ChunkLoadResult { ChunkCoord = chunkCoord, GenerationId = generationId, Loaded = false, IsMissingFromStorage = true };
       }
 
-      ChunkLoadResult result = new()
-      {
-        ChunkCoord = chunkCoord,
-        GenerationId = generationId,
-        Loaded = true,
-        TerrainSystem = record.TerrainSystem
-      };
+      ChunkLoadResult loaded = new() { ChunkCoord = chunkCoord, GenerationId = generationId, Loaded = true, TerrainSystem = record.TerrainSystem };
 
       switch (record.TerrainSystem)
       {
         case TerrainSystem.Block:
-          result.BlockChunkData = CubusChunkPayloadCodec.DecodeBlockChunk(record);
+          loaded.BlockChunkData = CubusChunkPayloadCodec.DecodeBlockChunk(record);
           break;
-
         case TerrainSystem.SmoothDensity:
-          result.DensityChunkData = CubusChunkPayloadCodec.DecodeDensityChunk(record);
+          loaded.DensityChunkData = CubusChunkPayloadCodec.DecodeDensityChunk(record);
           break;
-
         default:
-          result.Loaded = false;
+          loaded.Loaded = false;
           break;
       }
 
-      return result;
+      return loaded;
     }
   }
 
