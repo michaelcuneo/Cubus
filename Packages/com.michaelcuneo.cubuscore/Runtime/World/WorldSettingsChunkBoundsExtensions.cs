@@ -5,6 +5,9 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World
 {
   public static class WorldSettingsChunkBoundsExtensions
   {
+    private const int CompatibilityWorldMinChunkY = int.MinValue / 4;
+    private const int CompatibilityWorldMaxChunkY = int.MaxValue / 4;
+
     public static ChunkBounds3D GetEffectiveGenerationChunkBounds3D(this WorldSettings settings)
     {
       if (settings == null)
@@ -39,11 +42,9 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World
       int minZ = Mathf.Min(settings.WorldMinChunkXZ.y, settings.WorldMaxChunkXZ.y);
       int maxZ = Mathf.Max(settings.WorldMinChunkXZ.y, settings.WorldMaxChunkXZ.y);
 
-      GetEffectiveTerrainChunkYRange(settings, out int minY, out int maxY);
-
       return new ChunkBounds3D(
-        new Vector3Int(minX, minY, minZ),
-        new Vector3Int(maxX, maxY, maxZ)
+        new Vector3Int(minX, CompatibilityWorldMinChunkY, minZ),
+        new Vector3Int(maxX, CompatibilityWorldMaxChunkY, maxZ)
       );
     }
 
