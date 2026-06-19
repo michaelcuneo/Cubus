@@ -3,6 +3,7 @@ using System.Threading.Tasks;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Chunks;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain;
+using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World;
 using UnityEngine;
 
 namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
@@ -109,14 +110,25 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     {
       if (!store.TryLoadChunk(worldId, chunkCoord, out WorldChunkRecord record))
       {
+        if (StreamingGenerationContext.TryGetBlockSnapshot(out WorldGenerationSnapshot snapshot))
+        {
+          return new ChunkLoadResult
+          {
+            ChunkCoord = chunkCoord,
+            GenerationId = generationId,
+            Loaded = true,
+            IsMissingFromStorage = true,
+            TerrainSystem = TerrainSystem.Block,
+            BlockChunkData = BlockChunkBuilder.GenerateChunkData(chunkCoord, snapshot, null)
+          };
+        }
+
         return new ChunkLoadResult
         {
           ChunkCoord = chunkCoord,
           GenerationId = generationId,
-          Loaded = true,
-          IsMissingFromStorage = true,
-          TerrainSystem = TerrainSystem.Block,
-          BlockChunkData = new BlockChunkData(chunkCoord)
+          Loaded = false,
+          IsMissingFromStorage = true
         };
       }
 
