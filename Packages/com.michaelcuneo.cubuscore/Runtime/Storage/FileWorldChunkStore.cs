@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.IO;
+using System.Threading.Tasks;
 using UnityEngine;
 
 namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
@@ -43,21 +44,33 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
 
     public void SaveChunk(WorldChunkRecord chunk)
     {
-      string dir = GetChunkDirectory(chunk.WorldId);
-      Directory.CreateDirectory(dir);
+      _ = Task.Run(() => WriteChunk(chunk));
+    }
 
-      string path = GetChunkPath(chunk.WorldId, chunk.ChunkCoord);
+    private void WriteChunk(WorldChunkRecord chunk)
+    {
+      try
+      {
+        string dir = GetChunkDirectory(chunk.WorldId);
+        Directory.CreateDirectory(dir);
 
-      using FileStream stream = File.Open(path, FileMode.Create, FileAccess.Write, FileShare.None);
-      using BinaryWriter writer = new(stream);
+        string path = GetChunkPath(chunk.WorldId, chunk.ChunkCoord);
 
-      writer.Write((int)chunk.TerrainSystem);
-      writer.Write((byte)chunk.PayloadFormat);
-      writer.Write(chunk.PayloadVersion);
-      writer.Write(chunk.IsEmpty);
-      writer.Write(chunk.HasSurface);
-      writer.Write(chunk.PayloadBytes.Length);
-      writer.Write(chunk.PayloadBytes);
+        using FileStream stream = File.Open(path, FileMode.Create, FileAccess.Write, FileShare.None);
+        using BinaryWriter writer = new(stream);
+
+        writer.Write((int)chunk.TerrainSystem);
+        writer.Write((byte)chunk.PayloadFormat);
+        writer.Write(chunk.PayloadVersion);
+        writer.Write(chunk.IsEmpty);
+        writer.Write(chunk.HasSurface);
+        writer.Write(chunk.PayloadBytes.Length);
+        writer.Write(chunk.PayloadBytes);
+      }
+      catch (System.Exception ex)
+      {
+        Debug.LogWarning($"Failed to save Cubus chunk file. WorldId={chunk.WorldId}, Chunk={chunk.ChunkCoord}, Error={ex.Message}");
+      }
     }
 
     public bool TryLoadChunk(string worldId, Vector3Int chunkCoord, out WorldChunkRecord chunk)
