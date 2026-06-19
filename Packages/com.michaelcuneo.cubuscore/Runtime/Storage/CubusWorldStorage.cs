@@ -410,18 +410,14 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
     private WorldManifest CreateManifest()
     {
       WorldSettings settings = world.Settings;
-      settings.GetGenerationChunkBoundsXZ(out int minChunkX, out int maxChunkX, out int minChunkZ, out int maxChunkZ);
-
-      int minChunkY;
-      int maxChunkY;
-      if (settings.TerrainSystem == TerrainSystem.Block)
-      {
-        settings.GetEffectiveBlockChunkYRange(out minChunkY, out maxChunkY);
-      }
-      else
-      {
-        settings.GetEffectiveDensityChunkYRange(out minChunkY, out maxChunkY);
-      }
+      settings.GetEffectiveGenerationChunkBounds3D(
+        out int minChunkX,
+        out int maxChunkX,
+        out int minChunkY,
+        out int maxChunkY,
+        out int minChunkZ,
+        out int maxChunkZ
+      );
 
       long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
       return new WorldManifest
