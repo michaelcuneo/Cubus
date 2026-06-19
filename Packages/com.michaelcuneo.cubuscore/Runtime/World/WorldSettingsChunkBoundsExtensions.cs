@@ -4,8 +4,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World
 {
   public static class WorldSettingsChunkBoundsExtensions
   {
-    private const int DefaultGeneratedMinChunkY = -16;
-    private const int DefaultGeneratedMaxChunkY = 16;
     private const int CompatibilityWorldMinChunkY = int.MinValue / 4;
     private const int CompatibilityWorldMaxChunkY = int.MaxValue / 4;
 
@@ -16,17 +14,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World
         return new ChunkBounds3D(Vector3Int.zero, Vector3Int.zero);
       }
 
-      settings.GetGenerationChunkBoundsXZ(
-        out int minX,
-        out int maxX,
-        out int minZ,
-        out int maxZ
-      );
-
-      return new ChunkBounds3D(
-        new Vector3Int(minX, DefaultGeneratedMinChunkY, minZ),
-        new Vector3Int(maxX, DefaultGeneratedMaxChunkY, maxZ)
-      );
+      return settings.GetEffectiveWorldChunkBounds3D();
     }
 
     public static ChunkBounds3D GetEffectiveWorldChunkBounds3D(this WorldSettings settings)
@@ -64,7 +52,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World
         return false;
       }
 
-      return !settings.UseFixedGenerationBounds || settings.GetEffectiveGenerationChunkBounds3D().Contains(chunkCoord);
+      return !settings.UseWorldBounds || settings.GetEffectiveGenerationChunkBounds3D().Contains(chunkCoord);
     }
 
     public static void GetEffectiveGenerationChunkBounds3D(
