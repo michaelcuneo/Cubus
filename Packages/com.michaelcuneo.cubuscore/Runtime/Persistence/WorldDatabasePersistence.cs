@@ -60,9 +60,11 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Persistence
       writer.Write(settings.DensityMinChunkY);
       writer.Write(settings.DensityMaxChunkY);
 
-      settings.GetGenerationChunkBoundsXZ(
+      settings.GetEffectiveGenerationChunkBounds3D(
           out int minChunkX,
           out int maxChunkX,
+          out _,
+          out _,
           out int minChunkZ,
           out int maxChunkZ
       );
