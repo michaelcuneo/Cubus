@@ -1,10 +1,11 @@
-using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain;
 using UnityEngine;
 
 namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World
 {
   public static class WorldSettingsChunkBoundsExtensions
   {
+    private const int DefaultGeneratedMinChunkY = -16;
+    private const int DefaultGeneratedMaxChunkY = 16;
     private const int CompatibilityWorldMinChunkY = int.MinValue / 4;
     private const int CompatibilityWorldMaxChunkY = int.MaxValue / 4;
 
@@ -22,11 +23,9 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World
         out int maxZ
       );
 
-      GetEffectiveTerrainChunkYRange(settings, out int minY, out int maxY);
-
       return new ChunkBounds3D(
-        new Vector3Int(minX, minY, minZ),
-        new Vector3Int(maxX, maxY, maxZ)
+        new Vector3Int(minX, DefaultGeneratedMinChunkY, minZ),
+        new Vector3Int(maxX, DefaultGeneratedMaxChunkY, maxZ)
       );
     }
 
@@ -92,17 +91,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World
     {
       ChunkBounds3D bounds = settings.GetEffectiveWorldChunkBounds3D();
       bounds.GetBounds(out minChunkX, out maxChunkX, out minChunkY, out maxChunkY, out minChunkZ, out maxChunkZ);
-    }
-
-    private static void GetEffectiveTerrainChunkYRange(WorldSettings settings, out int minY, out int maxY)
-    {
-      if (settings.TerrainSystem == TerrainSystem.Block)
-      {
-        settings.GetEffectiveBlockChunkYRange(out minY, out maxY);
-        return;
-      }
-
-      settings.GetEffectiveDensityChunkYRange(out minY, out maxY);
     }
   }
 }
