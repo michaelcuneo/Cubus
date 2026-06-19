@@ -113,8 +113,10 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         {
           ChunkCoord = chunkCoord,
           GenerationId = generationId,
-          Loaded = false,
-          IsMissingFromStorage = true
+          Loaded = true,
+          IsMissingFromStorage = true,
+          TerrainSystem = TerrainSystem.Block,
+          BlockChunkData = new BlockChunkData(chunkCoord)
         };
       }
 
