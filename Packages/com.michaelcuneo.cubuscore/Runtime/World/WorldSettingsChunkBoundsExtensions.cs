@@ -1,0 +1,107 @@
+using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain;
+using UnityEngine;
+
+namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World
+{
+  public static class WorldSettingsChunkBoundsExtensions
+  {
+    public static ChunkBounds3D GetEffectiveGenerationChunkBounds3D(this WorldSettings settings)
+    {
+      if (settings == null)
+      {
+        return new ChunkBounds3D(Vector3Int.zero, Vector3Int.zero);
+      }
+
+      settings.GetGenerationChunkBoundsXZ(
+        out int minX,
+        out int maxX,
+        out int minZ,
+        out int maxZ
+      );
+
+      GetEffectiveTerrainChunkYRange(settings, out int minY, out int maxY);
+
+      return new ChunkBounds3D(
+        new Vector3Int(minX, minY, minZ),
+        new Vector3Int(maxX, maxY, maxZ)
+      );
+    }
+
+    public static ChunkBounds3D GetEffectiveWorldChunkBounds3D(this WorldSettings settings)
+    {
+      if (settings == null)
+      {
+        return new ChunkBounds3D(Vector3Int.zero, Vector3Int.zero);
+      }
+
+      int minX = Mathf.Min(settings.WorldMinChunkXZ.x, settings.WorldMaxChunkXZ.x);
+      int maxX = Mathf.Max(settings.WorldMinChunkXZ.x, settings.WorldMaxChunkXZ.x);
+      int minZ = Mathf.Min(settings.WorldMinChunkXZ.y, settings.WorldMaxChunkXZ.y);
+      int maxZ = Mathf.Max(settings.WorldMinChunkXZ.y, settings.WorldMaxChunkXZ.y);
+
+      GetEffectiveTerrainChunkYRange(settings, out int minY, out int maxY);
+
+      return new ChunkBounds3D(
+        new Vector3Int(minX, minY, minZ),
+        new Vector3Int(maxX, maxY, maxZ)
+      );
+    }
+
+    public static bool IsInsideEffectiveWorldBounds3D(this WorldSettings settings, Vector3Int chunkCoord)
+    {
+      if (settings == null)
+      {
+        return false;
+      }
+
+      return !settings.UseWorldBounds || settings.GetEffectiveWorldChunkBounds3D().Contains(chunkCoord);
+    }
+
+    public static bool IsInsideEffectiveGenerationBounds3D(this WorldSettings settings, Vector3Int chunkCoord)
+    {
+      if (settings == null)
+      {
+        return false;
+      }
+
+      return !settings.UseFixedGenerationBounds || settings.GetEffectiveGenerationChunkBounds3D().Contains(chunkCoord);
+    }
+
+    public static void GetEffectiveGenerationChunkBounds3D(
+      this WorldSettings settings,
+      out int minChunkX,
+      out int maxChunkX,
+      out int minChunkY,
+      out int maxChunkY,
+      out int minChunkZ,
+      out int maxChunkZ)
+    {
+      ChunkBounds3D bounds = settings.GetEffectiveGenerationChunkBounds3D();
+      bounds.GetBounds(out minChunkX, out maxChunkX, out minChunkY, out maxChunkY, out minChunkZ, out maxChunkZ);
+    }
+
+    public static void GetEffectiveWorldChunkBounds3D(
+      this WorldSettings settings,
+      out int minChunkX,
+      out int maxChunkX,
+      out int minChunkY,
+      out int maxChunkY,
+      out int minChunkZ,
+      out int maxChunkZ)
+    {
+      ChunkBounds3D bounds = settings.GetEffectiveWorldChunkBounds3D();
+      bounds.GetBounds(out minChunkX, out maxChunkX, out minChunkY, out maxChunkY, out minChunkZ, out maxChunkZ);
+    }
+
+    private static void GetEffectiveTerrainChunkYRange(WorldSettings settings, out int minY, out int maxY)
+    {
+      if (settings.TerrainSystem == TerrainSystem.Block)
+      {
+        settings.GetEffectiveBlockChunkYRange(out minY, out maxY);
+        return;
+      }
+
+      settings.GetEffectiveDensityChunkYRange(out minY, out maxY);
+    }
+  }
+}
