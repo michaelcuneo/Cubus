@@ -29,15 +29,28 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       }
     }
 
-    public static bool TryGetBlockSnapshot(out WorldGenerationSnapshot snapshot)
+    public static bool TryGet(out TerrainSystem activeTerrainSystem, out WorldGenerationSnapshot snapshot)
     {
       lock (SyncRoot)
       {
-        if (hasContext && terrainSystem == TerrainSystem.Block)
+        if (hasContext)
         {
+          activeTerrainSystem = terrainSystem;
           snapshot = worldSnapshot;
           return true;
         }
+      }
+
+      activeTerrainSystem = default;
+      snapshot = default;
+      return false;
+    }
+
+    public static bool TryGetBlockSnapshot(out WorldGenerationSnapshot snapshot)
+    {
+      if (TryGet(out TerrainSystem activeTerrainSystem, out snapshot) && activeTerrainSystem == TerrainSystem.Block)
+      {
+        return true;
       }
 
       snapshot = default;
