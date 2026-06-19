@@ -44,24 +44,14 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World
     {
       worldData.ClearGeneratedChunks();
 
-      settings.GetGenerationChunkBoundsXZ(
+      settings.GetEffectiveGenerationChunkBounds3D(
           out int minChunkX,
           out int maxChunkX,
+          out int minChunkY,
+          out int maxChunkY,
           out int minChunkZ,
           out int maxChunkZ
       );
-
-      int minChunkY;
-      int maxChunkY;
-
-      if (settings.TerrainSystem == TerrainSystem.Block)
-      {
-        settings.GetEffectiveBlockChunkYRange(out minChunkY, out maxChunkY);
-      }
-      else
-      {
-        settings.GetEffectiveDensityChunkYRange(out minChunkY, out maxChunkY);
-      }
 
       int totalChunks =
           (maxChunkX - minChunkX + 1) *
@@ -117,14 +107,14 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World
 
     public void GenerateBlockWorld(WorldData worldData)
     {
-      settings.GetGenerationChunkBoundsXZ(
+      settings.GetEffectiveGenerationChunkBounds3D(
           out int minChunkX,
           out int maxChunkX,
+          out int minChunkY,
+          out int maxChunkY,
           out int minChunkZ,
           out int maxChunkZ
       );
-
-      settings.GetEffectiveBlockChunkYRange(out int minChunkY, out int maxChunkY);
 
       for (int y = minChunkY; y <= maxChunkY; y++)
       {
@@ -144,14 +134,14 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World
 
     public void GenerateSmoothDensityWorld(WorldData worldData)
     {
-      settings.GetGenerationChunkBoundsXZ(
+      settings.GetEffectiveGenerationChunkBounds3D(
           out int minChunkX,
           out int maxChunkX,
+          out int minChunkY,
+          out int maxChunkY,
           out int minChunkZ,
           out int maxChunkZ
       );
-
-      settings.GetEffectiveDensityChunkYRange(out int minChunkY, out int maxChunkY);
 
       for (int y = minChunkY; y <= maxChunkY; y++)
       {
