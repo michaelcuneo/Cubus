@@ -20,14 +20,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World
     [Min(0.01f)]
     public float VoxelSize = VoxelConstants.DefaultVoxelSize;
 
-    [Header("Block")]
-    public int BlockMinChunkY = -1;
-    public int BlockMaxChunkY = 2;
-
     [Header("Smooth Density")]
-    public int DensityMinChunkY = -1;
-    public int DensityMaxChunkY = 2;
-
     [Range(1, 8)]
     public int DensityMeshStep = 1;
 
@@ -47,8 +40,18 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World
     [Header("Pre-Generation Bounds")]
     public bool UseFixedGenerationBounds = false;
 
-    public Vector2Int GenerationMinChunkXZ = new(-4, -4);
-    public Vector2Int GenerationMaxChunkXZ = new(4, 4);
+    [Tooltip("Minimum chunk coordinate included when building the initial generated world database.")]
+    public Vector3Int GenerationMinChunk = new(-4, -4, -4);
+
+    [Tooltip("Maximum chunk coordinate included when building the initial generated world database.")]
+    public Vector3Int GenerationMaxChunk = new(4, 4, 4);
+
+    [HideInInspector] public Vector2Int GenerationMinChunkXZ = new(-4, -4);
+    [HideInInspector] public Vector2Int GenerationMaxChunkXZ = new(4, 4);
+    [HideInInspector] public int BlockMinChunkY = -1;
+    [HideInInspector] public int BlockMaxChunkY = 2;
+    [HideInInspector] public int DensityMinChunkY = -1;
+    [HideInInspector] public int DensityMaxChunkY = 2;
 
     [Header("World Bounds")]
     public bool UseWorldBounds = true;
@@ -72,16 +75,36 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World
           : (byte)1;
     }
 
+    public void GetGenerationChunkBounds3D(
+        out int minChunkX,
+        out int maxChunkX,
+        out int minChunkY,
+        out int maxChunkY,
+        out int minChunkZ,
+        out int maxChunkZ)
+    {
+      minChunkX = Mathf.Min(GenerationMinChunk.x, GenerationMaxChunk.x);
+      maxChunkX = Mathf.Max(GenerationMinChunk.x, GenerationMaxChunk.x);
+      minChunkY = Mathf.Min(GenerationMinChunk.y, GenerationMaxChunk.y);
+      maxChunkY = Mathf.Max(GenerationMinChunk.y, GenerationMaxChunk.y);
+      minChunkZ = Mathf.Min(GenerationMinChunk.z, GenerationMaxChunk.z);
+      maxChunkZ = Mathf.Max(GenerationMinChunk.z, GenerationMaxChunk.z);
+    }
+
     public void GetGenerationChunkBoundsXZ(
         out int minChunkX,
         out int maxChunkX,
         out int minChunkZ,
         out int maxChunkZ)
     {
-      minChunkX = Mathf.Min(GenerationMinChunkXZ.x, GenerationMaxChunkXZ.x);
-      maxChunkX = Mathf.Max(GenerationMinChunkXZ.x, GenerationMaxChunkXZ.x);
-      minChunkZ = Mathf.Min(GenerationMinChunkXZ.y, GenerationMaxChunkXZ.y);
-      maxChunkZ = Mathf.Max(GenerationMinChunkXZ.y, GenerationMaxChunkXZ.y);
+      GetGenerationChunkBounds3D(
+        out minChunkX,
+        out maxChunkX,
+        out _,
+        out _,
+        out minChunkZ,
+        out maxChunkZ
+      );
     }
 
     public void ResolveBiomeAtWorldXZ(
@@ -572,24 +595,26 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World
 
     public void GetEffectiveBlockChunkYRange(out int minY, out int maxY)
     {
-      minY = BlockMinChunkY;
-      maxY = BlockMaxChunkY;
-
-      if (minY > maxY)
-      {
-        (minY, maxY) = (maxY, minY);
-      }
+      GetGenerationChunkBounds3D(
+        out _,
+        out _,
+        out minY,
+        out maxY,
+        out _,
+        out _
+      );
     }
 
     public void GetEffectiveDensityChunkYRange(out int minY, out int maxY)
     {
-      minY = DensityMinChunkY;
-      maxY = DensityMaxChunkY;
-
-      if (minY > maxY)
-      {
-        (minY, maxY) = (maxY, minY);
-      }
+      GetGenerationChunkBounds3D(
+        out _,
+        out _,
+        out minY,
+        out maxY,
+        out _,
+        out _
+      );
     }
 
     public bool IsInsideWorldBounds(Vector3Int chunkCoord)
@@ -612,15 +637,19 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World
 
     public bool IsInsideGeneratedBounds(Vector3Int chunkCoord)
     {
-      GetGenerationChunkBoundsXZ(
+      GetGenerationChunkBounds3D(
           out int minChunkX,
           out int maxChunkX,
+          out int minChunkY,
+          out int maxChunkY,
           out int minChunkZ,
           out int maxChunkZ
       );
 
       return chunkCoord.x >= minChunkX &&
              chunkCoord.x <= maxChunkX &&
+             chunkCoord.y >= minChunkY &&
+             chunkCoord.y <= maxChunkY &&
              chunkCoord.z >= minChunkZ &&
              chunkCoord.z <= maxChunkZ;
     }
