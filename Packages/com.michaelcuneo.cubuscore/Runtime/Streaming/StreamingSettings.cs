@@ -7,11 +7,11 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
   public sealed class StreamingSettings : ISerializationCallbackReceiver
   {
     private const int MaxRuntimeVerticalChunksAroundSurface = 1;
-    private const int MaxRuntimeChunksGeneratedPerFrame = 4;
-    private const int MaxRuntimeInitialChunksGeneratedPerFrame = 16;
-    private const int MaxRuntimeChunksRenderedPerFrame = 8;
-    private const int MaxRuntimeMeshAppliesPerFrame = 2;
-    private const int MaxRuntimeAsyncChunkTasks = 4;
+    private const int MaxRuntimeChunksGeneratedPerFrame = 32;
+    private const int MaxRuntimeInitialChunksGeneratedPerFrame = 64;
+    private const int MaxRuntimeChunksRenderedPerFrame = 64;
+    private const int MaxRuntimeMeshAppliesPerFrame = 16;
+    private const int MaxRuntimeAsyncChunkTasks = 16;
 
     [Header("Horizontal")]
     [Min(1)]
@@ -28,24 +28,24 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
     [Header("Budgets")]
     [Min(1)]
-    public int ChunksGeneratedPerFrame = 4;
+    public int ChunksGeneratedPerFrame = 16;
 
     [Min(1)]
-    public int InitialChunksGeneratedPerFrame = 16;
+    public int InitialChunksGeneratedPerFrame = 64;
 
     [Tooltip("Limits how many chunk render/build operations are started per frame.")]
     [Min(1)]
-    public int ChunksRenderedPerFrame = 8;
+    public int ChunksRenderedPerFrame = 32;
 
     [Tooltip("Maximum completed mesh data objects converted to Unity meshes per frame.")]
     [Min(1)]
-    public int MeshAppliesPerFrame = 2;
+    public int MeshAppliesPerFrame = 8;
 
     [Header("Async")]
     public bool UseAsyncGeneration = true;
 
     [Min(1)]
-    public int MaxAsyncChunkTasks = 4;
+    public int MaxAsyncChunkTasks = 12;
 
     public void OnBeforeSerialize()
     {
