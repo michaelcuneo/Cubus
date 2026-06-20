@@ -7,11 +7,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
   public sealed class StreamingSettings : ISerializationCallbackReceiver
   {
     private const int MaxRuntimeVerticalChunksAroundSurface = 1;
-    private const int MinRuntimeChunksGeneratedPerFrame = 16;
-    private const int MinRuntimeInitialChunksGeneratedPerFrame = 64;
-    private const int MinRuntimeChunksRenderedPerFrame = 32;
-    private const int MinRuntimeMeshAppliesPerFrame = 8;
-    private const int MinRuntimeAsyncChunkTasks = 12;
     private const int MaxRuntimeChunksGeneratedPerFrame = 32;
     private const int MaxRuntimeInitialChunksGeneratedPerFrame = 64;
     private const int MaxRuntimeChunksRenderedPerFrame = 64;
@@ -33,24 +28,24 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
     [Header("Budgets")]
     [Min(1)]
-    public int ChunksGeneratedPerFrame = MinRuntimeChunksGeneratedPerFrame;
+    public int ChunksGeneratedPerFrame = 4;
 
     [Min(1)]
-    public int InitialChunksGeneratedPerFrame = MinRuntimeInitialChunksGeneratedPerFrame;
+    public int InitialChunksGeneratedPerFrame = 16;
 
     [Tooltip("Limits how many chunk render/build operations are started per frame.")]
     [Min(1)]
-    public int ChunksRenderedPerFrame = MinRuntimeChunksRenderedPerFrame;
+    public int ChunksRenderedPerFrame = 8;
 
     [Tooltip("Maximum completed mesh data objects converted to Unity meshes per frame.")]
     [Min(1)]
-    public int MeshAppliesPerFrame = MinRuntimeMeshAppliesPerFrame;
+    public int MeshAppliesPerFrame = 2;
 
     [Header("Async")]
     public bool UseAsyncGeneration = true;
 
     [Min(1)]
-    public int MaxAsyncChunkTasks = MinRuntimeAsyncChunkTasks;
+    public int MaxAsyncChunkTasks = 4;
 
     public void OnBeforeSerialize()
     {
@@ -66,11 +61,11 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       UnloadPaddingInChunks = Mathf.Max(1, UnloadPaddingInChunks);
       ChunksBelowSurface = Mathf.Clamp(ChunksBelowSurface, 0, MaxRuntimeVerticalChunksAroundSurface);
       ChunksAboveSurface = Mathf.Clamp(ChunksAboveSurface, 0, MaxRuntimeVerticalChunksAroundSurface);
-      ChunksGeneratedPerFrame = Mathf.Clamp(Mathf.Max(ChunksGeneratedPerFrame, MinRuntimeChunksGeneratedPerFrame), 1, MaxRuntimeChunksGeneratedPerFrame);
-      InitialChunksGeneratedPerFrame = Mathf.Clamp(Mathf.Max(InitialChunksGeneratedPerFrame, MinRuntimeInitialChunksGeneratedPerFrame), 1, MaxRuntimeInitialChunksGeneratedPerFrame);
-      ChunksRenderedPerFrame = Mathf.Clamp(Mathf.Max(ChunksRenderedPerFrame, MinRuntimeChunksRenderedPerFrame), 1, MaxRuntimeChunksRenderedPerFrame);
-      MeshAppliesPerFrame = Mathf.Clamp(Mathf.Max(MeshAppliesPerFrame, MinRuntimeMeshAppliesPerFrame), 1, MaxRuntimeMeshAppliesPerFrame);
-      MaxAsyncChunkTasks = Mathf.Clamp(Mathf.Max(MaxAsyncChunkTasks, MinRuntimeAsyncChunkTasks), 1, MaxRuntimeAsyncChunkTasks);
+      ChunksGeneratedPerFrame = Mathf.Clamp(ChunksGeneratedPerFrame, 1, MaxRuntimeChunksGeneratedPerFrame);
+      InitialChunksGeneratedPerFrame = Mathf.Clamp(InitialChunksGeneratedPerFrame, 1, MaxRuntimeInitialChunksGeneratedPerFrame);
+      ChunksRenderedPerFrame = Mathf.Clamp(ChunksRenderedPerFrame, 1, MaxRuntimeChunksRenderedPerFrame);
+      MeshAppliesPerFrame = Mathf.Clamp(MeshAppliesPerFrame, 1, MaxRuntimeMeshAppliesPerFrame);
+      MaxAsyncChunkTasks = Mathf.Clamp(MaxAsyncChunkTasks, 1, MaxRuntimeAsyncChunkTasks);
     }
   }
 }
