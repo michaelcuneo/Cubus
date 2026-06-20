@@ -26,7 +26,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     [SerializeField] private bool evictCachedChunkDataOutsideKeepSet = true;
 
     [Header("Initial Streaming Stage")]
-    [SerializeField] [Min(0)] private int initialStreamingRadiusInChunks = 1;
+    [SerializeField][Min(0)] private int initialStreamingRadiusInChunks = 1;
     [SerializeField] private bool useInitialStreamingStage = true;
     [SerializeField][Min(0)] private int initialChunksBelowSurface = 1;
     [SerializeField][Min(0)] private int initialChunksAboveSurface = 1;
@@ -146,6 +146,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         enabled = false;
         return;
       }
+
       StartBootstrap(false);
     }
 
@@ -193,6 +194,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       if (!EnsureRuntimeReferences()) return;
       if (bootstrapCoroutine != null) return;
       if (world.Settings.TerrainSystem != TerrainSystem.Block && world.Settings.TerrainSystem != TerrainSystem.SmoothDensity) return;
+
       UpdateStreamingSetIfNeeded();
       PrioritizePendingQueues();
       ProcessCompletedChunkLoads();
@@ -234,6 +236,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     {
       Vector3Int viewerChunkCoord = WorldToChunkCoord(GetSpawnReferencePosition());
       if (!force && hasLastViewerChunkCoord && viewerChunkCoord == lastViewerChunkCoord) return;
+
       lastViewerChunkCoord = viewerChunkCoord;
       hasLastViewerChunkCoord = true;
       BuildChunkSet(viewerChunkCoord, ActiveDesiredRadiusInChunks, ActiveChunksBelowSurface, ActiveChunksAboveSurface, desiredChunkCoords);
@@ -258,10 +261,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         for (int y = minY; y <= maxY; y++)
         {
           Vector3Int chunkCoord = new(chunkX, y, chunkZ);
-          if (world.Settings.IsInsideEffectiveWorldBounds3D(chunkCoord))
-          {
-            targetSet.Add(chunkCoord);
-          }
+          if (world.Settings.IsInsideEffectiveWorldBounds3D(chunkCoord)) targetSet.Add(chunkCoord);
         }
       }
     }
@@ -275,6 +275,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         if (!world.Settings.IsInsideEffectiveWorldBounds3D(chunkCoord)) { knownEmptyChunks.Add(chunkCoord); continue; }
         candidates.Add(chunkCoord);
       }
+
       candidates.Sort((a, b) => CompareChunkPriority(a, b, viewerChunkCoord));
       for (int i = 0; i < candidates.Count; i++)
       {
@@ -298,7 +299,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
     private void QueueSpawnTargetForRender()
     {
-      desiredChunkCoords.Add(spawnTargetChunkCoord); keepChunkCoords.Add(spawnTargetChunkCoord);
+      desiredChunkCoords.Add(spawnTargetChunkCoord);
+      keepChunkCoords.Add(spawnTargetChunkCoord);
       if (worldRenderer.HasChunkView(spawnTargetChunkCoord) || pendingRenderSet.Contains(spawnTargetChunkCoord) || chunkLoadQueue.IsInFlight(spawnTargetChunkCoord)) return;
       if (HasChunkData(spawnTargetChunkCoord)) QueueRender(spawnTargetChunkCoord); else QueueLoad(spawnTargetChunkCoord);
     }
@@ -316,7 +318,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     private void PrioritizeQueue(Queue<Vector3Int> queue, HashSet<Vector3Int> membership, bool allowKeepOnlyChunks)
     {
       if (queue.Count < 2) return;
-
       List<Vector3Int> items = new(queue.Count);
       while (queue.Count > 0)
       {
@@ -342,10 +343,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         Vector3Int c = pendingLoadQueue.Dequeue();
         pendingLoadSet.Remove(c);
 
-        if ((!desiredChunkCoords.Contains(c) && !keepChunkCoords.Contains(c)) || worldRenderer.HasChunkView(c) || knownEmptyChunks.Contains(c))
-        {
-          continue;
-        }
+        if ((!desiredChunkCoords.Contains(c) && !keepChunkCoords.Contains(c)) || worldRenderer.HasChunkView(c) || knownEmptyChunks.Contains(c)) continue;
 
         if (HasChunkData(c))
         {
@@ -359,10 +357,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
           continue;
         }
 
-        if (chunkLoadQueue.IsInFlight(c))
-        {
-          continue;
-        }
+        if (chunkLoadQueue.IsInFlight(c)) continue;
 
         if (storage != null && storage.ActiveStore != null)
         {
@@ -426,10 +421,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         Vector3Int c = pendingRenderQueue.Dequeue();
         pendingRenderSet.Remove(c);
 
-        if (!desiredChunkCoords.Contains(c) && !keepChunkCoords.Contains(c))
-        {
-          continue;
-        }
+        if (!desiredChunkCoords.Contains(c) && !keepChunkCoords.Contains(c)) continue;
 
         if (world.Settings.TerrainSystem == TerrainSystem.Block)
         {
@@ -440,11 +432,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
             continue;
           }
 
-          if (!knownEmptyChunks.Contains(c))
-          {
-            QueueLoad(c);
-          }
-
+          if (!knownEmptyChunks.Contains(c)) QueueLoad(c);
           continue;
         }
 
@@ -460,16 +448,19 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
           continue;
         }
 
+        if (!EnsureDensitySampleChunksAvailableForMesh(c))
+        {
+          QueueRender(c);
+          continue;
+        }
+
         if (densityBuildQueue.ActiveTaskCount >= MaxAsyncChunkTasks)
         {
           QueueRender(c);
           break;
         }
 
-        if (TryStartDensityMeshBuild(c, d))
-        {
-          count++;
-        }
+        if (TryStartDensityMeshBuild(c, d)) count++;
       }
     }
 
@@ -480,19 +471,13 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       for (int i = 0; i < DensityMeshSampleChunkOffsets.Length; i++)
       {
         Vector3Int c = root + DensityMeshSampleChunkOffsets[i];
-
-        if (HasChunkData(c) || !world.Settings.IsInsideEffectiveWorldBounds3D(c))
-        {
-          continue;
-        }
+        if (HasChunkData(c) || !world.Settings.IsInsideEffectiveWorldBounds3D(c)) continue;
 
         allSampleChunksAvailable = false;
+        knownEmptyChunks.Remove(c);
         keepChunkCoords.Add(c);
 
-        if (!chunkLoadQueue.IsInFlight(c) && !pendingLoadSet.Contains(c))
-        {
-          QueueLoad(c);
-        }
+        if (!chunkLoadQueue.IsInFlight(c) && !pendingLoadSet.Contains(c)) QueueLoad(c);
       }
 
       return allSampleChunksAvailable;
@@ -505,17 +490,27 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       while (count < MeshAppliesPerFrame && densityBuildQueue.TryDequeueCompleted(out DensityChunkBuildResult r))
       {
         if (r == null) { count++; continue; }
-        if (r.GenerationId != densityBuildQueue.GenerationId || (!desiredChunkCoords.Contains(r.ChunkCoord) && !keepChunkCoords.Contains(r.ChunkCoord))) { ReturnMeshData(r); count++; continue; }
+        if (r.GenerationId != densityBuildQueue.GenerationId || (!desiredChunkCoords.Contains(r.ChunkCoord) && !keepChunkCoords.Contains(r.ChunkCoord)))
+        {
+          ReturnMeshData(r);
+          count++;
+          continue;
+        }
+
         if (r.ChunkData != null) world.Data.DensityChunks[r.ChunkCoord] = r.ChunkData;
+
         if (r.MeshData == null || r.MeshData.IsEmpty)
         {
-          knownEmptyChunks.Add(r.ChunkCoord);
-          world.Data.DensityChunks.Remove(r.ChunkCoord);
+          // Do not poison knownEmptyChunks or delete valid density data here. An empty mesh
+          // can be a transient result while streamed sample-neighbour chunks are still catching up.
+          // Removing the data and adding the suppression flag is what made holes permanent.
           worldRenderer.RemoveChunk(r.ChunkCoord);
           ReturnMeshData(r);
           count++;
           continue;
         }
+
+        knownEmptyChunks.Remove(r.ChunkCoord);
         Mesh mesh = r.MeshData.ToUnityMeshFast();
         MeshDataPool.Return(r.MeshData); r.MeshData = null;
         worldRenderer.RenderUnityMesh(r.ChunkCoord, mesh, r.ChunkCoord == spawnTargetChunkCoord && !hasBroadcastInitialTerrainReady);
@@ -565,6 +560,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     private bool TryRebuildDensityMeshImmediate(Vector3Int chunkCoord)
     {
       if (!world.Data.DensityChunks.TryGetValue(chunkCoord, out DensityChunkData chunkData) || chunkData == null) return false;
+      if (!EnsureDensitySampleChunksAvailableForMesh(chunkCoord)) return false;
 
       world.Settings.GetEffectiveWorldChunkBounds3D(out int minX, out int maxX, out int minY, out int maxY, out int minZ, out int maxZ);
       Dictionary<Vector3Int, DensityChunkData> snapshots = CreateDensityMeshChunkSnapshots(chunkCoord, chunkData);
@@ -604,7 +600,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       if (outsideGeneratedBounds) return chunkCoord.y > maxY ? DensityVoxel.Empty : new DensityVoxel(1.0f, 1);
 
       double scale = worldSnapshot.DensitySampleScale <= 0.0f ? 1.0 : worldSnapshot.DensitySampleScale;
-      TerrainSamplerBurst.Sample(worldSnapshot.TerrainProfile, worldVoxelCoord.x * scale, worldVoxelCoord.z * scale, worldVoxelCoord.y * scale, out float density, out int solidMaterialId);
+      TerrainSamplerBurst.Sample(worldSnapshot.TerrainProfile, worldVoxelCoord.x * scale, worldVoxelCoord.y * scale, worldVoxelCoord.z * scale, out float density, out int solidMaterialId);
       ushort materialId = density > 0.0f ? (ushort)Mathf.Clamp(solidMaterialId, 1, 65535) : (ushort)0;
       return new DensityVoxel(density, materialId);
     }
@@ -626,6 +622,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         if (!b.HasAnySolidVoxel()) { knownEmptyChunks.Add(c); return false; }
         world.Data.BlockChunks[c] = b; storage?.SaveChunk(c); return true;
       }
+
       DensityChunkData d = new(c); generator.FillDensityChunkFromTerrainSampler(d);
       world.Data.DensityChunks[c] = d; storage?.SaveChunk(c); return true;
     }
@@ -673,11 +670,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
     private void QueueEditedBlockChunk(Vector3Int chunkCoord)
     {
-      if (!world.Settings.IsInsideEffectiveWorldBounds3D(chunkCoord))
-      {
-        return;
-      }
-
+      if (!world.Settings.IsInsideEffectiveWorldBounds3D(chunkCoord)) return;
       knownEmptyChunks.Remove(chunkCoord);
       desiredChunkCoords.Add(chunkCoord);
       keepChunkCoords.Add(chunkCoord);
