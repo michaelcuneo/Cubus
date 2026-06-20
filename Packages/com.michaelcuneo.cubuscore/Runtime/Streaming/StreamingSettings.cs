@@ -28,24 +28,24 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
     [Header("Budgets")]
     [Min(1)]
-    public int ChunksGeneratedPerFrame = 16;
+    public int ChunksGeneratedPerFrame = 4;
 
     [Min(1)]
-    public int InitialChunksGeneratedPerFrame = 64;
+    public int InitialChunksGeneratedPerFrame = 16;
 
     [Tooltip("Limits how many chunk render/build operations are started per frame.")]
     [Min(1)]
-    public int ChunksRenderedPerFrame = 32;
+    public int ChunksRenderedPerFrame = 8;
 
     [Tooltip("Maximum completed mesh data objects converted to Unity meshes per frame.")]
     [Min(1)]
-    public int MeshAppliesPerFrame = 16;
+    public int MeshAppliesPerFrame = 2;
 
     [Header("Async")]
     public bool UseAsyncGeneration = true;
 
     [Min(1)]
-    public int MaxAsyncChunkTasks = 8;
+    public int MaxAsyncChunkTasks = 4;
 
     public void OnBeforeSerialize()
     {
