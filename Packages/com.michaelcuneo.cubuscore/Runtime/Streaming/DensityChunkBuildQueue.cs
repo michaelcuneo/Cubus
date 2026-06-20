@@ -220,8 +220,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       TerrainSamplerBurst.Sample(
           profile,
           worldVoxelCoord.x * scale,
-          worldVoxelCoord.z * scale,
           worldVoxelCoord.y * scale,
+          worldVoxelCoord.z * scale,
           out float density,
           out int solidMaterialId
       );
