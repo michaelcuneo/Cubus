@@ -393,7 +393,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     private void ProcessCompletedChunkLoads()
     {
       int count = 0;
-      while (count < ChunksLoadedPerFrame && chunkLoadQueue.TryDequeueCompleted(out ChunkLoadResult result))
+      int completedBudget = Mathf.Max(ChunksLoadedPerFrame, MaxAsyncChunkTasks * 2);
+      while (count < completedBudget && chunkLoadQueue.TryDequeueCompleted(out ChunkLoadResult result))
       {
         count++;
         if (result == null || result.GenerationId != chunkLoadQueue.GenerationId) continue;
@@ -435,14 +436,21 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
           if (world.Data.BlockChunks.TryGetValue(c, out BlockChunkData b) && b != null && b.HasAnySolidVoxel())
           {
             worldRenderer.RenderBlockChunk(c, b);
+            count++;
+            continue;
           }
 
-          count++;
+          if (!knownEmptyChunks.Contains(c))
+          {
+            QueueLoad(c);
+          }
+
           continue;
         }
 
         if (!world.Data.DensityChunks.TryGetValue(c, out DensityChunkData d) || d == null)
         {
+          QueueLoad(c);
           continue;
         }
 
