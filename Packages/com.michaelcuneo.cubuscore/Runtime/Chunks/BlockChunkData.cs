@@ -2,7 +2,6 @@ using UnityEngine;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Core;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Voxels;
 
-
 namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Chunks
 {
   public sealed class BlockChunkData
@@ -48,6 +47,13 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Chunks
       }
 
       return false;
+    }
+
+    public BlockChunkData Clone()
+    {
+      BlockChunkData clone = new(ChunkCoord);
+      System.Array.Copy(voxels, clone.voxels, voxels.Length);
+      return clone;
     }
 
     public Voxel[] GetRawVoxelArray()
