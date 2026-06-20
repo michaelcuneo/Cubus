@@ -10,6 +10,14 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 {
   public sealed class ChunkLoadQueue
   {
+    private static readonly object GeneratedDensityCacheLock = new();
+    private static readonly Dictionary<Vector3Int, DensityChunkData> GeneratedDensityCache = new();
+    private static readonly Vector3Int[] DensityNeighbourOffsets =
+    {
+      new(0, 0, 0), new(1, 0, 0), new(0, 1, 0), new(0, 0, 1),
+      new(1, 1, 0), new(1, 0, 1), new(0, 1, 1), new(1, 1, 1)
+    };
+
     private readonly Queue<ChunkLoadResult> completedResults = new();
     private readonly HashSet<Vector3Int> inFlightChunkCoords = new();
 
@@ -33,6 +41,11 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       lock (completedResults)
       {
         completedResults.Clear();
+      }
+
+      lock (GeneratedDensityCacheLock)
+      {
+        GeneratedDensityCache.Clear();
       }
     }
 
@@ -109,7 +122,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
           if (mode == TerrainSystem.SmoothDensity)
           {
-            result.DensityChunkData = DensityChunkBuilder.GenerateChunkData(chunkCoord, snapshot, null);
+            result.DensityChunkData = GetOrGenerateDensityChunk(chunkCoord, snapshot);
+            PrefillDensityNeighbours(chunkCoord, snapshot);
             return result;
           }
         }
@@ -133,6 +147,34 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       }
 
       return loaded;
+    }
+
+    private static DensityChunkData GetOrGenerateDensityChunk(Vector3Int chunkCoord, WorldGenerationSnapshot snapshot)
+    {
+      lock (GeneratedDensityCacheLock)
+      {
+        if (GeneratedDensityCache.TryGetValue(chunkCoord, out DensityChunkData cached) && cached != null)
+        {
+          return cached;
+        }
+      }
+
+      DensityChunkData generated = DensityChunkBuilder.GenerateChunkData(chunkCoord, snapshot, null);
+
+      lock (GeneratedDensityCacheLock)
+      {
+        GeneratedDensityCache[chunkCoord] = generated;
+      }
+
+      return generated;
+    }
+
+    private static void PrefillDensityNeighbours(Vector3Int root, WorldGenerationSnapshot snapshot)
+    {
+      for (int i = 0; i < DensityNeighbourOffsets.Length; i++)
+      {
+        GetOrGenerateDensityChunk(root + DensityNeighbourOffsets[i], snapshot);
+      }
     }
   }
 
