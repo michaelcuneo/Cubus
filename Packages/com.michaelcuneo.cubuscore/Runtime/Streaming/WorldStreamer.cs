@@ -468,11 +468,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
           continue;
         }
 
-        if (!EnsureDensitySampleChunksAvailableForMesh(c))
-        {
-          QueueRender(c);
-          continue;
-        }
+        EnsureDensitySampleChunksAvailableForMesh(c);
 
         if (densityBuildQueue.ActiveTaskCount >= MaxAsyncChunkTasks)
         {
