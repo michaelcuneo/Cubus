@@ -170,11 +170,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
       if (!world.IsWorldReady)
       {
-        if (storage == null || !storage.LoadWorldManifestOnly())
-        {
-          yield return world.GenerateWorldAsync();
-          storage?.LoadWorldManifestOnly();
-        }
+        storage?.LoadWorldManifestOnly();
+        if (!world.IsWorldReady) world.MarkDatabaseLoaded();
       }
 
       generator = new WorldGenerator(world.Settings);
