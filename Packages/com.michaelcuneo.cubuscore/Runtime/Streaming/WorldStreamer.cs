@@ -507,7 +507,15 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         if (r == null) { count++; continue; }
         if (r.GenerationId != densityBuildQueue.GenerationId || (!desiredChunkCoords.Contains(r.ChunkCoord) && !keepChunkCoords.Contains(r.ChunkCoord))) { ReturnMeshData(r); count++; continue; }
         if (r.ChunkData != null) world.Data.DensityChunks[r.ChunkCoord] = r.ChunkData;
-        if (r.MeshData == null || r.MeshData.IsEmpty) { worldRenderer.RemoveChunk(r.ChunkCoord); ReturnMeshData(r); count++; continue; }
+        if (r.MeshData == null || r.MeshData.IsEmpty)
+        {
+          knownEmptyChunks.Add(r.ChunkCoord);
+          world.Data.DensityChunks.Remove(r.ChunkCoord);
+          worldRenderer.RemoveChunk(r.ChunkCoord);
+          ReturnMeshData(r);
+          count++;
+          continue;
+        }
         Mesh mesh = r.MeshData.ToUnityMeshFast();
         MeshDataPool.Return(r.MeshData); r.MeshData = null;
         worldRenderer.RenderUnityMesh(r.ChunkCoord, mesh, r.ChunkCoord == spawnTargetChunkCoord && !hasBroadcastInitialTerrainReady);
@@ -523,8 +531,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
     private bool TryStartDensityMeshBuild(Vector3Int chunkCoord, DensityChunkData chunkData)
     {
-      world.Settings.GetGenerationChunkBoundsXZ(out int minX, out int maxX, out int minZ, out int maxZ);
-      world.Settings.GetEffectiveDensityChunkYRange(out int minY, out int maxY);
+      world.Settings.GetEffectiveWorldChunkBounds3D(out int minX, out int maxX, out int minY, out int maxY, out int minZ, out int maxZ);
       DensityChunkBuildRequest request = new()
       {
         ChunkCoord = chunkCoord,
@@ -559,8 +566,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     {
       if (!world.Data.DensityChunks.TryGetValue(chunkCoord, out DensityChunkData chunkData) || chunkData == null) return false;
 
-      world.Settings.GetGenerationChunkBoundsXZ(out int minX, out int maxX, out int minZ, out int maxZ);
-      world.Settings.GetEffectiveDensityChunkYRange(out int minY, out int maxY);
+      world.Settings.GetEffectiveWorldChunkBounds3D(out int minX, out int maxX, out int minY, out int maxY, out int minZ, out int maxZ);
       Dictionary<Vector3Int, DensityChunkData> snapshots = CreateDensityMeshChunkSnapshots(chunkCoord, chunkData);
 
       MeshData meshData = DensityMeshDataBuilder.Generate(
