@@ -288,13 +288,33 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     {
       if (a == spawnTargetChunkCoord) return -1;
       if (b == spawnTargetChunkCoord) return 1;
-      int ay = GetSurfaceChunkYForColumn(a.x, a.z, viewerChunkCoord.y * VoxelConstants.ChunkSize);
-      int by = GetSurfaceChunkYForColumn(b.x, b.z, viewerChunkCoord.y * VoxelConstants.ChunkSize);
-      int av = Mathf.Abs(a.y - ay); int bv = Mathf.Abs(b.y - by);
+
+      int ad = ChunkDistanceSquared(a, viewerChunkCoord);
+      int bd = ChunkDistanceSquared(b, viewerChunkCoord);
+      if (ad != bd) return ad.CompareTo(bd);
+
+      int av = Mathf.Abs(a.y - viewerChunkCoord.y);
+      int bv = Mathf.Abs(b.y - viewerChunkCoord.y);
       if (av != bv) return av.CompareTo(bv);
-      int ah = (a.x - viewerChunkCoord.x) * (a.x - viewerChunkCoord.x) + (a.z - viewerChunkCoord.z) * (a.z - viewerChunkCoord.z);
-      int bh = (b.x - viewerChunkCoord.x) * (b.x - viewerChunkCoord.x) + (b.z - viewerChunkCoord.z) * (b.z - viewerChunkCoord.z);
-      return ah != bh ? ah.CompareTo(bh) : Mathf.Abs(a.y - viewerChunkCoord.y).CompareTo(Mathf.Abs(b.y - viewerChunkCoord.y));
+
+      int ah = HorizontalChunkDistanceSquared(a, viewerChunkCoord);
+      int bh = HorizontalChunkDistanceSquared(b, viewerChunkCoord);
+      return ah.CompareTo(bh);
+    }
+
+    private static int ChunkDistanceSquared(Vector3Int a, Vector3Int b)
+    {
+      int dx = a.x - b.x;
+      int dy = a.y - b.y;
+      int dz = a.z - b.z;
+      return dx * dx + dy * dy + dz * dz;
+    }
+
+    private static int HorizontalChunkDistanceSquared(Vector3Int a, Vector3Int b)
+    {
+      int dx = a.x - b.x;
+      int dz = a.z - b.z;
+      return dx * dx + dz * dz;
     }
 
     private void QueueSpawnTargetForRender()
@@ -501,9 +521,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
         if (r.MeshData == null || r.MeshData.IsEmpty)
         {
-          // Do not poison knownEmptyChunks or delete valid density data here. An empty mesh
-          // can be a transient result while streamed sample-neighbour chunks are still catching up.
-          // Removing the data and adding the suppression flag is what made holes permanent.
           worldRenderer.RemoveChunk(r.ChunkCoord);
           ReturnMeshData(r);
           count++;
