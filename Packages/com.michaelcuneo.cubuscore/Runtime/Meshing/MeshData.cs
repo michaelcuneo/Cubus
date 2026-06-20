@@ -28,7 +28,10 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
     public readonly List<Vector2> UVs = new();
     public readonly List<Color32> Colors = new();
 
-    public bool IsEmpty => Vertices.Count == 0 || Triangles.Count == 0;
+    private bool completeWithoutGeometry;
+
+    public bool IsEmpty => !completeWithoutGeometry && (Vertices.Count == 0 || Triangles.Count == 0);
+    public bool IsCompleteWithoutGeometry => completeWithoutGeometry;
 
     public int VertexCount => Vertices.Count;
     public int TriangleCount => Triangles.Count / 3;
@@ -40,6 +43,15 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
       Normals.Clear();
       UVs.Clear();
       Colors.Clear();
+      completeWithoutGeometry = false;
+    }
+
+    public void MarkCompleteWithoutGeometry()
+    {
+      if (Vertices.Count == 0 && Triangles.Count == 0)
+      {
+        completeWithoutGeometry = true;
+      }
     }
 
     public void Reserve(int vertexCount, int indexCount)
