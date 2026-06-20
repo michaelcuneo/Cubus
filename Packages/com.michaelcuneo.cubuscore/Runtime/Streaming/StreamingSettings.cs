@@ -7,11 +7,11 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
   public sealed class StreamingSettings : ISerializationCallbackReceiver
   {
     private const int MaxRuntimeVerticalChunksAroundSurface = 1;
-    private const int MaxRuntimeChunksGeneratedPerFrame = 32;
-    private const int MaxRuntimeInitialChunksGeneratedPerFrame = 64;
-    private const int MaxRuntimeChunksRenderedPerFrame = 64;
-    private const int MaxRuntimeMeshAppliesPerFrame = 32;
-    private const int MaxRuntimeAsyncChunkTasks = 8;
+    private const int MaxRuntimeChunksGeneratedPerFrame = 4;
+    private const int MaxRuntimeInitialChunksGeneratedPerFrame = 16;
+    private const int MaxRuntimeChunksRenderedPerFrame = 8;
+    private const int MaxRuntimeMeshAppliesPerFrame = 2;
+    private const int MaxRuntimeAsyncChunkTasks = 4;
 
     [Header("Horizontal")]
     [Min(1)]
