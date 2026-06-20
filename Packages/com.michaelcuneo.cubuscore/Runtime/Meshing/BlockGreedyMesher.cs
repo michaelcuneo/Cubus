@@ -186,6 +186,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
           }
         }
       }
+
+      MarkCompleteWithoutGeometryIfSolid(chunkData, mesh);
     }
 
     public static MeshData GenerateNeighbourAware(
@@ -365,6 +367,16 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
             }
           }
         }
+      }
+
+      MarkCompleteWithoutGeometryIfSolid(chunkData, mesh);
+    }
+
+    private static void MarkCompleteWithoutGeometryIfSolid(BlockChunkData chunkData, MeshData mesh)
+    {
+      if (chunkData != null && mesh != null && mesh.IsEmpty && chunkData.HasAnySolidVoxel())
+      {
+        mesh.MarkCompleteWithoutGeometry();
       }
     }
 
