@@ -87,10 +87,10 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     private int UnloadPaddingInChunks => Mathf.Max(2, settings != null ? settings.UnloadPaddingInChunks : 4);
     private int ChunksBelowSurface => Mathf.Max(0, settings != null ? settings.ChunksBelowSurface : 8);
     private int ChunksAboveSurface => Mathf.Max(0, settings != null ? settings.ChunksAboveSurface : 8);
-    private int ChunksLoadedPerFrame => Mathf.Clamp(settings != null ? settings.ChunksGeneratedPerFrame : 8, 4, 64);
-    private int ChunksRenderedPerFrame => Mathf.Clamp(settings != null ? settings.ChunksRenderedPerFrame : 32, 4, 128);
-    private int MeshAppliesPerFrame => Mathf.Clamp(settings != null ? settings.MeshAppliesPerFrame : 32, 4, 128);
-    private int MaxAsyncChunkTasks => Mathf.Clamp(settings != null ? settings.MaxAsyncChunkTasks : 8, 2, 32);
+    private int ChunksLoadedPerFrame => Mathf.Clamp(settings != null ? settings.ChunksGeneratedPerFrame : 8, 1, 64);
+    private int ChunksRenderedPerFrame => Mathf.Clamp(settings != null ? settings.ChunksRenderedPerFrame : 32, 1, 128);
+    private int MeshAppliesPerFrame => Mathf.Clamp(settings != null ? settings.MeshAppliesPerFrame : 32, 1, 128);
+    private int MaxAsyncChunkTasks => Mathf.Clamp(settings != null ? settings.MaxAsyncChunkTasks : 8, 1, 32);
 
     private static readonly Vector3Int[] DensityMeshSampleChunkOffsets =
     {
@@ -177,6 +177,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       }
 
       generator = new WorldGenerator(world.Settings);
+      StreamingGenerationContext.Set(world.Settings);
       worldSnapshot = WorldGenerationSnapshot.FromSettings(world.Settings);
       spawnTargetChunkCoord = WorldToSurfaceChunkCoord(GetSpawnReferencePosition());
       worldRenderer.ClearAll();
@@ -205,6 +206,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     public void ForceRefreshStreamingSet()
     {
       if (!EnsureRuntimeReferences()) return;
+      StreamingGenerationContext.Set(world.Settings);
       worldSnapshot = WorldGenerationSnapshot.FromSettings(world.Settings);
       generator ??= new WorldGenerator(world.Settings);
       surfaceChunkYCache.Clear();
@@ -396,7 +398,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         count++;
         if (result == null || result.GenerationId != chunkLoadQueue.GenerationId) continue;
         Vector3Int c = result.ChunkCoord;
-        if (!desiredChunkCoords.Contains(c) && !keepChunkCoords.Contains(c)) continue;
 
         if (result.Loaded)
         {
@@ -407,7 +408,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
           continue;
         }
 
-        if ((desiredChunkCoords.Contains(c) || keepChunkCoords.Contains(c)) && EnsureGeneratedChunkDataAvailable(c)) QueueRender(c);
+        if (!desiredChunkCoords.Contains(c) && !keepChunkCoords.Contains(c)) continue;
+        QueueLoad(c);
       }
     }
 
@@ -441,12 +443,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
         if (!world.Data.DensityChunks.TryGetValue(c, out DensityChunkData d) || d == null)
         {
-          continue;
-        }
-
-        if (!EnsureDensitySampleChunksAvailableForMesh(c))
-        {
-          QueueRender(c);
           continue;
         }
 
