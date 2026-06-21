@@ -143,7 +143,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
               start[u] = i;
               start[v] = j;
 
-              AddGreedyQuad(
+              AddVoxelTiledGreedyQuad(
                 mesh,
                 axis,
                 u,
@@ -195,7 +195,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
       return materialLookup(chunkData.LocalToWorldVoxel(localX, localY, localZ));
     }
 
-    private static void AddGreedyQuad(
+    private static void AddVoxelTiledGreedyQuad(
       MeshData mesh,
       int axis,
       int u,
@@ -212,24 +212,33 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
       Vector3 normal = Vector3.zero;
       normal[axis] = positiveFace ? 1.0f : -1.0f;
 
-      Vector3Int start = new(startX, startY, startZ);
-      Vector3Int d1 = Vector3Int.zero;
-      Vector3Int d2 = Vector3Int.zero;
-      d1[u] = width;
-      d2[v] = height;
-
-      Vector3 p0 = ToPosition(start.x, start.y, start.z, voxelSize);
-      Vector3 p1 = ToPosition(start.x + d1.x, start.y + d1.y, start.z + d1.z, voxelSize);
-      Vector3 p2 = ToPosition(start.x + d1.x + d2.x, start.y + d1.y + d2.y, start.z + d1.z + d2.z, voxelSize);
-      Vector3 p3 = ToPosition(start.x + d2.x, start.y + d2.y, start.z + d2.z, voxelSize);
-
-      if (positiveFace)
+      for (int tileY = 0; tileY < height; tileY++)
       {
-        AddQuad(mesh, p0, p3, p2, p1, normal, materialId, new Vector2(width, height));
-      }
-      else
-      {
-        AddQuad(mesh, p0, p1, p2, p3, normal, materialId, new Vector2(width, height));
+        for (int tileX = 0; tileX < width; tileX++)
+        {
+          Vector3Int start = new(startX, startY, startZ);
+          start[u] += tileX;
+          start[v] += tileY;
+
+          Vector3Int d1 = Vector3Int.zero;
+          Vector3Int d2 = Vector3Int.zero;
+          d1[u] = 1;
+          d2[v] = 1;
+
+          Vector3 p0 = ToPosition(start.x, start.y, start.z, voxelSize);
+          Vector3 p1 = ToPosition(start.x + d1.x, start.y + d1.y, start.z + d1.z, voxelSize);
+          Vector3 p2 = ToPosition(start.x + d1.x + d2.x, start.y + d1.y + d2.y, start.z + d1.z + d2.z, voxelSize);
+          Vector3 p3 = ToPosition(start.x + d2.x, start.y + d2.y, start.z + d2.z, voxelSize);
+
+          if (positiveFace)
+          {
+            AddQuad(mesh, p0, p3, p2, p1, normal, materialId, Vector2.one);
+          }
+          else
+          {
+            AddQuad(mesh, p0, p1, p2, p3, normal, materialId, Vector2.one);
+          }
+        }
       }
     }
 
