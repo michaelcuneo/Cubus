@@ -548,7 +548,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
           }
 
           if (buildQueue.IsInFlight(c)) { QueueRender(c); continue; }
-          if (!EnsureBlockNeighborChunksAvailableForMesh(c)) { QueueRender(c); continue; }
 
           int totalActiveTasksForBlockBuild = chunkLoadQueue.ActiveTaskCount + buildQueue.ActiveTaskCount + densityBuildQueue.ActiveTaskCount;
           if (buildQueue.ActiveTaskCount >= MaxBlockAsyncTasks || totalActiveTasksForBlockBuild >= MaxTotalAsyncTasks)
@@ -591,20 +590,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         if (!chunkLoadQueue.IsInFlight(c) && !pendingLoadSet.Contains(c)) QueueLoad(c);
       }
       return allSampleChunksAvailable;
-    }
-
-    private bool EnsureBlockNeighborChunksAvailableForMesh(Vector3Int root)
-    {
-      bool allNeighborChunksAvailable = true;
-      for (int i = 0; i < BlockMeshNeighborOffsets.Length; i++)
-      {
-        Vector3Int c = root + BlockMeshNeighborOffsets[i];
-        if (world.Data.BlockChunks.ContainsKey(c) || !world.Settings.IsInsideEffectiveWorldBounds3D(c)) continue;
-        allNeighborChunksAvailable = false;
-        keepChunkCoords.Add(c);
-        if (!chunkLoadQueue.IsInFlight(c) && !pendingLoadSet.Contains(c)) QueueLoad(c);
-      }
-      return allNeighborChunksAvailable;
     }
 
     private void ProcessCompletedBuildResults(int meshApplyBudget)
