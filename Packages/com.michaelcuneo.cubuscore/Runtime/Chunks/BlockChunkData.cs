@@ -1,7 +1,7 @@
+using System;
 using UnityEngine;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Core;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Voxels;
-
 
 namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Chunks
 {
@@ -10,6 +10,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Chunks
     private readonly Voxel[] voxels;
 
     public Vector3Int ChunkCoord { get; }
+
+    internal Voxel[] RawVoxelsInternal => voxels;
 
     public BlockChunkData(Vector3Int chunkCoord)
     {
@@ -48,6 +50,21 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Chunks
       }
 
       return false;
+    }
+
+    public void CopyVoxelsTo(Voxel[] target)
+    {
+      if (target == null) throw new ArgumentNullException(nameof(target));
+      if (target.Length < voxels.Length) throw new ArgumentException("Target voxel array is too small.", nameof(target));
+
+      Array.Copy(voxels, target, voxels.Length);
+    }
+
+    public BlockChunkData Clone()
+    {
+      BlockChunkData clone = new(ChunkCoord);
+      Array.Copy(voxels, clone.voxels, voxels.Length);
+      return clone;
     }
 
     public Voxel[] GetRawVoxelArray()
