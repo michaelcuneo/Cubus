@@ -98,7 +98,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
           totalWatch.Stop();
           timingStats.TotalTicks = totalWatch.ElapsedTicks;
           LogSingleChunkCompressionIfEnabled("Saved", blockRecord);
-          LogTimingStatsIfEnabled("Saved chunk", timingStats);
           return true;
 
         case TerrainSystem.SmoothDensity:
@@ -123,7 +122,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
           totalWatch.Stop();
           timingStats.TotalTicks = totalWatch.ElapsedTicks;
           LogSingleChunkCompressionIfEnabled("Saved", densityRecord);
-          LogTimingStatsIfEnabled("Saved chunk", timingStats);
           return true;
       }
     }
@@ -356,7 +354,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
         timingStats.DecodeTicks += decodeWatch.ElapsedTicks;
         totalWatch.Stop();
         timingStats.TotalTicks = totalWatch.ElapsedTicks;
-        LogTimingStatsIfEnabled("Loaded chunk", timingStats);
         return true;
       }
       catch (Exception ex)

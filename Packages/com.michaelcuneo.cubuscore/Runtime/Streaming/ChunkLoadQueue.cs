@@ -38,7 +38,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
     public bool TryStartLoad(IWorldChunkStore store, string worldId, Vector3Int chunkCoord, int maxActiveTasks)
     {
-      if (store == null || string.IsNullOrWhiteSpace(worldId)) return false;
       if (activeTaskCount >= maxActiveTasks) return false;
       if (inFlightChunkCoords.Contains(chunkCoord)) return false;
 
@@ -88,51 +87,51 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
     private static ChunkLoadResult Load(IWorldChunkStore store, string worldId, Vector3Int chunkCoord, int generationId)
     {
-      if (!store.TryLoadChunk(worldId, chunkCoord, out WorldChunkRecord record))
+      if (store != null && !string.IsNullOrWhiteSpace(worldId) && store.TryLoadChunk(worldId, chunkCoord, out WorldChunkRecord record))
       {
-        if (StreamingGenerationContext.TryGet(out TerrainSystem mode, out WorldGenerationSnapshot snapshot))
+        ChunkLoadResult loaded = new() { ChunkCoord = chunkCoord, GenerationId = generationId, Loaded = true, TerrainSystem = record.TerrainSystem };
+
+        switch (record.TerrainSystem)
         {
-          ChunkLoadResult result = new()
-          {
-            ChunkCoord = chunkCoord,
-            GenerationId = generationId,
-            Loaded = true,
-            IsMissingFromStorage = true,
-            TerrainSystem = mode
-          };
-
-          if (mode == TerrainSystem.Block)
-          {
-            result.BlockChunkData = BlockChunkBuilder.GenerateChunkData(chunkCoord, snapshot, null);
-            return result;
-          }
-
-          if (mode == TerrainSystem.SmoothDensity)
-          {
-            result.DensityChunkData = DensityChunkBuilder.GenerateChunkData(chunkCoord, snapshot, null);
-            return result;
-          }
+          case TerrainSystem.Block:
+            loaded.BlockChunkData = CubusChunkPayloadCodec.DecodeBlockChunk(record);
+            break;
+          case TerrainSystem.SmoothDensity:
+            loaded.DensityChunkData = CubusChunkPayloadCodec.DecodeDensityChunk(record);
+            break;
+          default:
+            loaded.Loaded = false;
+            break;
         }
 
-        return new ChunkLoadResult { ChunkCoord = chunkCoord, GenerationId = generationId, Loaded = false, IsMissingFromStorage = true };
+        return loaded;
       }
 
-      ChunkLoadResult loaded = new() { ChunkCoord = chunkCoord, GenerationId = generationId, Loaded = true, TerrainSystem = record.TerrainSystem };
-
-      switch (record.TerrainSystem)
+      if (StreamingGenerationContext.TryGet(out TerrainSystem mode, out WorldGenerationSnapshot snapshot))
       {
-        case TerrainSystem.Block:
-          loaded.BlockChunkData = CubusChunkPayloadCodec.DecodeBlockChunk(record);
-          break;
-        case TerrainSystem.SmoothDensity:
-          loaded.DensityChunkData = CubusChunkPayloadCodec.DecodeDensityChunk(record);
-          break;
-        default:
-          loaded.Loaded = false;
-          break;
+        ChunkLoadResult result = new()
+        {
+          ChunkCoord = chunkCoord,
+          GenerationId = generationId,
+          Loaded = true,
+          IsMissingFromStorage = true,
+          TerrainSystem = mode
+        };
+
+        if (mode == TerrainSystem.Block)
+        {
+          result.BlockChunkData = BlockChunkBuilder.GenerateChunkData(chunkCoord, snapshot, null);
+          return result;
+        }
+
+        if (mode == TerrainSystem.SmoothDensity)
+        {
+          result.DensityChunkData = DensityChunkBuilder.GenerateChunkData(chunkCoord, snapshot, null);
+          return result;
+        }
       }
 
-      return loaded;
+      return new ChunkLoadResult { ChunkCoord = chunkCoord, GenerationId = generationId, Loaded = false, IsMissingFromStorage = true };
     }
   }
 

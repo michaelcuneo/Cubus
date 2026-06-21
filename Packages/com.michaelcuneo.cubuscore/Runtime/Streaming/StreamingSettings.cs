@@ -11,7 +11,15 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     private const int MaxRuntimeInitialChunksGeneratedPerFrame = 64;
     private const int MaxRuntimeChunksRenderedPerFrame = 64;
     private const int MaxRuntimeMeshAppliesPerFrame = 16;
+    private const int MaxRuntimeMeshApplyTimeBudgetMs = 12;
     private const int MaxRuntimeAsyncChunkTasks = 16;
+
+    public const int PrePr30BlockChunksGeneratedPerFrame = 16;
+    public const int PrePr30BlockInitialChunksGeneratedPerFrame = 64;
+    public const int PrePr30BlockChunksRenderedPerFrame = 32;
+    public const int PrePr30BlockMeshAppliesPerFrame = 8;
+    public const int PrePr30BlockMeshApplyTimeBudgetMs = 1;
+    public const int PrePr30BlockMaxAsyncChunkTasks = 8;
 
     [Header("Horizontal")]
     [Min(1)]
@@ -41,6 +49,10 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     [Min(1)]
     public int MeshAppliesPerFrame = 2;
 
+    [Tooltip("Maximum time budget in milliseconds spent applying completed mesh builds per frame.")]
+    [Min(1)]
+    public int MeshApplyTimeBudgetMs = 2;
+
     [Header("Async")]
     public bool UseAsyncGeneration = true;
 
@@ -65,7 +77,20 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       InitialChunksGeneratedPerFrame = Mathf.Clamp(InitialChunksGeneratedPerFrame, 1, MaxRuntimeInitialChunksGeneratedPerFrame);
       ChunksRenderedPerFrame = Mathf.Clamp(ChunksRenderedPerFrame, 1, MaxRuntimeChunksRenderedPerFrame);
       MeshAppliesPerFrame = Mathf.Clamp(MeshAppliesPerFrame, 1, MaxRuntimeMeshAppliesPerFrame);
+      MeshApplyTimeBudgetMs = Mathf.Clamp(MeshApplyTimeBudgetMs, 1, MaxRuntimeMeshApplyTimeBudgetMs);
       MaxAsyncChunkTasks = Mathf.Clamp(MaxAsyncChunkTasks, 1, MaxRuntimeAsyncChunkTasks);
+    }
+
+    public void ApplyPrePr30BlockFastProfile()
+    {
+      UseAsyncGeneration = true;
+      ChunksGeneratedPerFrame = PrePr30BlockChunksGeneratedPerFrame;
+      InitialChunksGeneratedPerFrame = PrePr30BlockInitialChunksGeneratedPerFrame;
+      ChunksRenderedPerFrame = PrePr30BlockChunksRenderedPerFrame;
+      MeshAppliesPerFrame = PrePr30BlockMeshAppliesPerFrame;
+      MeshApplyTimeBudgetMs = PrePr30BlockMeshApplyTimeBudgetMs;
+      MaxAsyncChunkTasks = PrePr30BlockMaxAsyncChunkTasks;
+      NormalizeRuntimeBudgets();
     }
   }
 }

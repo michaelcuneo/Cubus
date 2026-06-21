@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Persistence;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering;
+using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World;
 using UnityEngine;
@@ -35,6 +36,8 @@ namespace Assets.Demo.Scripts.Player
     [SerializeField] private float heatmapRefreshInterval = 0.25f;
 
     private CubusWorld world;
+    private WorldStreamer streamer;
+    private WorldRenderer worldRenderer;
     private WorldPersistence persistence;
     private Camera activeCamera;
 
@@ -55,6 +58,34 @@ namespace Assets.Demo.Scripts.Player
     private Texture2D heatmapTexture;
     private float heatmapTimeAccumulator;
     private readonly List<string> autocompleteScratch = new();
+    private const int ProfilerFrameBufferSize = 512;
+    private const float HitchThresholdMs = 33.3f;
+    private readonly float[] profilerFrameTimesMs = new float[ProfilerFrameBufferSize];
+    private readonly float[] profilerFrameScratchMs = new float[ProfilerFrameBufferSize];
+    private int profilerFrameWriteIndex;
+    private int profilerFrameCount;
+    private int profilerWindowFrameCount;
+    private int profilerWindowHitchCount;
+    private float profilerWindowElapsed;
+    private float profilerWindowFrameTimeTotalMs;
+    private float profilerWindowWorstFrameMs;
+    private float profilerFps;
+    private float profilerAvgFrameMs;
+    private float profilerP95FrameMs;
+    private float profilerWorstFrameMs;
+    private float profilerLoadsPerSecond;
+    private float profilerBlockAppliesPerSecond;
+    private float profilerDensityAppliesPerSecond;
+    private float profilerUnloadsPerSecond;
+    private float profilerLoadFailuresPerSecond;
+    private bool profilerRealtimeLogEnabled = true;
+    private int profilerRealtimeLogSequence;
+    private bool profilerCounterBaselineSet;
+    private long profilerLastTotalLoads;
+    private long profilerLastTotalBlockApplies;
+    private long profilerLastTotalDensityApplies;
+    private long profilerLastTotalUnloads;
+    private long profilerLastTotalLoadFailures;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     private static void Bootstrap()
@@ -100,6 +131,7 @@ namespace Assets.Demo.Scripts.Player
     private void Update()
     {
       EnsureReferences();
+      UpdateProfilerTelemetry();
 
       Keyboard keyboard = Keyboard.current;
       if (keyboard == null)
@@ -138,6 +170,16 @@ namespace Assets.Demo.Scripts.Player
       if (world == null)
       {
         world = FindAnyObjectByType<CubusWorld>();
+      }
+
+      if (streamer == null)
+      {
+        streamer = FindAnyObjectByType<WorldStreamer>();
+      }
+
+      if (worldRenderer == null)
+      {
+        worldRenderer = FindAnyObjectByType<WorldRenderer>();
       }
 
       if (persistence == null)
@@ -211,7 +253,7 @@ namespace Assets.Demo.Scripts.Player
         richText = true
       };
 
-      Rect rect = new(12.0f, 12.0f, 560.0f, 170.0f);
+      Rect rect = new(12.0f, 12.0f, 720.0f, 255.0f);
       string text = BuildOverlayText();
       GUI.Box(rect, text, box);
     }
@@ -246,7 +288,155 @@ namespace Assets.Demo.Scripts.Player
           $"Stored Block Material: {storedBlockMaterial}\n" +
           $"Procedural Material: {proceduralSample.SolidMaterialId}\n" +
           $"Density: {proceduralSample.Density.ToString("0.000", CultureInfo.InvariantCulture)} | SurfaceY: {proceduralSample.SurfaceHeight.ToString("0.00", CultureInfo.InvariantCulture)}\n" +
+          BuildProfilerOverlayText() + "\n" +
           "F3 overlay | F4 heatmap | ` console";
+    }
+
+    private string BuildProfilerOverlayText()
+    {
+      int activeChunkViews = worldRenderer != null ? worldRenderer.ActiveChunkViews.Count : -1;
+      int desiredChunks = streamer != null ? streamer.DesiredChunkCount : -1;
+      int keepChunks = streamer != null ? streamer.KeepChunkCount : -1;
+      int pendingLoads = streamer != null ? streamer.PendingLoadCount : -1;
+      int pendingRenders = streamer != null ? streamer.PendingRenderCount : -1;
+      int pendingUnloads = streamer != null ? streamer.PendingUnloadCount : -1;
+      int activeLoadTasks = streamer != null ? streamer.ActiveChunkLoadTaskCount : -1;
+      int activeBlockTasks = streamer != null ? streamer.ActiveBlockBuildTaskCount : -1;
+      int activeDensityTasks = streamer != null ? streamer.ActiveDensityBuildTaskCount : -1;
+
+      return
+          "<b>Profiler</b>\n" +
+          $"Frame: {profilerFps.ToString("0.0", CultureInfo.InvariantCulture)} FPS | Avg {profilerAvgFrameMs.ToString("0.00", CultureInfo.InvariantCulture)} ms | " +
+          $"P95 {profilerP95FrameMs.ToString("0.00", CultureInfo.InvariantCulture)} ms | Worst {profilerWorstFrameMs.ToString("0.00", CultureInfo.InvariantCulture)} ms | " +
+          $"Hitches(>{HitchThresholdMs.ToString("0.0", CultureInfo.InvariantCulture)}ms): {profilerWindowHitchCount}\n" +
+          $"Stream/s: Load {profilerLoadsPerSecond.ToString("0.0", CultureInfo.InvariantCulture)} | BlockApply {profilerBlockAppliesPerSecond.ToString("0.0", CultureInfo.InvariantCulture)} | " +
+          $"DensityApply {profilerDensityAppliesPerSecond.ToString("0.0", CultureInfo.InvariantCulture)} | Unload {profilerUnloadsPerSecond.ToString("0.0", CultureInfo.InvariantCulture)} | " +
+          $"LoadFail {profilerLoadFailuresPerSecond.ToString("0.0", CultureInfo.InvariantCulture)}\n" +
+          $"Queues: Desired {desiredChunks} | Keep {keepChunks} | ActiveViews {activeChunkViews} | Pending L/R/U {pendingLoads}/{pendingRenders}/{pendingUnloads} | " +
+          $"ActiveTasks L/B/D {activeLoadTasks}/{activeBlockTasks}/{activeDensityTasks}";
+    }
+
+    private void UpdateProfilerTelemetry()
+    {
+      float frameMs = Mathf.Max(0.0f, Time.unscaledDeltaTime * 1000.0f);
+      profilerFrameTimesMs[profilerFrameWriteIndex] = frameMs;
+      profilerFrameWriteIndex = (profilerFrameWriteIndex + 1) % ProfilerFrameBufferSize;
+      if (profilerFrameCount < ProfilerFrameBufferSize)
+      {
+        profilerFrameCount++;
+      }
+
+      profilerWindowFrameCount++;
+      profilerWindowElapsed += Time.unscaledDeltaTime;
+      profilerWindowFrameTimeTotalMs += frameMs;
+      if (frameMs > profilerWindowWorstFrameMs)
+      {
+        profilerWindowWorstFrameMs = frameMs;
+      }
+
+      if (frameMs >= HitchThresholdMs)
+      {
+        profilerWindowHitchCount++;
+      }
+
+      if (profilerWindowElapsed < 1.0f)
+      {
+        return;
+      }
+
+      float elapsed = Mathf.Max(0.0001f, profilerWindowElapsed);
+      profilerFps = profilerWindowFrameCount / elapsed;
+      profilerAvgFrameMs = profilerWindowFrameCount > 0
+          ? profilerWindowFrameTimeTotalMs / profilerWindowFrameCount
+          : 0.0f;
+      profilerWorstFrameMs = profilerWindowWorstFrameMs;
+      profilerP95FrameMs = ComputeP95FrameTimeMs();
+
+      if (streamer != null)
+      {
+        if (!profilerCounterBaselineSet)
+        {
+          profilerLastTotalLoads = streamer.TotalChunkLoadsCompleted;
+          profilerLastTotalBlockApplies = streamer.TotalBlockMeshApplies;
+          profilerLastTotalDensityApplies = streamer.TotalDensityMeshApplies;
+          profilerLastTotalUnloads = streamer.TotalChunkUnloadsApplied;
+          profilerLastTotalLoadFailures = streamer.TotalChunkLoadFailures;
+          profilerCounterBaselineSet = true;
+        }
+
+        long totalLoads = streamer.TotalChunkLoadsCompleted;
+        long totalBlockApplies = streamer.TotalBlockMeshApplies;
+        long totalDensityApplies = streamer.TotalDensityMeshApplies;
+        long totalUnloads = streamer.TotalChunkUnloadsApplied;
+        long totalLoadFailures = streamer.TotalChunkLoadFailures;
+
+        profilerLoadsPerSecond = Mathf.Max(0.0f, (totalLoads - profilerLastTotalLoads) / elapsed);
+        profilerBlockAppliesPerSecond = Mathf.Max(0.0f, (totalBlockApplies - profilerLastTotalBlockApplies) / elapsed);
+        profilerDensityAppliesPerSecond = Mathf.Max(0.0f, (totalDensityApplies - profilerLastTotalDensityApplies) / elapsed);
+        profilerUnloadsPerSecond = Mathf.Max(0.0f, (totalUnloads - profilerLastTotalUnloads) / elapsed);
+        profilerLoadFailuresPerSecond = Mathf.Max(0.0f, (totalLoadFailures - profilerLastTotalLoadFailures) / elapsed);
+
+        profilerLastTotalLoads = totalLoads;
+        profilerLastTotalBlockApplies = totalBlockApplies;
+        profilerLastTotalDensityApplies = totalDensityApplies;
+        profilerLastTotalUnloads = totalUnloads;
+        profilerLastTotalLoadFailures = totalLoadFailures;
+      }
+
+      EmitRealtimeProfilerLog(elapsed);
+
+      profilerWindowFrameCount = 0;
+      profilerWindowElapsed = 0.0f;
+      profilerWindowFrameTimeTotalMs = 0.0f;
+      profilerWindowWorstFrameMs = 0.0f;
+      profilerWindowHitchCount = 0;
+    }
+
+    private void EmitRealtimeProfilerLog(float elapsed)
+    {
+      if (!profilerRealtimeLogEnabled)
+      {
+        return;
+      }
+
+      int activeChunkViews = worldRenderer != null ? worldRenderer.ActiveChunkViews.Count : -1;
+      int desiredChunks = streamer != null ? streamer.DesiredChunkCount : -1;
+      int keepChunks = streamer != null ? streamer.KeepChunkCount : -1;
+      int pendingLoads = streamer != null ? streamer.PendingLoadCount : -1;
+      int pendingRenders = streamer != null ? streamer.PendingRenderCount : -1;
+      int pendingUnloads = streamer != null ? streamer.PendingUnloadCount : -1;
+      int activeLoadTasks = streamer != null ? streamer.ActiveChunkLoadTaskCount : -1;
+      int activeBlockTasks = streamer != null ? streamer.ActiveBlockBuildTaskCount : -1;
+      int activeDensityTasks = streamer != null ? streamer.ActiveDensityBuildTaskCount : -1;
+
+      profilerRealtimeLogSequence++;
+      string line =
+          $"CUBUS_PROFILER seq={profilerRealtimeLogSequence} dt={elapsed:0.000} " +
+          $"fps={profilerFps:0.0} avgMs={profilerAvgFrameMs:0.00} p95Ms={profilerP95FrameMs:0.00} worstMs={profilerWorstFrameMs:0.00} hitches={profilerWindowHitchCount} " +
+          $"loadPerSec={profilerLoadsPerSecond:0.0} blockApplyPerSec={profilerBlockAppliesPerSecond:0.0} densityApplyPerSec={profilerDensityAppliesPerSecond:0.0} " +
+          $"unloadPerSec={profilerUnloadsPerSecond:0.0} loadFailPerSec={profilerLoadFailuresPerSecond:0.0} " +
+          $"desired={desiredChunks} keep={keepChunks} activeViews={activeChunkViews} pendingL={pendingLoads} pendingR={pendingRenders} pendingU={pendingUnloads} " +
+          $"activeTasksL={activeLoadTasks} activeTasksB={activeBlockTasks} activeTasksD={activeDensityTasks}";
+
+      Debug.LogFormat(LogType.Log, LogOption.NoStacktrace, null, "{0}", line);
+    }
+
+    private float ComputeP95FrameTimeMs()
+    {
+      if (profilerFrameCount <= 0)
+      {
+        return 0.0f;
+      }
+
+      for (int i = 0; i < profilerFrameCount; i++)
+      {
+        int sourceIndex = (profilerFrameWriteIndex - profilerFrameCount + i + ProfilerFrameBufferSize) % ProfilerFrameBufferSize;
+        profilerFrameScratchMs[i] = profilerFrameTimesMs[sourceIndex];
+      }
+
+      Array.Sort(profilerFrameScratchMs, 0, profilerFrameCount);
+      int percentileIndex = Mathf.Clamp(Mathf.CeilToInt(profilerFrameCount * 0.95f) - 1, 0, profilerFrameCount - 1);
+      return profilerFrameScratchMs[percentileIndex];
     }
 
     private bool TryGetCrosshairVoxel(out Vector3Int worldVoxel)
@@ -655,6 +845,48 @@ namespace Assets.Demo.Scripts.Player
         }
 
         EnqueueLog($"Overlay {(overlayVisible ? "enabled" : "disabled")}");
+      });
+
+      RegisterCommand("profiler", "Profiler controls: profiler status|reset|log on|off", args =>
+      {
+        if (args.Length >= 2 && args[1].Equals("reset", StringComparison.OrdinalIgnoreCase))
+        {
+          profilerCounterBaselineSet = false;
+          profilerLoadsPerSecond = 0.0f;
+          profilerBlockAppliesPerSecond = 0.0f;
+          profilerDensityAppliesPerSecond = 0.0f;
+          profilerUnloadsPerSecond = 0.0f;
+          profilerLoadFailuresPerSecond = 0.0f;
+          profilerRealtimeLogSequence = 0;
+          EnqueueLog("Profiler counters reset.");
+          return;
+        }
+
+        if (args.Length >= 3 && args[1].Equals("log", StringComparison.OrdinalIgnoreCase))
+        {
+          if (args[2].Equals("on", StringComparison.OrdinalIgnoreCase))
+          {
+            profilerRealtimeLogEnabled = true;
+            EnqueueLog("Realtime profiler logging enabled.");
+            return;
+          }
+
+          if (args[2].Equals("off", StringComparison.OrdinalIgnoreCase))
+          {
+            profilerRealtimeLogEnabled = false;
+            EnqueueLog("Realtime profiler logging disabled.");
+            return;
+          }
+
+          EnqueueLog("Usage: profiler log on|off");
+          return;
+        }
+
+        EnqueueLog(
+            $"Profiler: FPS={profilerFps:0.0}, AvgMs={profilerAvgFrameMs:0.00}, P95Ms={profilerP95FrameMs:0.00}, WorstMs={profilerWorstFrameMs:0.00}, " +
+            $"Load/s={profilerLoadsPerSecond:0.0}, BlockApply/s={profilerBlockAppliesPerSecond:0.0}, DensityApply/s={profilerDensityAppliesPerSecond:0.0}, " +
+            $"Unload/s={profilerUnloadsPerSecond:0.0}, LoadFail/s={profilerLoadFailuresPerSecond:0.0}, Log={(profilerRealtimeLogEnabled ? "on" : "off")}"
+        );
       });
     }
 

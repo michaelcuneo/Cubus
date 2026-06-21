@@ -26,12 +26,9 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         for (int x = 0; x < size; x++)
         {
           Vector3Int baseWorldVoxel = chunkData.LocalToWorldVoxel(x, 0, z);
-
-          snapshot.ResolveBiomeAtWorldXZ(
+          BiomeBlendSample blend = snapshot.ResolveBiomeBlendAtWorldXZ(
               baseWorldVoxel.x,
-              baseWorldVoxel.z,
-              out TerrainGenerationProfileSnapshot profile,
-              out byte biomeId
+              baseWorldVoxel.z
           );
 
           for (int y = 0; y < size; y++)
@@ -40,6 +37,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
             TerrainSample sample = BiomeTerrainSampler.Sample(
                 snapshot,
+                blend,
                 worldVoxel,
                 scale
             );

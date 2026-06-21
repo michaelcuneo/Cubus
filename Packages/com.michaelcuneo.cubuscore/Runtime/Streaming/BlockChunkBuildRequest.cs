@@ -11,6 +11,9 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     public Vector3Int ChunkCoord;
     public int GenerationId;
     public WorldGenerationSnapshot WorldSnapshot;
+    public float VoxelSize;
+    public BlockChunkData ChunkDataSnapshot;
+    public Dictionary<Vector3Int, BlockChunkData> NeighborChunkSnapshots;
 
     public Dictionary<int, ushort> OverrideSnapshot;
   }

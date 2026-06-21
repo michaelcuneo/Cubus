@@ -33,6 +33,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
       set
       {
         collisionMode = value;
+        NormalizeCollisionMode();
         RefreshChunkCollision();
       }
     }
@@ -58,9 +59,15 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
 
     private void Awake()
     {
+      NormalizeCollisionMode();
       world = GetComponent<CubusWorld>();
       chunkPool = new ChunkPool(transform);
       EnsureWorldMaterial();
+    }
+
+    private void OnValidate()
+    {
+      NormalizeCollisionMode();
     }
 
     private void Update()
@@ -71,6 +78,13 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
       }
 
       if (collisionViewer == null || world == null)
+      {
+        return;
+      }
+
+      timeSinceLastCollisionUpdate += Time.deltaTime;
+      float updateInterval = Mathf.Max(0.01f, collisionUpdateInterval);
+      if (timeSinceLastCollisionUpdate < updateInterval)
       {
         return;
       }
@@ -89,6 +103,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
         return;
       }
 
+      timeSinceLastCollisionUpdate = 0.0f;
       lastCollisionViewerChunkCoord = viewerChunkCoord;
       hasLastCollisionViewerChunkCoord = true;
 
@@ -99,6 +114,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
     {
       collisionViewer = viewer;
       hasLastCollisionViewerChunkCoord = false;
+      timeSinceLastCollisionUpdate = 0.0f;
       RefreshChunkCollision();
     }
 
@@ -132,7 +148,13 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
       }
 
       ChunkView chunkView = GetOrCreateChunkView(chunkCoord);
-      chunkView.ApplyMesh(meshData, collisionMode != WorldCollisionMode.None);
+      bool shouldGenerateCollision = collisionMode switch
+      {
+        WorldCollisionMode.None => false,
+        WorldCollisionMode.NearViewerOnly => IsChunkNearCollisionViewer(chunkView),
+        _ => false
+      };
+      chunkView.ApplyMesh(meshData, shouldGenerateCollision);
       MeshDataPool.Return(meshData);
       ApplyCollisionStateToChunk(chunkView);
     }
@@ -201,14 +223,21 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
           chunkView.SetCollisionEnabled(false);
           break;
 
-        case WorldCollisionMode.AllChunks:
-          chunkView.SetCollisionEnabled(true);
-          break;
-
         case WorldCollisionMode.NearViewerOnly:
+        default:
           chunkView.SetCollisionEnabled(IsChunkNearCollisionViewer(chunkView));
           break;
       }
+    }
+
+    private void NormalizeCollisionMode()
+    {
+      if (collisionMode == WorldCollisionMode.None)
+      {
+        return;
+      }
+
+      collisionMode = WorldCollisionMode.NearViewerOnly;
     }
 
     private bool IsChunkNearCollisionViewer(ChunkView chunkView)
@@ -372,7 +401,13 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
       }
 
       ChunkView chunkView = GetOrCreateChunkView(chunkCoord);
-      chunkView.ApplyMesh(meshData, collisionMode != WorldCollisionMode.None);
+      bool shouldGenerateCollision = collisionMode switch
+      {
+        WorldCollisionMode.None => false,
+        WorldCollisionMode.NearViewerOnly => IsChunkNearCollisionViewer(chunkView),
+        _ => false
+      };
+      chunkView.ApplyMesh(meshData, shouldGenerateCollision);
       MeshDataPool.Return(meshData);
       ApplyCollisionStateToChunk(chunkView);
     }
