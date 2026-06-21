@@ -17,6 +17,7 @@ Shader "Cubus/BiomeAtlasURP"
     {
       "RenderType" = "Opaque"
       "RenderPipeline" = "UniversalPipeline"
+      "Queue" = "Geometry"
     }
 
     LOD 100
@@ -26,8 +27,10 @@ Shader "Cubus/BiomeAtlasURP"
       Name "ForwardLit"
       Tags { "LightMode" = "UniversalForward" }
 
-      Blend SrcAlpha OneMinusSrcAlpha
+      Cull Back
       ZWrite On
+      ZTest LEqual
+      Blend One Zero
 
       HLSLPROGRAM
       #pragma vertex vert
@@ -90,13 +93,14 @@ Shader "Cubus/BiomeAtlasURP"
 
       float DecodeLookupU16(float2 rg)
       {
-        // Runtime lookup textures store packed integer bytes, not colour.
-        // Unity samples normal RGBA textures through colour-space conversion in
-        // linear projects, which turns small byte values such as 4/255 into
-        // near-zero. Convert the sampled channels back before unpacking.
         float low = round(LinearToSrgbChannel(rg.x) * 255.0);
         float high = round(LinearToSrgbChannel(rg.y) * 255.0);
         return low + (high * 256.0);
+      }
+
+      float DecodeLookupByte(float value)
+      {
+        return round(LinearToSrgbChannel(value) * 255.0);
       }
 
       float2 MaterialLookupUv(float materialId)
@@ -121,6 +125,13 @@ Shader "Cubus/BiomeAtlasURP"
         float4 encoded = SAMPLE_TEXTURE2D(lookupTex, lookupSampler, uv);
 
         return max(1.0, DecodeLookupU16(encoded.rg));
+      }
+
+      float SampleRenderCategory(float materialId)
+      {
+        float2 uv = MaterialLookupUv(materialId);
+        float4 encoded = SAMPLE_TEXTURE2D(_PropsLookup, sampler_PropsLookup, uv);
+        return DecodeLookupByte(encoded.r);
       }
 
       float SelectTileId(float3 normalWS, float materialId)
@@ -155,7 +166,7 @@ Shader "Cubus/BiomeAtlasURP"
         Light mainLight = GetMainLight();
 
         float ndl = saturate(dot(n, mainLight.direction));
-        float litFactor = 0.2 + ndl * 0.8;
+        float litFactor = 0.35 + ndl * 0.65;
 
         return albedoRgb * litFactor * mainLight.color;
       }
@@ -180,6 +191,7 @@ Shader "Cubus/BiomeAtlasURP"
       {
         float materialId = max(1.0, DecodeMaterialId(IN.color));
         float tileId = SelectTileId(normalize(IN.normalWS), materialId);
+        float renderCategory = SampleRenderCategory(materialId);
 
         float columns = max(1.0, floor(_AtlasGrid.x + 0.5));
         float rows = max(1.0, floor(_AtlasGrid.y + 0.5));
@@ -207,8 +219,13 @@ Shader "Cubus/BiomeAtlasURP"
             atlasDy
         );
 
+        if (renderCategory == 1.0 && albedo.a < 0.5)
+        {
+          discard;
+        }
+
         float3 lit = ApplyLighting(albedo.rgb * _Tint.rgb, IN.normalWS);
-        return half4(lit, albedo.a * _Tint.a);
+        return half4(lit, 1.0);
       }
 
       ENDHLSL
