@@ -123,7 +123,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
       if (request.ChunkDataSnapshot != null)
       {
-        chunkData = request.ChunkDataSnapshot.Clone();
+        chunkData = request.ChunkDataSnapshot;
 
         if (request.OverrideSnapshot != null && request.OverrideSnapshot.Count > 0)
         {

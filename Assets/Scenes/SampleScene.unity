@@ -449,13 +449,9 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: CubusCore.Runtime::CubusCore.World.CubusWorld
   settings:
-    TerrainSystem: 1
+    TerrainSystem: 0
     ViewDistanceInChunks: 6
     VoxelSize: 1
-    BlockMinChunkY: -1
-    BlockMaxChunkY: 2
-    DensityMinChunkY: -4
-    DensityMaxChunkY: 6
     DensityMeshStep: 1
     DensitySampleScale: 1
     BiomeRuleWorldScale: 8
@@ -532,8 +528,14 @@ MonoBehaviour:
       UseErosion: 0
       ErosionRange: {x: 0.42, y: 1}
     UseFixedGenerationBounds: 0
+    GenerationMinChunk: {x: -8, y: -8, z: -8}
+    GenerationMaxChunk: {x: 8, y: 8, z: 8}
     GenerationMinChunkXZ: {x: -8, y: -8}
     GenerationMaxChunkXZ: {x: 8, y: 8}
+    BlockMinChunkY: -1
+    BlockMaxChunkY: 2
+    DensityMinChunkY: -4
+    DensityMaxChunkY: 6
     UseWorldBounds: 1
     WorldMinChunkXZ: {x: -1024, y: -1024}
     WorldMaxChunkXZ: {x: 1024, y: 1024}
@@ -557,7 +559,7 @@ MonoBehaviour:
   biomeAtlasGrid: {x: 8, y: 8}
   blockMaterialDatabase: {fileID: 11400000, guid: 9f3dd8c62d0f4e43a96e91bd7ea8be12, type: 2}
   biomeTint: {r: 1, g: 1, b: 1, a: 1}
-  logRenderedChunkMeshes: 1
+  logRenderedChunkMeshes: 0
   collisionMode: 1
   collisionViewer: {fileID: 1517188426}
   collisionActivationRadius: 64
@@ -576,28 +578,27 @@ MonoBehaviour:
   m_EditorClassIdentifier: CubusCore.Runtime::CubusCore.Streaming.WorldStreamer
   viewer: {fileID: 1517188426}
   settings:
-    UnloadPaddingInChunks: 2
-    ChunksBelowSurface: 2
-    ChunksAboveSurface: 2
-    ChunksGeneratedPerFrame: 16
-    InitialChunksGeneratedPerFrame: 64
-    ChunksRenderedPerFrame: 64
-    MeshAppliesPerFrame: 64
+    UnloadPaddingInChunks: 6
+    ChunksBelowSurface: 1
+    ChunksAboveSurface: 1
+    ChunksGeneratedPerFrame: 12
+    InitialChunksGeneratedPerFrame: 24
+    ChunksRenderedPerFrame: 8
+    MeshAppliesPerFrame: 2
+    MeshApplyTimeBudgetMs: 2
     UseAsyncGeneration: 1
     MaxAsyncChunkTasks: 8
   initialSpawnRequiredRenderedChunks: 1
-  useIncrementalPreGeneration: 0
-  preGenerationChunksPerFrame: 8
-  spawnFirstRadiusInChunks: 0
-  continuePreGenerationInBackground: 0
-  maxAutoPreGenerationChunks: 8192
-  allowVeryLargePreGeneration: 0
-  evictCachedChunkDataOutsideKeepSet: 1
   desiredInitialSpawnLocation: {x: 0, y: 0, z: 0}
-  initialSpawnSearchRadius: 128
-  initialSpawnSearchBelowVoxels: 512
-  initialSpawnSearchAboveVoxels: 512
   initialSpawnClearance: 2
+  evictCachedChunkDataOutsideKeepSet: 1
+  generateWorldDatabaseBeforeStreaming: 0
+  enforcePrePr30BlockPerformanceProfile: 1
+  initialStreamingRadiusInChunks: 1
+  useInitialStreamingStage: 1
+  initialChunksBelowSurface: 1
+  initialChunksAboveSurface: 1
+  initialKeepPaddingInChunks: 1
 --- !u!114 &1298388483
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -680,6 +681,10 @@ MonoBehaviour:
   worldId: demo_world
   autoSaveAfterGeneration: 1
   autoLoadOnStart: 1
+  autoLoadManifestOnlyOnStart: 1
+  logCompressionStats: 0
+  logTimingStats: 0
+  logSingleChunkCompressionStats: 0
 --- !u!1 &1453617040
 GameObject:
   m_ObjectHideFlags: 0

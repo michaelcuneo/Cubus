@@ -1,6 +1,8 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Chunks;
+using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Core;
+using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World;
 using UnityEngine;
 
@@ -122,21 +124,59 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
     private static BlockChunkBuildResult Build(BlockChunkBuildRequest request)
     {
-      BlockChunkData chunkData = BlockChunkBuilder.GenerateChunkData(
-          request.ChunkCoord,
-          request.WorldSnapshot,
-          request.OverrideSnapshot,
-          out bool hasAnySolidVoxel
-      );
+      BlockChunkData chunkData = request.ChunkDataSnapshot;
+      bool hasAnySolidVoxel;
+
+      if (chunkData == null)
+      {
+        chunkData = BlockChunkBuilder.GenerateChunkData(
+            request.ChunkCoord,
+            request.WorldSnapshot,
+            request.OverrideSnapshot,
+            out hasAnySolidVoxel
+        );
+      }
+      else
+      {
+        hasAnySolidVoxel = chunkData.HasAnySolidVoxel();
+      }
+
+      MeshData meshData = null;
+      if (hasAnySolidVoxel)
+      {
+        request.NeighborChunkSnapshots ??= new Dictionary<Vector3Int, BlockChunkData>();
+        request.NeighborChunkSnapshots[chunkData.ChunkCoord] = chunkData;
+
+        meshData = BlockGreedyMesher.GenerateNeighbourAware(
+            chunkData,
+            worldVoxelCoord => ResolveMaterialForMeshing(request, worldVoxelCoord),
+            Mathf.Max(0.0001f, request.VoxelSize)
+        );
+      }
 
       return new BlockChunkBuildResult
       {
         ChunkCoord = request.ChunkCoord,
         ChunkData = chunkData,
-        MeshData = null,
-        IsEmpty = !hasAnySolidVoxel,
+        MeshData = meshData,
+        IsEmpty = !hasAnySolidVoxel || meshData == null || meshData.IsEmpty,
         GenerationId = request.GenerationId
       };
+    }
+
+    private static ushort ResolveMaterialForMeshing(BlockChunkBuildRequest request, Vector3Int worldVoxelCoord)
+    {
+      if (request?.NeighborChunkSnapshots != null)
+      {
+        Vector3Int chunkCoord = VoxelMath.WorldVoxelToChunkCoord(worldVoxelCoord);
+        Vector3Int localCoord = VoxelMath.WorldVoxelToLocalCoord(worldVoxelCoord);
+        if (request.NeighborChunkSnapshots.TryGetValue(chunkCoord, out BlockChunkData snapshotChunk) && snapshotChunk != null)
+        {
+          return snapshotChunk.GetVoxel(localCoord.x, localCoord.y, localCoord.z).MaterialId;
+        }
+      }
+
+      return BlockChunkBuilder.SampleMaterialAtWorldVoxel(worldVoxelCoord, request.WorldSnapshot);
     }
   }
 }

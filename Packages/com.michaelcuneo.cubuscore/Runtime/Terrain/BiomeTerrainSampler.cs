@@ -79,6 +79,39 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain
       );
     }
 
+    public static TerrainSample Sample(
+      WorldGenerationSnapshot snapshot,
+      BiomeBlendSample blend,
+      Vector3Int worldVoxel,
+      float densityScale)
+    {
+      if (blend == null || !blend.IsValid)
+      {
+        snapshot.ResolveBiomeAtWorldXZ(
+          worldVoxel.x,
+          worldVoxel.z,
+          out TerrainGenerationProfileSnapshot fallbackProfile,
+          out byte fallbackBiomeId
+        );
+
+        return TerrainSampler.Sample(
+          fallbackProfile,
+          fallbackBiomeId,
+          new Vector3(
+            worldVoxel.x * densityScale,
+            worldVoxel.y * densityScale,
+            worldVoxel.z * densityScale
+          )
+        );
+      }
+
+      return SampleBlend(
+        blend,
+        worldVoxel,
+        densityScale
+      );
+    }
+
     private static TerrainSample SampleBlend(
         BiomeBlendSample blend,
         Vector3Int worldVoxel,
