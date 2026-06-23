@@ -10,6 +10,9 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     public BlockChunkData ChunkData;
     public MeshData MeshData;
     public bool IsEmpty;
+    // True when the background build threw instead of producing a result. The
+    // chunk is NOT genuinely empty and must be retried, not marked known-empty.
+    public bool Failed;
     public int GenerationId;
   }
 }

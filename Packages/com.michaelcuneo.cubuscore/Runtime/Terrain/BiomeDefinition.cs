@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain
@@ -28,21 +29,33 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain
     public Vector3 TextureXYZ = Vector3.one;
     public Vector3 RuleXYZ = Vector3.one;
 
-    [Header("Climate Tags (0..1)")]
-    [Range(0.0f, 1.0f)]
-    public float Temperature = 0.5f;
+    [Header("Biome Variables (Game Mechanics)")]
+    [Tooltip("Optional overrides for realistic biome variables (temperature, " +
+             "erosion, humidity, ...). Only add the variables this biome should " +
+             "differ on; anything not listed uses the world default. These are " +
+             "gameplay values and do NOT affect terrain placement.")]
+    public List<BiomeVariableOverride> VariableOverrides = new();
 
-    [Range(0.0f, 1.0f)]
-    public float Elevation = 0.5f;
+    // Returns true and the overridden value if this biome explicitly sets the
+    // given variable. Otherwise returns false (caller should use the world
+    // default).
+    public bool TryGetVariableOverride(BiomeVariableType type, out float value)
+    {
+      if (VariableOverrides != null)
+      {
+        for (int i = 0; i < VariableOverrides.Count; i++)
+        {
+          if (VariableOverrides[i].Type == type)
+          {
+            value = VariableOverrides[i].Value;
+            return true;
+          }
+        }
+      }
 
-    [Range(0.0f, 1.0f)]
-    public float Rise = 0.5f;
-
-    [Range(0.0f, 1.0f)]
-    public float Harshness = 0.5f;
-
-    [Range(0.0f, 1.0f)]
-    public float Erosion = 0.5f;
+      value = 0.0f;
+      return false;
+    }
 
     [ContextMenu("Apply Material Set To Generation Profile")]
     public void ApplyMaterialSetToGenerationProfile()
@@ -57,7 +70,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain
         GenerationProfile = new TerrainGenerationProfile();
       }
 
-      GenerationProfile.MaterialLayers = new System.Collections.Generic.List<MaterialLayer>(MaterialSet.MaterialLayers.Count);
+      GenerationProfile.MaterialLayers = new List<MaterialLayer>(MaterialSet.MaterialLayers.Count);
       for (int i = 0; i < MaterialSet.MaterialLayers.Count; i++)
       {
         MaterialLayer src = MaterialSet.MaterialLayers[i];

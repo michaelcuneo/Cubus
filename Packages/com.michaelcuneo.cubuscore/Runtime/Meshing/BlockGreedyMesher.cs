@@ -16,8 +16,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
         MaterialLookup materialLookup,
         float voxelSize)
     {
-      MeshData mesh = new();
-      mesh.Reserve(4096, 6144);
+      MeshData mesh = MeshDataPool.Rent(4096, 6144);
 
       GenerateNeighbourAware(chunkData, materialLookup, voxelSize, mesh);
 
@@ -29,8 +28,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
         WorldGenerationSnapshot snapshot,
         float voxelSize)
     {
-      MeshData mesh = new();
-      mesh.Reserve(4096, 6144);
+      MeshData mesh = MeshDataPool.Rent(4096, 6144);
 
       GenerateNeighbourAware(chunkData, snapshot, voxelSize, mesh);
 
@@ -91,11 +89,20 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
               }
               else if (solidA)
               {
-                mask[n++] = materialA;
+                // Face is owned by voxel A (at x[axis]); only emit it when A is
+                // inside this chunk. On the x[axis] == -1 boundary plane A is the
+                // neighbour voxel, whose face belongs to the neighbour chunk's
+                // own mesh - emitting it here would double-draw the face (and,
+                // when the neighbour is the unloaded solid fallback, paint a
+                // phantom one-sided cap with the fallback material).
+                mask[n++] = x[axis] >= 0 ? materialA : 0;
               }
               else
               {
-                mask[n++] = -materialB;
+                // Face is owned by voxel B (at x[axis] + 1); only emit it when B
+                // is inside this chunk (the x[axis] == size - 1 plane has B as the
+                // neighbour voxel, owned by the neighbour chunk's mesh).
+                mask[n++] = (x[axis] + 1) < size ? -materialB : 0;
               }
             }
           }
@@ -195,8 +202,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
         BlockChunkNeighborhood neighborhood,
         float voxelSize)
     {
-      MeshData mesh = new();
-      mesh.Reserve(4096, 6144);
+      MeshData mesh = MeshDataPool.Rent(4096, 6144);
 
       GenerateNeighbourAware(
           chunkData,
@@ -271,11 +277,20 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
               }
               else if (solidA)
               {
-                mask[n++] = materialA;
+                // Face is owned by voxel A (at x[axis]); only emit it when A is
+                // inside this chunk. On the x[axis] == -1 boundary plane A is the
+                // neighbour voxel, whose face belongs to the neighbour chunk's
+                // own mesh - emitting it here would double-draw the face (and,
+                // when the neighbour is the unloaded solid fallback, paint a
+                // phantom one-sided cap with the fallback material).
+                mask[n++] = x[axis] >= 0 ? materialA : 0;
               }
               else
               {
-                mask[n++] = -materialB;
+                // Face is owned by voxel B (at x[axis] + 1); only emit it when B
+                // is inside this chunk (the x[axis] == size - 1 plane has B as the
+                // neighbour voxel, owned by the neighbour chunk's mesh).
+                mask[n++] = (x[axis] + 1) < size ? -materialB : 0;
               }
             }
           }
@@ -439,81 +454,86 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
       Vector3 normal = Vector3.zero;
       normal[axis] = positiveFace ? 1.0f : -1.0f;
 
-      for (int tileY = 0; tileY < height; tileY++)
+      // Emit a SINGLE quad spanning the whole greedy rectangle instead of
+      // width*height unit quads. The CubusBiomeAtlasURP shader tiles the atlas
+      // tile per voxel via frac(uv) and samples with explicit gradients
+      // (SAMPLE_TEXTURE2D_GRAD using the unwrapped uv) so a UV that runs 0..N
+      // across the merged face reproduces the exact per-voxel texturing the
+      // old per-tile quads produced, with up to width*height fewer vertices.
+      Vector3Int start = new(startX, startY, startZ);
+
+      Vector3Int d1 = Vector3Int.zero;
+      Vector3Int d2 = Vector3Int.zero;
+
+      d1[u] = width;
+      d2[v] = height;
+
+      Vector3 p0 = ToPosition(
+          start.x,
+          start.y,
+          start.z,
+          voxelSize
+      );
+
+      Vector3 p1 = ToPosition(
+          start.x + d1.x,
+          start.y + d1.y,
+          start.z + d1.z,
+          voxelSize
+      );
+
+      Vector3 p2 = ToPosition(
+          start.x + d1.x + d2.x,
+          start.y + d1.y + d2.y,
+          start.z + d1.z + d2.z,
+          voxelSize
+      );
+
+      Vector3 p3 = ToPosition(
+          start.x + d2.x,
+          start.y + d2.y,
+          start.z + d2.z,
+          voxelSize
+      );
+
+      Vector3 v0;
+      Vector3 v1;
+      Vector3 v2;
+      Vector3 v3;
+
+      // UV runs one unit per voxel so frac() in the shader tiles correctly. The
+      // winding (and therefore which face axis maps to uv.x vs uv.y) differs by
+      // face sign, so the scale is transposed for negative faces to keep the
+      // per-voxel texture orientation identical to the old per-tile output.
+      Vector2 uvScale;
+
+      if (positiveFace)
       {
-        for (int tileX = 0; tileX < width; tileX++)
-        {
-          Vector3Int start = new(startX, startY, startZ);
-
-          start[u] = start[u] + tileX;
-          start[v] = start[v] + tileY;
-
-          Vector3Int d1 = Vector3Int.zero;
-          Vector3Int d2 = Vector3Int.zero;
-
-          d1[u] = 1;
-          d2[v] = 1;
-
-          Vector3 p0 = ToPosition(
-              start.x,
-              start.y,
-              start.z,
-              voxelSize
-          );
-
-          Vector3 p1 = ToPosition(
-              start.x + d1.x,
-              start.y + d1.y,
-              start.z + d1.z,
-              voxelSize
-          );
-
-          Vector3 p2 = ToPosition(
-              start.x + d1.x + d2.x,
-              start.y + d1.y + d2.y,
-              start.z + d1.z + d2.z,
-              voxelSize
-          );
-
-          Vector3 p3 = ToPosition(
-              start.x + d2.x,
-              start.y + d2.y,
-              start.z + d2.z,
-              voxelSize
-          );
-
-          Vector3 v0;
-          Vector3 v1;
-          Vector3 v2;
-          Vector3 v3;
-
-          if (positiveFace)
-          {
-            v0 = p0;
-            v1 = p3;
-            v2 = p2;
-            v3 = p1;
-          }
-          else
-          {
-            v0 = p0;
-            v1 = p1;
-            v2 = p2;
-            v3 = p3;
-          }
-
-          AddQuad(
-              mesh,
-              v0,
-              v1,
-              v2,
-              v3,
-              normal,
-              materialId,
-              Vector2.one
-          );
-        }
+        v0 = p0;
+        v1 = p3;
+        v2 = p2;
+        v3 = p1;
+        uvScale = new Vector2(width, height);
       }
+      else
+      {
+        v0 = p0;
+        v1 = p1;
+        v2 = p2;
+        v3 = p3;
+        uvScale = new Vector2(height, width);
+      }
+
+      AddQuad(
+          mesh,
+          v0,
+          v1,
+          v2,
+          v3,
+          normal,
+          materialId,
+          uvScale
+      );
     }
 
     private static Vector3 ToPosition(int x, int y, int z, float voxelSize)

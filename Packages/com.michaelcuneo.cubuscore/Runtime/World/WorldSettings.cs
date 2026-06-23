@@ -13,6 +13,10 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World
     [Header("World")]
     public TerrainSystem TerrainSystem = TerrainSystem.SmoothDensity;
 
+    [Tooltip("Global world seed. Changing it reshuffles all procedural noise " +
+             "(terrain, caves, biome placement) deterministically.")]
+    public int WorldSeed = 0;
+
     [Header("View Distance")]
     [Min(1)]
     public int ViewDistanceInChunks = 4;
@@ -36,6 +40,14 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World
     public float BiomeBlendFeather = 0.10f;
 
     public List<BiomeWorldRule> BiomeWorldRules = new();
+
+    [Header("World Default Biome Variables")]
+    [Tooltip("World-wide default values for biome variables. Individual biomes " +
+             "override only what they need; everything else uses these. Any " +
+             "variable not listed here falls back to its built-in catalog default.")]
+    public List<BiomeVariableOverride> WorldDefaultVariables = new();
+
+    [NonSerialized] private Dictionary<byte, BiomeDefinition> biomeIdToDefinition;
 
     [Header("Pre-Generation Bounds")]
     public bool UseFixedGenerationBounds = false;
@@ -73,6 +85,123 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World
       return TryGetFallbackBiome(out BiomeDefinition biome)
           ? (byte)Mathf.Clamp(biome.BiomeId, 0, 255)
           : (byte)1;
+    }
+
+    // World-wide default for a biome variable: an explicit WorldDefaultVariables
+    // entry if present, otherwise the variable's built-in catalog default.
+    public float GetWorldDefaultVariable(BiomeVariableType type)
+    {
+      if (WorldDefaultVariables != null)
+      {
+        for (int i = 0; i < WorldDefaultVariables.Count; i++)
+        {
+          if (WorldDefaultVariables[i].Type == type)
+          {
+            return WorldDefaultVariables[i].Value;
+          }
+        }
+      }
+
+      return BiomeVariableCatalog.DefaultValue(type);
+    }
+
+    // Call when BiomeWorldRules change at runtime so the BiomeId lookup rebuilds.
+    public void InvalidateBiomeVariableCache()
+    {
+      biomeIdToDefinition = null;
+    }
+
+    private void EnsureBiomeIdLookup()
+    {
+      if (biomeIdToDefinition != null)
+      {
+        return;
+      }
+
+      biomeIdToDefinition = new Dictionary<byte, BiomeDefinition>();
+
+      if (BiomeWorldRules == null)
+      {
+        return;
+      }
+
+      for (int i = 0; i < BiomeWorldRules.Count; i++)
+      {
+        BiomeWorldRule rule = BiomeWorldRules[i];
+
+        if (rule == null || rule.Biome == null)
+        {
+          continue;
+        }
+
+        byte id = (byte)Mathf.Clamp(rule.Biome.BiomeId, 0, 255);
+        biomeIdToDefinition[id] = rule.Biome;
+      }
+    }
+
+    // Blended value of a biome variable at a world position. Each contributing
+    // biome supplies its override (or the world default if it has none), and the
+    // contributions are weighted by the biome blend so the value transitions
+    // smoothly across biome borders. Gameplay-facing; does not affect terrain.
+    public float SampleBiomeVariable(float worldX, float worldZ, BiomeVariableType type)
+    {
+      float worldDefault = GetWorldDefaultVariable(type);
+
+      BiomeBlendSample blend = ResolveBiomeBlendAtWorldXZ(worldX, worldZ);
+
+      if (blend == null || !blend.IsValid || blend.Count <= 0)
+      {
+        return worldDefault;
+      }
+
+      EnsureBiomeIdLookup();
+
+      float accumulated = 0.0f;
+      float totalWeight = 0.0f;
+
+      for (int i = 0; i < blend.Count; i++)
+      {
+        BiomeBlendContributor contributor = blend.GetContributor(i);
+
+        if (contributor.Weight <= 0.0f)
+        {
+          continue;
+        }
+
+        float effective = worldDefault;
+
+        if (biomeIdToDefinition.TryGetValue(contributor.BiomeId, out BiomeDefinition def) &&
+            def != null &&
+            def.TryGetVariableOverride(type, out float overrideValue))
+        {
+          effective = overrideValue;
+        }
+
+        accumulated += effective * contributor.Weight;
+        totalWeight += contributor.Weight;
+      }
+
+      return totalWeight > 0.0001f ? accumulated / totalWeight : worldDefault;
+    }
+
+    // Value of a biome variable for the single dominant biome at a world
+    // position (no blending across borders).
+    public float SampleBiomeVariableDominant(float worldX, float worldZ, BiomeVariableType type)
+    {
+      float worldDefault = GetWorldDefaultVariable(type);
+
+      ResolveBiomeAtWorldXZ(worldX, worldZ, out _, out byte biomeId);
+
+      EnsureBiomeIdLookup();
+
+      if (biomeIdToDefinition.TryGetValue(biomeId, out BiomeDefinition def) &&
+          def != null &&
+          def.TryGetVariableOverride(type, out float overrideValue))
+      {
+        return overrideValue;
+      }
+
+      return worldDefault;
     }
 
     public void GetGenerationChunkBounds3D(
@@ -117,7 +246,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World
 
       if (!blend.IsValid)
       {
-        profile = new TerrainGenerationProfileSnapshot(GetActiveGenerationProfile());
+        profile = new TerrainGenerationProfileSnapshot(GetActiveGenerationProfile(), WorldSeed);
         biomeId = GetActiveBiomeId();
         return;
       }
@@ -147,7 +276,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World
       if (BiomeWorldRules == null || BiomeWorldRules.Count == 0)
       {
         result.Add(new BiomeBlendContributor(
-            new TerrainGenerationProfileSnapshot(GetActiveGenerationProfile()),
+            new TerrainGenerationProfileSnapshot(GetActiveGenerationProfile(), WorldSeed),
             GetActiveBiomeId(),
             1.0f
         ));
@@ -161,9 +290,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World
 
       BiomeWorldRule fallbackRule = null;
       int fallbackPriority = int.MinValue;
-
-      int minPriority = int.MaxValue;
-      int maxPriority = int.MinValue;
+      bool hasNonFallback = false;
 
       for (int i = 0; i < BiomeWorldRules.Count; i++)
       {
@@ -185,39 +312,28 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World
           continue;
         }
 
-        minPriority = Mathf.Min(minPriority, rule.Priority);
-        maxPriority = Mathf.Max(maxPriority, rule.Priority);
+        hasNonFallback = true;
       }
 
-      if (minPriority == int.MaxValue || maxPriority == int.MinValue)
+      if (!hasNonFallback)
       {
         AddFallbackBiome(result, fallbackRule);
         result.Normalize();
         return result;
       }
 
-      float selector = SampleBiomePrioritySelector(
-          worldX,
-          worldZ,
-          BiomeRuleWorldScale
-      );
-
-      float targetPriority = Mathf.Lerp(
-          minPriority,
-          maxPriority,
-          selector
-      );
-
-      float priorityRange = Mathf.Max(1.0f, maxPriority - minPriority);
-
-      // Bigger window = actual biome terrain blending.
-      // This is intentionally wider than the previous lower/upper resolver.
-      float priorityWindow = Mathf.Max(
-          2.0f,
-          priorityRange * Mathf.Lerp(0.10f, 0.65f, feather)
-      );
-
-      float totalWeight = 0.0f;
+      // Layered priority compositing. Climate validity decides WHERE a biome
+      // may appear; Priority only decides WHO wins where ranges overlap. The
+      // highest-priority valid biome claims a voxel fully, and lower-priority
+      // biomes show through only where the higher one feathers out, producing
+      // smooth, climate-driven transitions.
+      //
+      // Previously a separate priority-selector noise picked a target priority
+      // band independently of the climate, which suppressed climate-correct
+      // biomes (e.g. snow on flat ground, deserts on peaks). That noise gate is
+      // gone: weight_i = validity_i * Product_over_dominating_j(1 - validity_j),
+      // and the leftover coverage goes to the fallback.
+      float coverageComplement = 1.0f;
 
       for (int i = 0; i < BiomeWorldRules.Count; i++)
       {
@@ -235,16 +351,37 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World
           continue;
         }
 
-        float priorityDistance = Mathf.Abs(rule.Priority - targetPriority);
-        float priorityT = Mathf.Clamp01(1.0f - priorityDistance / priorityWindow);
-        float priorityWeight = priorityT * priorityT * (3.0f - 2.0f * priorityT);
+        float occlusion = 1.0f;
 
-        if (priorityWeight <= 0.0001f)
+        for (int j = 0; j < BiomeWorldRules.Count; j++)
         {
-          continue;
+          if (j == i)
+          {
+            continue;
+          }
+
+          BiomeWorldRule other = BiomeWorldRules[j];
+
+          if (other == null || other.Biome == null || other.IsFallback)
+          {
+            continue;
+          }
+
+          bool otherDominates =
+              other.Priority > rule.Priority ||
+              (other.Priority == rule.Priority && j < i);
+
+          if (!otherDominates)
+          {
+            continue;
+          }
+
+          occlusion *= 1.0f - other.GetMatchScore(climate, feather);
         }
 
-        float weight = validity * priorityWeight;
+        coverageComplement *= 1.0f - validity;
+
+        float weight = validity * occlusion;
 
         if (weight <= 0.0001f)
         {
@@ -252,65 +389,20 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World
         }
 
         AddRuleBiome(result, rule, weight);
-        totalWeight += weight;
       }
 
-      if (totalWeight <= 0.0001f || result.Count <= 0)
+      if (coverageComplement > 0.0001f)
       {
-        int nearestIndex = FindNearestValidBiomeRuleIndex(
-            targetPriority,
-            climate,
-            feather
-        );
+        AddFallbackBiome(result, fallbackRule, coverageComplement);
+      }
 
-        if (nearestIndex >= 0)
-        {
-          AddRuleBiome(result, BiomeWorldRules[nearestIndex], 1.0f);
-        }
-        else
-        {
-          AddFallbackBiome(result, fallbackRule);
-        }
+      if (result.Count <= 0)
+      {
+        AddFallbackBiome(result, fallbackRule);
       }
 
       result.Normalize();
       return result;
-    }
-
-    private int FindNearestValidBiomeRuleIndex(
-    float targetPriority,
-    in BiomeClimateSample climate,
-    float feather)
-    {
-      int bestIndex = -1;
-      float bestDistance = float.PositiveInfinity;
-
-      for (int i = 0; i < BiomeWorldRules.Count; i++)
-      {
-        BiomeWorldRule rule = BiomeWorldRules[i];
-
-        if (rule == null || rule.Biome == null || rule.IsFallback)
-        {
-          continue;
-        }
-
-        float validity = rule.GetMatchScore(climate, feather);
-
-        if (validity <= 0.0001f)
-        {
-          continue;
-        }
-
-        float distance = Mathf.Abs(rule.Priority - targetPriority);
-
-        if (distance < bestDistance)
-        {
-          bestDistance = distance;
-          bestIndex = i;
-        }
-      }
-
-      return bestIndex;
     }
 
     private void AddRuleBiome(
@@ -324,7 +416,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World
       }
 
       result.Add(new BiomeBlendContributor(
-          new TerrainGenerationProfileSnapshot(rule.Biome.GenerationProfile),
+          new TerrainGenerationProfileSnapshot(rule.Biome.GenerationProfile, WorldSeed),
           (byte)Mathf.Clamp(rule.Biome.BiomeId, 0, 255),
           weight
       ));
@@ -334,16 +426,24 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World
         BiomeBlendSample result,
         BiomeWorldRule fallbackRule)
     {
+      AddFallbackBiome(result, fallbackRule, 1.0f);
+    }
+
+    private void AddFallbackBiome(
+        BiomeBlendSample result,
+        BiomeWorldRule fallbackRule,
+        float weight)
+    {
       if (fallbackRule != null && fallbackRule.Biome != null)
       {
-        AddRuleBiome(result, fallbackRule, 1.0f);
+        AddRuleBiome(result, fallbackRule, weight);
         return;
       }
 
       result.Add(new BiomeBlendContributor(
-          new TerrainGenerationProfileSnapshot(GetActiveGenerationProfile()),
+          new TerrainGenerationProfileSnapshot(GetActiveGenerationProfile(), WorldSeed),
           GetActiveBiomeId(),
-          1.0f
+          weight
       ));
     }
 
@@ -485,21 +585,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World
       float a = Mathf.Sin((x * fx) + (z * fz) + phase);
       float b = Mathf.Cos((x * (fx * 0.77f)) - (z * (fz * 1.31f)) - phase * 0.53f);
       return Mathf.Clamp01(((a + b) * 0.25f) + 0.5f);
-    }
-
-    private static float SampleBiomePrioritySelector(
-    float worldX,
-    float worldZ,
-    float worldScale)
-    {
-      float s = Mathf.Max(0.0001f, worldScale);
-      float x = worldX * s;
-      float z = worldZ * s;
-
-      float broad = Noise01(x, z, 0.0009f, 0.0007f, 11.17f);
-      float detail = Noise01(x, z, 0.0021f, 0.0018f, 43.71f);
-
-      return Mathf.Clamp01((broad * 0.8f) + (detail * 0.2f));
     }
 
     public bool TryValidateConfiguration(out string message)

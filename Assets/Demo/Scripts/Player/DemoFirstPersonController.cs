@@ -86,7 +86,7 @@ namespace Assets.Demo.Scripts.Player
       Vector2 delta = mouse.delta.ReadValue();
 
       float mouseX = delta.x * mouseSensitivity;
-      float mouseY = delta.y * mouseSensitivity;
+      float mouseY = -delta.y * mouseSensitivity;
 
       transform.Rotate(Vector3.up * mouseX);
 

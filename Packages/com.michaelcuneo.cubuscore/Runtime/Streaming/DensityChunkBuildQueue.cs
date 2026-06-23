@@ -92,6 +92,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
             MeshData = null,
             IsEmpty = true,
             HasSurfaceCrossing = false,
+            Failed = true,
             GenerationId = request.GenerationId
           });
         }
