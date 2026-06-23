@@ -36,7 +36,13 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       }
     }
 
-    public bool TryStartLoad(IWorldChunkStore store, string worldId, Vector3Int chunkCoord, int maxActiveTasks)
+    public bool TryStartLoad(
+        IWorldChunkStore store,
+        string worldId,
+        Vector3Int chunkCoord,
+        int maxActiveTasks,
+        IReadOnlyDictionary<int, ushort> blockOverrides = null,
+        IReadOnlyDictionary<int, DensityVoxelOverride> densityOverrides = null)
     {
       if (activeTaskCount >= maxActiveTasks) return false;
       if (inFlightChunkCoords.Contains(chunkCoord)) return false;
@@ -45,7 +51,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       inFlightChunkCoords.Add(chunkCoord);
       activeTaskCount++;
 
-      _ = Task.Run(() => Load(store, worldId, chunkCoord, requestGeneration)).ContinueWith(task =>
+      _ = Task.Run(() => Load(store, worldId, chunkCoord, requestGeneration, blockOverrides, densityOverrides)).ContinueWith(task =>
       {
         ChunkLoadResult result;
 
@@ -85,7 +91,13 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       return false;
     }
 
-    private static ChunkLoadResult Load(IWorldChunkStore store, string worldId, Vector3Int chunkCoord, int generationId)
+    private static ChunkLoadResult Load(
+        IWorldChunkStore store,
+        string worldId,
+        Vector3Int chunkCoord,
+        int generationId,
+        IReadOnlyDictionary<int, ushort> blockOverrides,
+        IReadOnlyDictionary<int, DensityVoxelOverride> densityOverrides)
     {
       if (store != null && !string.IsNullOrWhiteSpace(worldId) && store.TryLoadChunk(worldId, chunkCoord, out WorldChunkRecord record))
       {
@@ -95,9 +107,13 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         {
           case TerrainSystem.Block:
             loaded.BlockChunkData = CubusChunkPayloadCodec.DecodeBlockChunk(record);
+            // Player edits are stored as a sparse override layer, not baked into the
+            // saved record, so re-apply them on top of the stored chunk.
+            BlockChunkBuilder.ApplyOverrides(loaded.BlockChunkData, blockOverrides);
             break;
           case TerrainSystem.SmoothDensity:
             loaded.DensityChunkData = CubusChunkPayloadCodec.DecodeDensityChunk(record);
+            DensityChunkBuilder.ApplyOverrides(loaded.DensityChunkData, densityOverrides);
             break;
           default:
             loaded.Loaded = false;
@@ -125,13 +141,13 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
           // column sampler but is dramatically faster, and generation is the
           // dominant per-chunk streaming cost. Falls back to managed C#
           // automatically when the Burst package is unavailable.
-          result.BlockChunkData = BlockChunkBuilder.GenerateChunkDataJob(chunkCoord, snapshot, null, out _);
+          result.BlockChunkData = BlockChunkBuilder.GenerateChunkDataJob(chunkCoord, snapshot, blockOverrides, out _);
           return result;
         }
 
         if (mode == TerrainSystem.SmoothDensity)
         {
-          result.DensityChunkData = DensityChunkBuilder.GenerateChunkData(chunkCoord, snapshot, null);
+          result.DensityChunkData = DensityChunkBuilder.GenerateChunkData(chunkCoord, snapshot, densityOverrides);
           return result;
         }
       }
