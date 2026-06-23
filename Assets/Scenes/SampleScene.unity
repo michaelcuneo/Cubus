@@ -450,9 +450,14 @@ MonoBehaviour:
   m_EditorClassIdentifier: CubusCore.Runtime::CubusCore.World.CubusWorld
   settings:
     TerrainSystem: 0
-    WorldSeed: 0
+    WorldSeed: 123123123
     ViewDistanceInChunks: 12
     VoxelSize: 1
+    EnableLodTerrain: 1
+    LodLevelCount: 4
+    LodRingWidthInTiles: 4
+    LodVerticalRadiusInTiles: 1
+    LodSkirtDepthInCells: 2
     DensityMeshStep: 1
     DensitySampleScale: 1
     BiomeRuleWorldScale: 8
@@ -589,7 +594,7 @@ MonoBehaviour:
     MeshAppliesPerFrame: 6
     MeshApplyTimeBudgetMs: 4
     UseAsyncGeneration: 1
-    MaxAsyncChunkTasks: 8
+    MaxAsyncChunkTasks: 12
   initialSpawnRequiredRenderedChunks: 1
   desiredInitialSpawnLocation: {x: 0, y: 0, z: 0}
   initialSpawnClearance: 2
@@ -628,7 +633,7 @@ MonoBehaviour:
   defaultSaveName: cubus_world
   loadTerrainPolicy: 0
   overrideActiveTerrainSystemOnLoad: 0
-  persistenceMode: 0
+  persistenceMode: 3
   autoSaveOnlyWhenModified: 1
 --- !u!114 &1298388485
 MonoBehaviour:

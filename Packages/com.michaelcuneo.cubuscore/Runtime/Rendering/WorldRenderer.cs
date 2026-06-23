@@ -505,6 +505,14 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
       return activeChunkViews.ContainsKey(chunkCoord);
     }
 
+    // Shared atlas material used for all world geometry. The Distant-Horizon LOD
+    // renderer reuses this so distant tiles look identical to near terrain.
+    public Material EnsureWorldMaterialAndGet()
+    {
+      EnsureWorldMaterial();
+      return runtimeWorldMaterial != null ? runtimeWorldMaterial : worldMaterial;
+    }
+
     private ChunkView GetOrCreateChunkView(Vector3Int chunkCoord)
     {
       if (activeChunkViews.TryGetValue(chunkCoord, out ChunkView existingView) && existingView != null)
@@ -533,7 +541,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
         runtimeWorldMaterial = worldMaterial;
         return;
       }
-
       Shader shader = Shader.Find(biomeAtlasShaderName);
       if (!IsUsableShader(shader))
       {

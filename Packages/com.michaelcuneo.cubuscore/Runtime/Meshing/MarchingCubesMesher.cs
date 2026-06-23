@@ -190,9 +190,13 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
       int numSamplesAxis = numCellsAxis + 1;
       int totalSamples = numSamplesAxis * numSamplesAxis * numSamplesAxis;
 
-      NativeArray<float> densityGrid = new(totalSamples, Allocator.TempJob, NativeArrayOptions.UninitializedMemory);
-      NativeArray<Vector3> normalGrid = new(totalSamples, Allocator.TempJob, NativeArrayOptions.UninitializedMemory);
-      NativeArray<ushort> materialGrid = new(totalSamples, Allocator.TempJob, NativeArrayOptions.UninitializedMemory);
+      // Allocator.Persistent (not TempJob): these back jobs that are Scheduled and
+      // Completed within this call, but using Persistent avoids the 4-frame
+      // TempJob lifetime safety check entirely and matches the streaming build
+      // path's robustness. They are disposed in the finally block below.
+      NativeArray<float> densityGrid = new(totalSamples, Allocator.Persistent, NativeArrayOptions.UninitializedMemory);
+      NativeArray<Vector3> normalGrid = new(totalSamples, Allocator.Persistent, NativeArrayOptions.UninitializedMemory);
+      NativeArray<ushort> materialGrid = new(totalSamples, Allocator.Persistent, NativeArrayOptions.UninitializedMemory);
 
       try
       {
@@ -294,8 +298,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
           totalIndices += StripeBuffers.ICounts[s];
         }
 
-        NativeArray<Vertex> finalVertices = new NativeArray<Vertex>(totalVerts, Allocator.TempJob, NativeArrayOptions.UninitializedMemory);
-        NativeArray<int> finalIndices = new NativeArray<int>(totalIndices, Allocator.TempJob, NativeArrayOptions.UninitializedMemory);
+        NativeArray<Vertex> finalVertices = new NativeArray<Vertex>(totalVerts, Allocator.Persistent, NativeArrayOptions.UninitializedMemory);
+        NativeArray<int> finalIndices = new NativeArray<int>(totalIndices, Allocator.Persistent, NativeArrayOptions.UninitializedMemory);
 
         try
         {

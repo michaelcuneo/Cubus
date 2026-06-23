@@ -26,6 +26,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     [SerializeField] private float initialSpawnClearance = 2.0f;
     [SerializeField] private bool evictCachedChunkDataOutsideKeepSet = true;
     [SerializeField] private bool generateWorldDatabaseBeforeStreaming = false;
+    [SerializeField] private bool persistStreamedChunks = true;
     [SerializeField] private bool enforcePrePr30BlockPerformanceProfile = true;
 
     [Header("Initial Streaming Stage")]
@@ -606,6 +607,18 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
             RequeueSettledBlockNeighbors(c);
           }
           else if (result.TerrainSystem == TerrainSystem.SmoothDensity && result.DensityChunkData != null) world.Data.DensityChunks[c] = result.DensityChunkData;
+
+          // Chunks that were just generated on the streaming worker (no record on
+          // disk yet) are written back so subsequent visits load them from storage
+          // instead of regenerating. This is the wired-up counterpart to
+          // ChunkLoadResult.IsMissingFromStorage. Skipped when the store is hidden
+          // for a terrain-system mismatch (ActiveStore == null), so we never
+          // overwrite a world saved in the other terrain mode.
+          if (result.IsMissingFromStorage && persistStreamedChunks && storage != null && storage.ActiveStore != null && HasChunkData(c))
+          {
+            storage.SaveChunk(c);
+          }
+
           if ((desiredChunkCoords.Contains(c) || keepChunkCoords.Contains(c)) && HasChunkData(c)) QueueRender(c);
           continue;
         }

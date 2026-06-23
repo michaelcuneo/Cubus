@@ -27,7 +27,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
 
       float[] densityGrid = new float[totalSamples];
       ushort[] materialGrid = new ushort[totalSamples];
-      Vector3[] normalGrid = new Vector3[totalSamples];
 
       for (int sz = 0; sz < numSamplesAxis; sz++)
       {
@@ -53,6 +52,38 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
         }
       }
 
+      return BuildFromGrids(
+          densityGrid,
+          materialGrid,
+          numCellsAxis,
+          safeCellStep * snapshot.VoxelSize,
+          flipWinding);
+    }
+
+    /// <summary>
+    /// Builds a marching-cubes mesh from pre-sampled coarse grids. Shared by the
+    /// per-chunk density build and the Distant-Horizon LOD tile mesher so both
+    /// produce visually identical surfaces (same interpolation, normals, material
+    /// packing and winding). <paramref name="cellWorldSize"/> is the world-space
+    /// size of one grid cell (cellStep*VoxelSize for full chunks,
+    /// 2^level*VoxelSize for LOD tiles). The grids must contain
+    /// (numCellsAxis + 1)^3 samples in x + axis*(y + axis*z) order. Returns
+    /// <c>null</c> when the grid has no surface crossing.
+    /// </summary>
+    public static MeshData BuildFromGrids(
+        float[] densityGrid,
+        ushort[] materialGrid,
+        int numCellsAxis,
+        float cellWorldSize,
+        bool flipWinding)
+    {
+      if (densityGrid == null || materialGrid == null || numCellsAxis <= 0)
+      {
+        return null;
+      }
+
+      int numSamplesAxis = numCellsAxis + 1;
+      Vector3[] normalGrid = new Vector3[densityGrid.Length];
       BuildNormalGrid(densityGrid, normalGrid, numSamplesAxis);
 
       MeshData mesh = MeshDataPool.Rent(4096, 6144);
@@ -85,9 +116,9 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
               materials[corner] = materialGrid[sampleIndex];
 
               positions[corner] = new Vector3(
-                  sx * safeCellStep * snapshot.VoxelSize,
-                  sy * safeCellStep * snapshot.VoxelSize,
-                  sz * safeCellStep * snapshot.VoxelSize
+                  sx * cellWorldSize,
+                  sy * cellWorldSize,
+                  sz * cellWorldSize
               );
 
               if (densities[corner] > 0.0f)

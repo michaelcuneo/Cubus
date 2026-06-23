@@ -123,15 +123,21 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
       int ruleCount = snapshot.BiomeRules?.Length ?? 0;
 
-      NativeArray<ushort> materials = new(volume, Allocator.TempJob, NativeArrayOptions.UninitializedMemory);
+      // These arrays are allocated and disposed entirely within this method, but
+      // it runs on a background build/load worker thread where wall-clock time can
+      // span more than the 4 main-thread frames Allocator.TempJob permits (Unity
+      // flags such arrays as "older than its permitted lifetime"). Allocator.
+      // Persistent has no frame-lifetime check and is the correct choice for
+      // off-main-thread, manually-disposed allocations.
+      NativeArray<ushort> materials = new(volume, Allocator.Persistent, NativeArrayOptions.UninitializedMemory);
       NativeArray<BiomeRuleClimate> ruleClimates = new(
           Mathf.Max(1, ruleCount),
-          Allocator.TempJob,
+          Allocator.Persistent,
           NativeArrayOptions.UninitializedMemory
       );
       NativeArray<TerrainGenerationProfileSnapshot> ruleProfiles = new(
           Mathf.Max(1, ruleCount),
-          Allocator.TempJob,
+          Allocator.Persistent,
           NativeArrayOptions.UninitializedMemory
       );
 
