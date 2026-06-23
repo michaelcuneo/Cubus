@@ -22,7 +22,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     public int GeneratedMaxChunkY;
     public int GeneratedMinChunkZ;
     public int GeneratedMaxChunkZ;
-
   }
 
   public readonly struct DensityVoxelOverride

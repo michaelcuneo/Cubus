@@ -16,6 +16,12 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
     private Mesh currentMesh;
     private static Material fallbackMaterial;
 
+    // Naming chunk meshes allocates a fresh interpolated string on every mesh
+    // apply (a hot main-thread path). The names are only ever useful for
+    // Profiler/Frame Debugger inspection, so they are off by default and can be
+    // toggled on when debugging.
+    public static bool AssignDebugMeshNames;
+
     private bool hasCollisionMesh;
 
     public Vector3Int ChunkCoord { get; private set; }
@@ -103,7 +109,10 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
       }
 
       currentMesh = meshData.ToUnityMeshFast();
-      currentMesh.name = $"Chunk Mesh {ChunkCoord.x}, {ChunkCoord.y}, {ChunkCoord.z}";
+      if (AssignDebugMeshNames)
+      {
+        currentMesh.name = $"Chunk Mesh {ChunkCoord.x}, {ChunkCoord.y}, {ChunkCoord.z}";
+      }
       currentMesh.MarkDynamic();
 
       meshFilter.sharedMesh = currentMesh;
@@ -136,7 +145,10 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
       }
 
       currentMesh = unityMesh;
-      currentMesh.name = $"Chunk Mesh {ChunkCoord.x}, {ChunkCoord.y}, {ChunkCoord.z}";
+      if (AssignDebugMeshNames)
+      {
+        currentMesh.name = $"Chunk Mesh {ChunkCoord.x}, {ChunkCoord.y}, {ChunkCoord.z}";
+      }
       currentMesh.MarkDynamic();
 
       meshFilter.sharedMesh = currentMesh;

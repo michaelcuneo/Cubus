@@ -49,6 +49,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain
     public readonly float CaveFrequency;
     public readonly float CaveStartDepth;
 
+    public readonly int WorldSeed;
+
     // Fixed-list storage — Burst-safe, no heap allocation.
     public readonly int LayerCount;
     public readonly FixedList4096Bytes<MaterialLayerSnapshotEntry> MaterialLayers;
@@ -77,6 +79,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain
         float caveStrength,
         float caveFrequency,
         float caveStartDepth,
+        int worldSeed,
         FixedList4096Bytes<MaterialLayerSnapshotEntry> materialLayers)
     {
       UseWorldEdgeFalloff = useWorldEdgeFalloff;
@@ -102,11 +105,12 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain
       CaveStrength = caveStrength;
       CaveFrequency = caveFrequency;
       CaveStartDepth = caveStartDepth;
+      WorldSeed = worldSeed;
       MaterialLayers = materialLayers;
       LayerCount = MaterialLayers.Length;
     }
 
-    public TerrainGenerationProfileSnapshot(TerrainGenerationProfile profile)
+    public TerrainGenerationProfileSnapshot(TerrainGenerationProfile profile, int worldSeed = 0)
     {
       if (profile == null)
       {
@@ -136,6 +140,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain
       CaveStrength = profile.CaveStrength;
       CaveFrequency = profile.CaveFrequency;
       CaveStartDepth = profile.CaveStartDepth;
+      WorldSeed = worldSeed;
 
       FixedList4096Bytes<MaterialLayerSnapshotEntry> layers = new();
       List<MaterialLayer> src = profile.MaterialLayers;
@@ -244,6 +249,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain
           Mathf.Lerp(a.CaveStrength, b.CaveStrength, clampedT),
           Mathf.Lerp(a.CaveFrequency, b.CaveFrequency, clampedT),
           Mathf.Lerp(a.CaveStartDepth, b.CaveStartDepth, clampedT),
+          a.WorldSeed,
           layers
       );
     }

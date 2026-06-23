@@ -2,7 +2,6 @@ using UnityEngine;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Core;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Voxels;
 
-
 namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Chunks
 {
   public sealed class BlockChunkData
@@ -15,6 +14,15 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Chunks
     {
       ChunkCoord = chunkCoord;
       voxels = new Voxel[VoxelConstants.ChunkVolume];
+    }
+
+    // Wraps an externally-owned (e.g. pooled) voxel array instead of allocating.
+    // The caller is responsible for the array's lifetime; used for throwaway
+    // neighbour snapshots whose backing array is rented from VoxelArrayPool.
+    public BlockChunkData(Vector3Int chunkCoord, Voxel[] backingVoxels)
+    {
+      ChunkCoord = chunkCoord;
+      voxels = backingVoxels;
     }
 
     public Voxel GetVoxel(int x, int y, int z)

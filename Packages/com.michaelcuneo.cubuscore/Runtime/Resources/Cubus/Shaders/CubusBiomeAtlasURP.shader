@@ -74,6 +74,7 @@ Shader "Cubus/BiomeAtlasURP"
       CBUFFER_START(UnityPerMaterial)
       float4 _AtlasGrid;
       float4 _Tint;
+      float4 _Atlas_TexelSize;
       CBUFFER_END
 
       float DecodeU16(float2 rg)
@@ -136,30 +137,12 @@ Shader "Cubus/BiomeAtlasURP"
 
       float SelectTileId(float3 normalWS, float materialId)
       {
-        float3 n = normalize(normalWS);
-
-        if (n.y > 0.5)
-        {
-          return SampleLookupTileId(
-              TEXTURE2D_ARGS(_TopLookup, sampler_TopLookup),
-              materialId
-          );
-        }
-
-        if (n.y < -0.5)
-        {
-          return SampleLookupTileId(
-              TEXTURE2D_ARGS(_BottomLookup, sampler_BottomLookup),
-              materialId
-          );
-        }
-
         return SampleLookupTileId(
-            TEXTURE2D_ARGS(_SideLookup, sampler_SideLookup),
+            TEXTURE2D_ARGS(_TopLookup, sampler_TopLookup),
             materialId
         );
       }
-
+      
       float3 ApplyLighting(float3 albedoRgb, float3 normalWS)
       {
         float3 n = normalize(normalWS);
@@ -205,6 +188,14 @@ Shader "Cubus/BiomeAtlasURP"
         float2 atlasGrid = float2(columns, rows);
         float2 unwrappedTileUv = IN.uv;
         float2 tileUv = frac(unwrappedTileUv);
+
+        // Inset the in-tile UV by half a texel so bilinear filtering never
+        // samples across the tile boundary into a neighbouring atlas tile.
+        // Without this, every voxel face draws a thin seam of the adjacent
+        // tile's colour around its edges.
+        float2 tilePixelSize = max(_Atlas_TexelSize.zw / atlasGrid, 1.0);
+        float2 halfTexelInTile = 0.5 / tilePixelSize;
+        tileUv = clamp(tileUv, halfTexelInTile, 1.0 - halfTexelInTile);
 
         float2 atlasUv = (tileUv + float2(col, row)) / atlasGrid;
 

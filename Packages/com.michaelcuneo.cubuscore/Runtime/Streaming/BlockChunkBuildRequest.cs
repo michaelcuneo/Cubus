@@ -15,6 +15,12 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     public BlockChunkData ChunkDataSnapshot;
     public Dictionary<Vector3Int, BlockChunkData> NeighborChunkSnapshots;
 
+    // Face-neighbour chunk coords that are in-bounds but not yet loaded at build
+    // time. The mesher treats these as solid (hides the shared boundary face) so
+    // no transient one-sided wall is drawn at the load frontier; the chunk is
+    // re-meshed against real voxels once the neighbour loads.
+    public HashSet<Vector3Int> SolidFallbackNeighborChunks;
+
     public Dictionary<int, ushort> OverrideSnapshot;
   }
 }

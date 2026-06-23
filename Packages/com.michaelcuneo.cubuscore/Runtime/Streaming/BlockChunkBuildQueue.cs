@@ -3,6 +3,7 @@ using System.Threading.Tasks;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Chunks;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Core;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing;
+using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World;
 using UnityEngine;
 
@@ -10,6 +11,11 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 {
   public sealed class BlockChunkBuildQueue
   {
+    // Material used for an in-bounds neighbour voxel whose chunk hasn't loaded
+    // yet. Any non-zero (solid) id hides the shared boundary face; the value
+    // itself is never rendered because the hidden face emits no geometry.
+    private const ushort SolidBoundaryFallbackMaterial = 1;
+
     private readonly Queue<BlockChunkBuildResult> completedResults = new();
     private readonly HashSet<Vector3Int> inFlightChunkCoords = new();
 
@@ -80,6 +86,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
           Debug.LogException(task.Exception);
         }
 
+        ReturnNeighborSnapshotsToPool(request);
+
         lock (completedResults)
         {
           if (result != null)
@@ -94,6 +102,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
               ChunkData = null,
               MeshData = null,
               IsEmpty = true,
+              Failed = true,
               GenerationId = request.GenerationId
             });
           }
@@ -101,6 +110,27 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       });
 
       return true;
+    }
+
+    // Neighbour snapshots are throwaway; return their pooled backing arrays once
+    // the build has finished reading them. The root chunk's own snapshot becomes
+    // the canonical chunk data (result.ChunkData) and must never be pooled.
+    private static void ReturnNeighborSnapshotsToPool(BlockChunkBuildRequest request)
+    {
+      if (request?.NeighborChunkSnapshots == null)
+      {
+        return;
+      }
+
+      foreach (KeyValuePair<Vector3Int, BlockChunkData> snapshot in request.NeighborChunkSnapshots)
+      {
+        if (snapshot.Key == request.ChunkCoord)
+        {
+          continue;
+        }
+
+        VoxelArrayPool.Return(snapshot.Value?.GetRawVoxelArray());
+      }
     }
 
     public bool TryDequeueCompleted(out BlockChunkBuildResult result)
@@ -129,7 +159,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
       if (chunkData == null)
       {
-        chunkData = BlockChunkBuilder.GenerateChunkData(
+        chunkData = BlockChunkBuilder.GenerateChunkDataJob(
             request.ChunkCoord,
             request.WorldSnapshot,
             request.OverrideSnapshot,
@@ -147,9 +177,14 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         request.NeighborChunkSnapshots ??= new Dictionary<Vector3Int, BlockChunkData>();
         request.NeighborChunkSnapshots[chunkData.ChunkCoord] = chunkData;
 
+        // Boundary voxels with no neighbor snapshot fall back to terrain
+        // sampling. Cache a sampler per (x, z) column so the surface noise is
+        // resolved once per column instead of once per boundary voxel.
+        Dictionary<long, TerrainColumnSampler> meshColumnCache = new();
+
         meshData = BlockGreedyMesher.GenerateNeighbourAware(
             chunkData,
-            worldVoxelCoord => ResolveMaterialForMeshing(request, worldVoxelCoord),
+            worldVoxelCoord => ResolveMaterialForMeshing(request, worldVoxelCoord, meshColumnCache),
             Mathf.Max(0.0001f, request.VoxelSize)
         );
       }
@@ -164,19 +199,51 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       };
     }
 
-    private static ushort ResolveMaterialForMeshing(BlockChunkBuildRequest request, Vector3Int worldVoxelCoord)
+    private static ushort ResolveMaterialForMeshing(
+        BlockChunkBuildRequest request,
+        Vector3Int worldVoxelCoord,
+        Dictionary<long, TerrainColumnSampler> columnCache)
     {
-      if (request?.NeighborChunkSnapshots != null)
+      Vector3Int chunkCoord = VoxelMath.WorldVoxelToChunkCoord(worldVoxelCoord);
+
+      if (request?.NeighborChunkSnapshots != null
+          && request.NeighborChunkSnapshots.TryGetValue(chunkCoord, out BlockChunkData snapshotChunk)
+          && snapshotChunk != null)
       {
-        Vector3Int chunkCoord = VoxelMath.WorldVoxelToChunkCoord(worldVoxelCoord);
         Vector3Int localCoord = VoxelMath.WorldVoxelToLocalCoord(worldVoxelCoord);
-        if (request.NeighborChunkSnapshots.TryGetValue(chunkCoord, out BlockChunkData snapshotChunk) && snapshotChunk != null)
-        {
-          return snapshotChunk.GetVoxel(localCoord.x, localCoord.y, localCoord.z).MaterialId;
-        }
+        return snapshotChunk.GetVoxel(localCoord.x, localCoord.y, localCoord.z).MaterialId;
       }
 
-      return BlockChunkBuilder.SampleMaterialAtWorldVoxel(worldVoxelCoord, request.WorldSnapshot);
+      // In-bounds face neighbour that hasn't loaded yet: treat it as solid so the
+      // shared boundary face is hidden rather than meshed against the terrain
+      // fallback (which briefly draws a one-sided wall that vanishes when the real
+      // neighbour arrives). The chunk is re-meshed once the neighbour loads, so
+      // the correct faces appear then.
+      if (request?.SolidFallbackNeighborChunks != null && request.SolidFallbackNeighborChunks.Contains(chunkCoord))
+      {
+        return SolidBoundaryFallbackMaterial;
+      }
+
+      long columnKey = ((long)worldVoxelCoord.x << 32) | (uint)worldVoxelCoord.z;
+
+      if (!columnCache.TryGetValue(columnKey, out TerrainColumnSampler column))
+      {
+        column = new TerrainColumnSampler();
+        column.Prepare(request.WorldSnapshot, worldVoxelCoord.x, worldVoxelCoord.z, 1.0f);
+        columnCache[columnKey] = column;
+      }
+
+      TerrainSample sample = column.SampleAt(worldVoxelCoord, 1.0f);
+
+      // Solidity must match the generation job, which floors the column's
+      // double-precision blended surface. Using the per-voxel float-blended
+      // sample.SurfaceHeight here can disagree by a voxel at biome transitions
+      // and leave seam faces, so use column.SurfaceHeight instead.
+      bool isBelowSurface = worldVoxelCoord.y <= Mathf.FloorToInt(column.SurfaceHeight);
+
+      return isBelowSurface
+          ? (ushort)Mathf.Clamp(sample.SolidMaterialId > 0 ? sample.SolidMaterialId : 1, 1, 65535)
+          : (ushort)0;
     }
   }
 }

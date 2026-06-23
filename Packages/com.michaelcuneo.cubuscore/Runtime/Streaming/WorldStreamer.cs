@@ -1,3 +1,4 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Chunks;
@@ -64,6 +65,14 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     private Vector3Int spawnTargetChunkCoord;
     private bool hasBroadcastInitialTerrainReady;
     private bool pendingQueuesNeedPrioritization;
+    private bool renderReconciliationPending;
+    // Cached once on the main thread; SystemInfo.processorCount is a native call
+    // that was previously hit many times per frame inside the streaming loops.
+    private int cachedMaxHardwareConcurrency = 1;
+    // Reusable sort state so the priority comparison can be a single cached
+    // delegate instead of allocating a closure + Comparison delegate per sort.
+    private Vector3Int sortPivotChunkCoord;
+    private Comparison<Vector3Int> chunkPriorityComparison;
     private long totalChunkLoadRequestsStarted;
     private long totalChunkLoadsCompleted;
     private long totalChunkLoadFailures;
@@ -72,8 +81,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     private long totalChunkUnloadsApplied;
     private int adaptiveThrottleFramesRemaining;
 
-    private const float AdaptiveThrottleTriggerFrameMs = 20.0f;
-    private const int AdaptiveThrottleDurationFrames = 20;
+    private const float AdaptiveThrottleTriggerFrameMs = 33.0f;
+    private const int AdaptiveThrottleDurationFrames = 8;
 
     public StreamingSettings Settings => settings;
     public Vector3Int LastViewerChunkCoord => lastViewerChunkCoord;
@@ -125,8 +134,14 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     private int MeshAppliesPerFrame => Mathf.Clamp(settings != null ? settings.MeshAppliesPerFrame : 32, 1, 128);
     private int MaxAsyncChunkTasks => Mathf.Clamp(settings != null ? settings.MaxAsyncChunkTasks : 8, 1, 32);
     private bool IsSmoothDensityMode => world != null && world.Settings != null && world.Settings.TerrainSystem == TerrainSystem.SmoothDensity;
-    private int MaxTotalAsyncTasks => Mathf.Clamp(MaxAsyncChunkTasks, 1, Mathf.Max(1, SystemInfo.processorCount - 1));
-    private int MaxLoadAsyncTasks => IsSmoothDensityMode ? Mathf.Max(1, MaxTotalAsyncTasks / 2) : Mathf.Max(1, MaxTotalAsyncTasks - 2);
+    private int MaxTotalAsyncTasks => Mathf.Clamp(MaxAsyncChunkTasks, 1, cachedMaxHardwareConcurrency);
+    // Block chunks now mesh immediately (unloaded in-bounds neighbours are drawn
+    // as solid and the chunk re-meshes once they load), so loading no longer
+    // gates meshing. Loading feeds meshing and meshing additionally re-meshes per
+    // neighbour load, so both stages carry comparable work; split the worker pool
+    // evenly between them. Both are cheap now (Burst column gen + merged-quad
+    // meshing), so the even split keeps data flowing in while meshes keep up.
+    private int MaxLoadAsyncTasks => Mathf.Max(1, MaxTotalAsyncTasks / 2);
     private int MaxBlockAsyncTasks => IsSmoothDensityMode ? 0 : Mathf.Max(1, MaxTotalAsyncTasks - MaxLoadAsyncTasks);
     private int MaxDensityAsyncTasks => IsSmoothDensityMode ? Mathf.Max(1, MaxTotalAsyncTasks - MaxLoadAsyncTasks) : 0;
     private float MeshApplyTimeBudgetSeconds => Mathf.Max(0.001f, (settings != null ? settings.MeshApplyTimeBudgetMs : 2) / 1000.0f);
@@ -162,6 +177,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
     private void Awake()
     {
+      cachedMaxHardwareConcurrency = Mathf.Max(1, SystemInfo.processorCount - 1);
+      chunkPriorityComparison = CompareChunkPriorityByPivot;
       EnsureRuntimeReferences();
     }
 
@@ -277,11 +294,12 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
       if (adaptiveThrottleFramesRemaining > 0)
       {
-        // Favor smooth frame time after a hitch by temporarily reducing streaming pressure.
+        // Favor smooth frame time after a hitch by throttling how much NEW work we
+        // start, but keep applying already-built meshes at full budget so chunks
+        // the player is standing in front of still become visible promptly.
         loadBudget = Mathf.Max(1, loadBudget / 4);
         renderBudget = Mathf.Max(1, renderBudget / 2);
         unloadBudget = Mathf.Max(1, unloadBudget / 2);
-        meshApplyBudget = Mathf.Max(1, meshApplyBudget / 2);
       }
 
       UpdateStreamingSetIfNeeded();
@@ -291,7 +309,40 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       ProcessLoadQueue(loadBudget, renderBudget);
       ProcessUnloadQueue(unloadBudget);
       ProcessCompletedBuildResults(meshApplyBudget);
+      ReconcileRenderCoverageIfSettled();
       TryBroadcastInitialTerrainReady();
+    }
+
+    // QueueGeneratedChunksForRender only runs when the viewer chunk changes. If a
+    // build result is dropped mid-flight (generation bump or a chunk that briefly
+    // left the desired set during bootstrap), the chunk keeps its data but never
+    // gets a view, and a stationary viewer would never re-queue it. Once the
+    // streamer has fully drained its queues, run a single reconciliation pass to
+    // re-queue any desired chunk that still lacks a view. This converges: the pass
+    // only enqueues genuinely stuck chunks, and clears the flag once nothing is
+    // left to do.
+    private void ReconcileRenderCoverageIfSettled()
+    {
+      bool busy =
+          pendingLoadQueue.Count > 0 ||
+          pendingRenderQueue.Count > 0 ||
+          chunkLoadQueue.ActiveTaskCount > 0 ||
+          buildQueue.ActiveTaskCount > 0 ||
+          densityBuildQueue.ActiveTaskCount > 0;
+
+      if (busy)
+      {
+        renderReconciliationPending = true;
+        return;
+      }
+
+      if (!renderReconciliationPending || !hasLastViewerChunkCoord)
+      {
+        return;
+      }
+
+      renderReconciliationPending = false;
+      QueueGeneratedChunksForRender(lastViewerChunkCoord);
     }
 
     [ContextMenu("Force Refresh Streaming Set")]
@@ -371,13 +422,24 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         candidateChunksBuffer.Add(chunkCoord);
       }
 
-      candidateChunksBuffer.Sort((a, b) => CompareChunkPriority(a, b, viewerChunkCoord));
+      candidateChunksBuffer.Sort(GetChunkPriorityComparison(viewerChunkCoord));
       for (int i = 0; i < candidateChunksBuffer.Count; i++)
       {
         if (HasChunkData(candidateChunksBuffer[i])) QueueRender(candidateChunksBuffer[i]);
         else QueueLoad(candidateChunksBuffer[i]);
       }
     }
+
+    // Returns the cached comparison delegate configured for the given pivot.
+    // Avoids allocating a new closure/Comparison on every Sort call.
+    private Comparison<Vector3Int> GetChunkPriorityComparison(Vector3Int pivotChunkCoord)
+    {
+      sortPivotChunkCoord = pivotChunkCoord;
+      chunkPriorityComparison ??= CompareChunkPriorityByPivot;
+      return chunkPriorityComparison;
+    }
+
+    private int CompareChunkPriorityByPivot(Vector3Int a, Vector3Int b) => CompareChunkPriority(a, b, sortPivotChunkCoord);
 
     private int CompareChunkPriority(Vector3Int a, Vector3Int b, Vector3Int viewerChunkCoord)
     {
@@ -458,7 +520,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         queueSortBuffer.Add(c);
       }
 
-      queueSortBuffer.Sort((a, b) => CompareChunkPriority(a, b, lastViewerChunkCoord));
+      queueSortBuffer.Sort(GetChunkPriorityComparison(lastViewerChunkCoord));
       for (int i = 0; i < queueSortBuffer.Count; i++) queue.Enqueue(queueSortBuffer[i]);
     }
 
@@ -474,6 +536,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       int count = 0;
       int scanned = 0;
       int maxScans = Mathf.Max(maxLoadsThisFrame * 8, pendingLoadQueue.Count);
+      int maxLoadTasks = MaxLoadAsyncTasks;
+      int maxTotalTasks = MaxTotalAsyncTasks;
 
       while (pendingLoadQueue.Count > 0 && count < maxLoadsThisFrame && scanned < maxScans)
       {
@@ -498,7 +562,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         if (chunkLoadQueue.IsInFlight(c)) continue;
 
         int totalActiveAsyncTasks = chunkLoadQueue.ActiveTaskCount + buildQueue.ActiveTaskCount + densityBuildQueue.ActiveTaskCount;
-        if (chunkLoadQueue.ActiveTaskCount >= MaxLoadAsyncTasks || totalActiveAsyncTasks >= MaxTotalAsyncTasks)
+        if (chunkLoadQueue.ActiveTaskCount >= maxLoadTasks || totalActiveAsyncTasks >= maxTotalTasks)
         {
           QueueLoad(c);
           break;
@@ -534,6 +598,12 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
             world.Data.BlockChunks[c] = result.BlockChunkData;
             // Avoid scanning the full voxel array on the main thread; emptiness is resolved by mesh build results.
             knownEmptyChunks.Remove(c);
+
+            // A newly-available chunk changes its neighbours' boundary faces.
+            // Re-mesh neighbours that have already been meshed so they use this
+            // chunk's real voxels instead of the terrain-sampling fallback,
+            // which otherwise leaves stale boundary walls at the load frontier.
+            RequeueSettledBlockNeighbors(c);
           }
           else if (result.TerrainSystem == TerrainSystem.SmoothDensity && result.DensityChunkData != null) world.Data.DensityChunks[c] = result.DensityChunkData;
           if ((desiredChunkCoords.Contains(c) || keepChunkCoords.Contains(c)) && HasChunkData(c)) QueueRender(c);
@@ -639,21 +709,32 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       return allSampleChunksAvailable;
     }
 
-    private bool EnsureBlockNeighborChunksAvailableForMesh(Vector3Int root)
+    // Block chunks are meshed IMMEDIATELY, without waiting for neighbour data.
+    // For each in-bounds face neighbour that hasn't loaded yet, we (a) record it
+    // so the mesher treats it as SOLID and hides the shared boundary face -
+    // instead of meshing it against the terrain fallback, which briefly draws a
+    // one-sided wall at the load frontier that vanishes when the real neighbour
+    // arrives (the spawn "vertical mesh" flicker) - and (b) make sure it is queued
+    // to load, so the chunk is re-meshed against the real voxels the moment the
+    // neighbour arrives (RequeueSettledBlockNeighbors). Out-of-bounds neighbours
+    // (genuine world edges) are left out of the set so the mesher keeps drawing
+    // their faces via terrain sampling. Returns null when nothing is missing
+    // (the common settled case) to avoid an allocation.
+    private HashSet<Vector3Int> CollectUnloadedInBoundsBlockNeighbors(Vector3Int root)
     {
-      bool allNeighborChunksAvailable = true;
+      HashSet<Vector3Int> unloaded = null;
 
       for (int i = 0; i < BlockMeshNeighborOffsets.Length; i++)
       {
         Vector3Int c = root + BlockMeshNeighborOffsets[i];
         if (world.Data.BlockChunks.ContainsKey(c) || !world.Settings.IsInsideEffectiveWorldBounds3D(c)) continue;
 
-        allNeighborChunksAvailable = false;
+        (unloaded ??= new HashSet<Vector3Int>()).Add(c);
         keepChunkCoords.Add(c);
         if (!chunkLoadQueue.IsInFlight(c) && !pendingLoadSet.Contains(c)) QueueLoad(c);
       }
 
-      return allNeighborChunksAvailable;
+      return unloaded;
     }
 
     private void ProcessCompletedBuildResults(int meshApplyBudget)
@@ -674,7 +755,33 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
             continue;
           }
 
-          if (r.ChunkData != null) world.Data.BlockChunks[r.ChunkCoord] = r.ChunkData;
+          if (r.ChunkData != null)
+          {
+            // The freshly meshed snapshot becomes the chunk's canonical data.
+            // Recycle the array it replaces (only referenced by this dictionary
+            // entry; in-flight builds hold copies, never the live array) so the
+            // per-build clone stays GC-free instead of churning 64 KB each time.
+            if (world.Data.BlockChunks.TryGetValue(r.ChunkCoord, out BlockChunkData previousChunk)
+                && previousChunk != null
+                && !ReferenceEquals(previousChunk, r.ChunkData))
+            {
+              VoxelArrayPool.Return(previousChunk.GetRawVoxelArray());
+            }
+
+            world.Data.BlockChunks[r.ChunkCoord] = r.ChunkData;
+          }
+
+          if (r.Failed)
+          {
+            // The background build threw (typically transient). The chunk is NOT
+            // genuinely empty, so it must not be marked known-empty: that would
+            // leave a permanent hole that only a voxel edit could clear. The
+            // chunk data is still present, so requeue it to retry the mesh build.
+            if (world.Data.BlockChunks.ContainsKey(r.ChunkCoord)) QueueRender(r.ChunkCoord);
+            ReturnMeshData(r.MeshData);
+            blockCount++;
+            continue;
+          }
 
           if (r.IsEmpty || r.MeshData == null || r.MeshData.IsEmpty)
           {
@@ -709,6 +816,16 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
         if (r.ChunkData != null) world.Data.DensityChunks[r.ChunkCoord] = r.ChunkData;
 
+        if (r.Failed)
+        {
+          // Transient background-build exception. Requeue to retry instead of
+          // dropping the chunk and waiting on a later reconciliation pass.
+          if (world.Data.DensityChunks.ContainsKey(r.ChunkCoord)) QueueRender(r.ChunkCoord);
+          ReturnMeshData(r);
+          count++;
+          continue;
+        }
+
         if (r.MeshData == null || r.MeshData.IsEmpty)
         {
           worldRenderer.RemoveChunk(r.ChunkCoord);
@@ -736,21 +853,25 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         WorldSnapshot = worldSnapshot,
         VoxelSize = world.Settings.VoxelSize,
         ChunkDataSnapshot = CloneBlockChunkData(chunkData),
-        NeighborChunkSnapshots = CreateBlockMeshChunkSnapshots(chunkCoord)
+        NeighborChunkSnapshots = CreateBlockMeshChunkSnapshots(chunkCoord),
+        SolidFallbackNeighborChunks = CollectUnloadedInBoundsBlockNeighbors(chunkCoord)
       };
 
       return buildQueue.TryStartBuild(request, MaxBlockAsyncTasks);
     }
 
+    // The build snapshot is a throwaway clone the worker meshes against. Rent
+    // its backing array from VoxelArrayPool instead of allocating ~64 KB per
+    // build; the array is recycled when the snapshot it becomes (result.ChunkData)
+    // is later replaced as the chunk's canonical data (see ProcessCompletedBuildResults).
     private static BlockChunkData CloneBlockChunkData(BlockChunkData source)
     {
       if (source == null) return null;
 
-      BlockChunkData clone = new(source.ChunkCoord);
       Voxel[] sourceVoxels = source.GetRawVoxelArray();
-      Voxel[] targetVoxels = clone.GetRawVoxelArray();
-      System.Array.Copy(sourceVoxels, targetVoxels, sourceVoxels.Length);
-      return clone;
+      Voxel[] rented = VoxelArrayPool.Rent();
+      System.Array.Copy(sourceVoxels, rented, sourceVoxels.Length);
+      return new BlockChunkData(source.ChunkCoord, rented);
     }
 
     private Dictionary<Vector3Int, BlockChunkData> CreateBlockMeshChunkSnapshots(Vector3Int root)
@@ -759,12 +880,97 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
       for (int i = 0; i < BlockMeshNeighborOffsets.Length; i++)
       {
-        Vector3Int c = root + BlockMeshNeighborOffsets[i];
+        Vector3Int offset = BlockMeshNeighborOffsets[i];
+        Vector3Int c = root + offset;
         if (!world.Data.BlockChunks.TryGetValue(c, out BlockChunkData source) || source == null) continue;
-        snapshots[c] = CloneBlockChunkData(source);
+        snapshots[c] = CloneNeighborBoundaryFace(source, offset);
       }
 
       return snapshots;
+    }
+
+    // The block mesher only ever samples a neighbour chunk along the single face
+    // plane it shares with the chunk being meshed, so we copy just that 32x32
+    // slice (~1 KB) instead of cloning the whole 64 KB voxel array. Snapshot
+    // creation runs synchronously on the main thread for every build start, so
+    // trimming it ~32x is the single biggest win for keeping streaming smooth.
+    //
+    // The rented array's interior is intentionally left as whatever the pool
+    // handed back: ResolveMaterialForMeshing only ever queries the shared face
+    // (see BlockChunkBuildQueue), so the stale interior is never read. The
+    // backing array is returned to VoxelArrayPool when the build completes.
+    private static BlockChunkData CloneNeighborBoundaryFace(BlockChunkData source, Vector3Int offset)
+    {
+      const int size = VoxelConstants.ChunkSize;
+      Voxel[] rented = VoxelArrayPool.Rent();
+      Voxel[] src = source.GetRawVoxelArray();
+
+      if (offset.x != 0)
+      {
+        // Fixed x plane; (y, z) vary. Index x + size*(y + size*z) is strided in
+        // both free axes, so copy element by element.
+        int x = offset.x < 0 ? size - 1 : 0;
+        for (int z = 0; z < size; z++)
+        {
+          int planeBase = size * size * z + x;
+          for (int y = 0; y < size; y++)
+          {
+            int idx = planeBase + size * y;
+            rented[idx] = src[idx];
+          }
+        }
+      }
+      else if (offset.y != 0)
+      {
+        // Fixed y plane; x runs contiguously (32 voxels), z is strided.
+        int y = offset.y < 0 ? size - 1 : 0;
+        for (int z = 0; z < size; z++)
+        {
+          int rowBase = size * (y + size * z);
+          System.Array.Copy(src, rowBase, rented, rowBase, size);
+        }
+      }
+      else
+      {
+        // Fixed z plane; the whole (x, y) slab is contiguous.
+        int z = offset.z < 0 ? size - 1 : 0;
+        int planeBase = size * size * z;
+        System.Array.Copy(src, planeBase, rented, planeBase, size * size);
+      }
+
+      return new BlockChunkData(source.ChunkCoord, rented);
+    }
+
+    // Re-queue already-meshed (settled) block neighbours of a freshly-loaded
+    // chunk so their boundary faces are rebuilt against the real chunk data.
+    private void RequeueSettledBlockNeighbors(Vector3Int chunkCoord)
+    {
+      for (int i = 0; i < BlockMeshNeighborOffsets.Length; i++)
+      {
+        Vector3Int n = chunkCoord + BlockMeshNeighborOffsets[i];
+
+        if (!desiredChunkCoords.Contains(n) && !keepChunkCoords.Contains(n))
+        {
+          continue;
+        }
+
+        // A neighbour still queued for its first mesh will snapshot this chunk when
+        // its build starts, so it needs no extra requeue. A neighbour whose build is
+        // already in flight, however, captured its neighbour snapshot BEFORE this
+        // chunk's data existed and meshed the shared boundary against the terrain
+        // fallback. It must be requeued so it rebuilds against the real voxels once
+        // the in-flight build completes; otherwise a stale one-sided boundary wall is
+        // left at the load frontier until the chunk is edited.
+        if (pendingRenderSet.Contains(n))
+        {
+          continue;
+        }
+
+        if (world.Data.BlockChunks.TryGetValue(n, out BlockChunkData nb) && nb != null)
+        {
+          QueueRender(n);
+        }
+      }
     }
 
     private static void ReturnMeshData(DensityChunkBuildResult result)

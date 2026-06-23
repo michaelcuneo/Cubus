@@ -3,7 +3,6 @@ using UnityEngine;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Core;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Voxels;
 
-
 namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Chunks
 {
   public sealed class DensityChunkData

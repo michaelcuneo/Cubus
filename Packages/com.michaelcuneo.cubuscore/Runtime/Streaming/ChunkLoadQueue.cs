@@ -120,7 +120,12 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
         if (mode == TerrainSystem.Block)
         {
-          result.BlockChunkData = BlockChunkBuilder.GenerateChunkData(chunkCoord, snapshot, null);
+          // Use the Burst-compiled generator (SIMD, designed to run on these
+          // worker threads). It produces output identical to the managed
+          // column sampler but is dramatically faster, and generation is the
+          // dominant per-chunk streaming cost. Falls back to managed C#
+          // automatically when the Burst package is unavailable.
+          result.BlockChunkData = BlockChunkBuilder.GenerateChunkDataJob(chunkCoord, snapshot, null, out _);
           return result;
         }
 

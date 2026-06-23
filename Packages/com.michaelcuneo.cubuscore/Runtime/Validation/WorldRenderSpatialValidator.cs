@@ -1,6 +1,8 @@
 using System.Collections.Generic;
+using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Chunks;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Core;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering;
+using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World;
 using UnityEngine;
 
@@ -72,6 +74,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Validation
       int checkedCount = 0;
       int renderedCount = 0;
       int colliderCount = 0;
+      int emptyPlaceholderCount = 0;
       Bounds combinedRendererBounds = default;
       bool hasCombinedBounds = false;
 
@@ -134,14 +137,24 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Validation
           return Fail($"Render spatial validation failed: chunk {chunkCoord} has no shared mesh.", out message);
         }
 
-        if (mesh.vertexCount <= 0)
+        // A fully-occluded solid chunk meshes to zero geometry, but the renderer
+        // deliberately keeps a placeholder ChunkView (MeshData.completeWithoutGeometry)
+        // so the streamer treats the chunk as handled instead of re-queuing it forever.
+        // Such a view legitimately has an empty mesh; accept it as a placeholder and
+        // skip the geometry-dependent checks below. Any other empty view is a defect.
+        bool hasGeometry = mesh.vertexCount > 0 && mesh.subMeshCount > 0 && mesh.GetIndexCount(0) > 0;
+        if (!hasGeometry)
         {
-          return Fail($"Render spatial validation failed: chunk {chunkCoord} mesh has zero vertices.", out message);
-        }
+          if (!IsOccludedSolidPlaceholder(chunkCoord))
+          {
+            return Fail(
+              $"Render spatial validation failed: chunk {chunkCoord} has an empty mesh but is not a fully-occluded solid chunk (unexpected empty view).",
+              out message
+            );
+          }
 
-        if (mesh.subMeshCount <= 0 || mesh.GetIndexCount(0) <= 0)
-        {
-          return Fail($"Render spatial validation failed: chunk {chunkCoord} mesh has no indices.", out message);
+          emptyPlaceholderCount++;
+          continue;
         }
 
         if (!meshRenderer.enabled)
@@ -206,7 +219,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Validation
 
       message =
         $"Render spatial validation passed. " +
-        $"Checked={checkedCount}, Rendered={renderedCount}, Colliders={colliderCount}, " +
+        $"Checked={checkedCount}, Rendered={renderedCount}, EmptyPlaceholders={emptyPlaceholderCount}, Colliders={colliderCount}, " +
         $"CombinedRendererBounds={(hasCombinedBounds ? combinedRendererBounds.ToString() : "None")}";
 
       LastValidationPassed = true;
@@ -243,6 +256,26 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Validation
       LastValidationMessage = failureMessage;
       message = failureMessage;
       return false;
+    }
+
+    // True when an empty active view is the renderer's intentional placeholder for a
+    // fully-occluded solid block chunk (meshed to zero geometry). Density chunks with
+    // no surface are marked known-empty and never get a view, so they never apply.
+    private bool IsOccludedSolidPlaceholder(Vector3Int chunkCoord)
+    {
+      if (sourceWorld == null || sourceWorld.Data == null || sourceWorld.Settings == null)
+      {
+        return false;
+      }
+
+      if (sourceWorld.Settings.TerrainSystem != TerrainSystem.Block)
+      {
+        return false;
+      }
+
+      return sourceWorld.Data.BlockChunks.TryGetValue(chunkCoord, out BlockChunkData blockChunk) &&
+             blockChunk != null &&
+             blockChunk.HasAnySolidVoxel();
     }
   }
 }
