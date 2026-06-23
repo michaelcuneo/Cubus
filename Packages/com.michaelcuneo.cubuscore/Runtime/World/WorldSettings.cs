@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Core;
+using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Lod;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage;
 using UnityEngine;
@@ -23,6 +24,37 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World
 
     [Min(0.01f)]
     public float VoxelSize = VoxelConstants.DefaultVoxelSize;
+
+    [Header("Distant Horizon LOD")]
+    [Tooltip("Render coarse low-detail terrain in concentric bands beyond the " +
+             "full-detail view distance, so terrain reaches the horizon cheaply. " +
+             "Block terrain only.")]
+    public bool EnableLodTerrain = true;
+
+    [Tooltip("Number of LOD bands beyond the full-detail ring. Each band L uses " +
+             "voxel stride 2^L (level 1 = 2x, level 2 = 4x, ...), so each band " +
+             "covers exponentially more ground for a similar tile count.")]
+    [Range(1, LodConstants.MaxLodLevel)]
+    public int LodLevelCount = 4;
+
+    [Tooltip("Thickness of each LOD band measured in that level's own tiles. The " +
+             "world-space width of band L is therefore LodRingWidthInTiles * 2^L " +
+             "base chunks.")]
+    [Min(1)]
+    public int LodRingWidthInTiles = 4;
+
+    [Tooltip("Vertical extent of LOD tiles above and below the sampled surface, " +
+             "measured in that level's tiles. Distant underground is never seen, " +
+             "so keep this small (1 is usually enough).")]
+    [Min(0)]
+    public int LodVerticalRadiusInTiles = 1;
+
+    [Tooltip("Depth of the downward skirt added around each LOD tile's perimeter, " +
+             "in that tile's coarse voxels. Skirts hide the vertical cracks that " +
+             "appear where neighbouring bands meet at different resolutions. 0 " +
+             "disables skirts.")]
+    [Range(0, 8)]
+    public int LodSkirtDepthInCells = 2;
 
     [Header("Smooth Density")]
     [Range(1, 8)]

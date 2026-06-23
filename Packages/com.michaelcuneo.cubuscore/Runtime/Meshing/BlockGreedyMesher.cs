@@ -437,6 +437,44 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
       return BlockChunkBuilder.SampleMaterialAtWorldVoxel(worldVoxel, snapshot);
     }
 
+    /// <summary>
+    /// Emits a single greedy quad spanning <paramref name="width"/> x
+    /// <paramref name="height"/> voxels on the plane at axis coordinate
+    /// <c>start[axis]</c>, using the same per-voxel UV tiling, winding and packed
+    /// material colour as the chunk mesher. Exposed so the Distant-Horizon LOD
+    /// skirt builder produces geometry that textures identically to the terrain.
+    /// </summary>
+    public static void AppendGreedyQuad(
+        MeshData mesh,
+        int axis,
+        int startX,
+        int startY,
+        int startZ,
+        int width,
+        int height,
+        bool positiveFace,
+        ushort materialId,
+        float voxelSize)
+    {
+      int u = (axis + 1) % 3;
+      int v = (axis + 2) % 3;
+
+      AddVoxelTiledGreedyQuad(
+          mesh,
+          axis,
+          u,
+          v,
+          startX,
+          startY,
+          startZ,
+          width,
+          height,
+          positiveFace,
+          materialId,
+          voxelSize
+      );
+    }
+
     private static void AddVoxelTiledGreedyQuad(
         MeshData mesh,
         int axis,
