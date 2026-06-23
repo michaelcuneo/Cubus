@@ -600,6 +600,7 @@ MonoBehaviour:
   initialSpawnClearance: 2
   evictCachedChunkDataOutsideKeepSet: 1
   generateWorldDatabaseBeforeStreaming: 0
+  persistStreamedChunks: 1
   enforcePrePr30BlockPerformanceProfile: 1
   initialStreamingRadiusInChunks: 1
   useInitialStreamingStage: 1

@@ -569,7 +569,13 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
           break;
         }
 
-        if (chunkLoadQueue.TryStartLoad(storage != null ? storage.ActiveStore : null, storage != null ? storage.WorldId : null, c, MaxLoadAsyncTasks))
+        if (chunkLoadQueue.TryStartLoad(
+              storage != null ? storage.ActiveStore : null,
+              storage != null ? storage.WorldId : null,
+              c,
+              MaxLoadAsyncTasks,
+              world.Settings.TerrainSystem == TerrainSystem.Block ? world.CreateBlockOverrideSnapshot(c) : null,
+              world.Settings.TerrainSystem == TerrainSystem.SmoothDensity ? world.CreateDensityOverrideSnapshot(c) : null))
         {
           totalChunkLoadRequestsStarted++;
           count++;
@@ -1070,6 +1076,16 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         QueueEditedBlockChunk(dirtyChunk + Vector3Int.up);
         QueueEditedBlockChunk(dirtyChunk + new Vector3Int(0, 0, -1));
         QueueEditedBlockChunk(dirtyChunk + new Vector3Int(0, 0, 1));
+
+        // Write the edited chunk straight to the store so the change survives
+        // eviction/quit and reloads fast. The edit also lives in the sparse
+        // override layer (re-applied on every streamed load). SaveEditedChunk
+        // writes an explicit empty record when the edit erased the whole chunk,
+        // so a fully-cleared chunk doesn't reload its stale pre-edit terrain.
+        if (persistStreamedChunks && storage != null && storage.ActiveStore != null)
+        {
+          storage.SaveEditedChunk(dirtyChunk);
+        }
       }
     }
 

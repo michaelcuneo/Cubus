@@ -126,6 +126,27 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
       }
     }
 
+    // Persists the current state of an edited chunk. When an edit erased the whole
+    // chunk it no longer exists in memory, so SaveChunk has nothing to write and the
+    // stale pre-edit record would survive. In that case we write an explicit empty
+    // record so the erased state reloads correctly.
+    public void SaveEditedChunk(Vector3Int chunkCoord)
+    {
+      EnsureStore();
+
+      if (SaveChunk(chunkCoord))
+      {
+        return;
+      }
+
+      WorldChunkRecord emptyRecord = world.Settings.TerrainSystem == TerrainSystem.Block
+          ? CubusChunkPayloadCodec.EncodeBlockChunk(WorldId, chunkCoord, new BlockChunkData(chunkCoord))
+          : CubusChunkPayloadCodec.EncodeDensityChunk(WorldId, chunkCoord, new DensityChunkData(chunkCoord));
+
+      activeStore.SaveChunk(emptyRecord);
+      storageReadsDisabledForTerrainSystem = false;
+    }
+
     public void SaveWorldDatabase()
     {
       EnsureStore();
