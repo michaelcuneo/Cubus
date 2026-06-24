@@ -12,9 +12,14 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
   public sealed class WorldRenderer : MonoBehaviour
   {
     [Header("Rendering")]
-    [SerializeField] private Material worldMaterial;
-    [SerializeField] private bool useBiomeAtlasShader = true;
-    [SerializeField] private string biomeAtlasShaderName = "Cubus/BiomeAtlasURP";
+    [SerializeField] private Material blockWorldMaterial;
+    [SerializeField] private Material densityWorldMaterial;
+
+    [SerializeField] private bool useBlockBiomeAtlasShader = true;
+    [SerializeField] private bool useDensityBiomeShader = true;
+
+    [SerializeField] private string blockBiomeAtlasShaderName = "Cubus/BiomeAtlasURP";
+    [SerializeField] private string densityBiomeShaderName = "Cubus/DensityBiomeURP";
     [SerializeField] private Texture2D biomeTextureAtlas;
     [SerializeField] private Vector2Int biomeAtlasGrid = new(4, 4);
     [SerializeField] private BlockMaterialDatabase blockMaterialDatabase;
@@ -40,7 +45,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
 
     private float timeSinceLastCollisionUpdate;
     private readonly Dictionary<Vector3Int, ChunkView> activeChunkViews = new();
-    private Material runtimeWorldMaterial;
+    private Material runtimeBlockMaterial;
+    private Material runtimeDensityMaterial;
     private Texture2D generatedFallbackAtlas;
     private Texture2D topLookupTexture;
     private Texture2D sideLookupTexture;
@@ -62,7 +68,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
       NormalizeCollisionMode();
       world = GetComponent<CubusWorld>();
       chunkPool = new ChunkPool(transform);
-      EnsureWorldMaterial();
+      EnsureBlockWorldMaterial();
+      EnsureDensityWorldMaterial();
     }
 
     private void OnValidate()
@@ -147,7 +154,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
         return;
       }
 
-      ChunkView chunkView = GetOrCreateChunkView(chunkCoord);
+      ChunkView chunkView = GetOrCreateChunkView(chunkCoord, GetBlockRenderMaterial());
+
       bool shouldGenerateCollision = collisionMode switch
       {
         WorldCollisionMode.None => false,
@@ -160,6 +168,16 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
     }
 
     public void RenderUnityMesh(Vector3Int chunkCoord, Mesh unityMesh, bool generateCollision = false)
+    {
+      RenderDensityChunkMesh(chunkCoord, unityMesh, generateCollision);
+    }
+
+    public Material EnsureWorldMaterialAndGet()
+    {
+      return GetDensityRenderMaterial();
+    }
+
+    public void RenderDensityChunkMesh(Vector3Int chunkCoord, Mesh unityMesh, bool generateCollision = false)
     {
       if (world == null)
       {
@@ -176,7 +194,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
         if (logRenderedChunkMeshes)
         {
           Debug.LogWarning(
-              $"Skipping Unity mesh chunk {chunkCoord}. " +
+              $"Skipping density mesh chunk {chunkCoord}. " +
               $"MeshNull={unityMesh == null}, " +
               $"Verts={(unityMesh != null ? unityMesh.vertexCount : 0)}, " +
               $"Indices={(unityMesh != null && unityMesh.subMeshCount > 0 ? unityMesh.GetIndexCount(0) : 0)}"
@@ -187,7 +205,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
         return;
       }
 
-      ChunkView chunkView = GetOrCreateChunkView(chunkCoord);
+      ChunkView chunkView = GetOrCreateChunkView(chunkCoord, GetDensityRenderMaterial());
 
       bool shouldGenerateCollision =
           generateCollision &&
@@ -198,7 +216,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
       if (logRenderedChunkMeshes)
       {
         Debug.Log(
-            $"Rendered Unity mesh chunk {chunkCoord}. " +
+            $"Rendered density mesh chunk {chunkCoord}. " +
             $"Verts={unityMesh.vertexCount}, " +
             $"Indices={unityMesh.GetIndexCount(0)}, " +
             $"Bounds={unityMesh.bounds}, " +
@@ -261,19 +279,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
     {
       ClearAll();
 
-      if (runtimeWorldMaterial != null)
-      {
-        if (Application.isPlaying)
-        {
-          Destroy(runtimeWorldMaterial);
-        }
-        else
-        {
-          DestroyImmediate(runtimeWorldMaterial);
-        }
-
-        runtimeWorldMaterial = null;
-      }
+      DestroyRuntimeMaterial(ref runtimeBlockMaterial, blockWorldMaterial);
+      DestroyRuntimeMaterial(ref runtimeDensityMaterial, densityWorldMaterial);
 
       if (generatedFallbackAtlas != null)
       {
@@ -363,13 +370,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
             continue;
           }
 
-          ChunkView cv = GetOrCreateChunkView(chunkCoord);
-
-          // Smooth-density RebuildAll is visual-only for now.
-          // Do not cook full marching-cubes MeshColliders for every chunk.
-          cv.ApplyMesh(unityMesh, false);
-
-          ApplyCollisionStateToChunk(cv);
+          RenderDensityChunkMesh(chunkCoord, unityMesh, false);
           rendered++;
         }
 
@@ -400,7 +401,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
         return;
       }
 
-      ChunkView chunkView = GetOrCreateChunkView(chunkCoord);
+      ChunkView chunkView = GetOrCreateChunkView(chunkCoord, GetBlockRenderMaterial());
       bool shouldGenerateCollision = collisionMode switch
       {
         WorldCollisionMode.None => false,
@@ -505,27 +506,24 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
       return activeChunkViews.ContainsKey(chunkCoord);
     }
 
-    // Shared atlas material used for all world geometry. The Distant-Horizon LOD
-    // renderer reuses this so distant tiles look identical to near terrain.
-    public Material EnsureWorldMaterialAndGet()
-    {
-      EnsureWorldMaterial();
-      return runtimeWorldMaterial != null ? runtimeWorldMaterial : worldMaterial;
-    }
-
-    private ChunkView GetOrCreateChunkView(Vector3Int chunkCoord)
+    private ChunkView GetOrCreateChunkView(Vector3Int chunkCoord, Material material)
     {
       if (activeChunkViews.TryGetValue(chunkCoord, out ChunkView existingView) && existingView != null)
       {
+        if (existingView.MeshRenderer != null)
+        {
+          existingView.MeshRenderer.sharedMaterial = material;
+        }
+
         return existingView;
       }
 
-      EnsureWorldMaterial();
+      Material safeMaterial = material != null ? material : GetBlockRenderMaterial();
 
       ChunkView chunkView = chunkPool.Acquire(
           chunkCoord,
           world.Settings.VoxelSize,
-          runtimeWorldMaterial != null ? runtimeWorldMaterial : worldMaterial
+          safeMaterial
       );
 
       activeChunkViews[chunkCoord] = chunkView;
@@ -534,43 +532,108 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
       return chunkView;
     }
 
-    private void EnsureWorldMaterial()
+    private Material GetBlockRenderMaterial()
     {
-      if (!useBiomeAtlasShader)
+      EnsureBlockWorldMaterial();
+      return runtimeBlockMaterial != null ? runtimeBlockMaterial : blockWorldMaterial;
+    }
+
+    private Material GetDensityRenderMaterial()
+    {
+      EnsureDensityWorldMaterial();
+
+      if (runtimeDensityMaterial != null)
       {
-        runtimeWorldMaterial = worldMaterial;
+        return runtimeDensityMaterial;
+      }
+
+      if (densityWorldMaterial != null)
+      {
+        return densityWorldMaterial;
+      }
+
+      return GetBlockRenderMaterial();
+    }
+
+    private void EnsureBlockWorldMaterial()
+    {
+      if (!useBlockBiomeAtlasShader)
+      {
+        runtimeBlockMaterial = blockWorldMaterial;
         return;
       }
-      Shader shader = Shader.Find(biomeAtlasShaderName);
+
+      Shader shader = Shader.Find(blockBiomeAtlasShaderName);
       if (!IsUsableShader(shader))
       {
-        runtimeWorldMaterial = worldMaterial;
+        runtimeBlockMaterial = blockWorldMaterial;
         return;
       }
 
-      if (runtimeWorldMaterial == null || runtimeWorldMaterial.shader != shader)
+      if (runtimeBlockMaterial == null || runtimeBlockMaterial.shader != shader)
       {
-        if (runtimeWorldMaterial != null && runtimeWorldMaterial != worldMaterial)
-        {
-          if (Application.isPlaying)
-          {
-            Destroy(runtimeWorldMaterial);
-          }
-          else
-          {
-            DestroyImmediate(runtimeWorldMaterial);
-          }
-        }
+        DestroyRuntimeMaterial(ref runtimeBlockMaterial, blockWorldMaterial);
 
-        runtimeWorldMaterial = new Material(shader)
+        runtimeBlockMaterial = new Material(shader)
         {
-          name = "Cubus Runtime Biome Atlas Material"
+          name = "Cubus Runtime Block Biome Atlas Material"
         };
       }
 
+      ApplyCommonAtlasProperties(runtimeBlockMaterial);
+      ApplyBlockMaterialLookups(runtimeBlockMaterial);
+
+      if (runtimeBlockMaterial == null || !IsUsableShader(runtimeBlockMaterial.shader))
+      {
+        runtimeBlockMaterial = blockWorldMaterial;
+      }
+    }
+
+    private void EnsureDensityWorldMaterial()
+    {
+      if (!useDensityBiomeShader)
+      {
+        runtimeDensityMaterial = densityWorldMaterial;
+        return;
+      }
+
+      Shader shader = Shader.Find(densityBiomeShaderName);
+      if (!IsUsableShader(shader))
+      {
+        runtimeDensityMaterial = densityWorldMaterial;
+        return;
+      }
+
+      if (runtimeDensityMaterial == null || runtimeDensityMaterial.shader != shader)
+      {
+        DestroyRuntimeMaterial(ref runtimeDensityMaterial, densityWorldMaterial);
+
+        runtimeDensityMaterial = new Material(shader)
+        {
+          name = "Cubus Runtime Density Biome Material"
+        };
+      }
+
+      ApplyCommonAtlasProperties(runtimeDensityMaterial);
+      ApplyDensityMaterialLookups(runtimeDensityMaterial);
+
+      if (runtimeDensityMaterial == null || !IsUsableShader(runtimeDensityMaterial.shader))
+      {
+        runtimeDensityMaterial = densityWorldMaterial;
+      }
+    }
+
+    private void ApplyCommonAtlasProperties(Material material)
+    {
+      if (material == null)
+      {
+        return;
+      }
+
       Texture2D atlas = biomeTextureAtlas != null ? biomeTextureAtlas : GetOrCreateFallbackAtlas();
-      runtimeWorldMaterial.SetTexture("_Atlas", atlas);
-      runtimeWorldMaterial.SetVector(
+
+      material.SetTexture("_Atlas", atlas);
+      material.SetVector(
           "_AtlasGrid",
           new Vector4(
               Mathf.Max(1, biomeAtlasGrid.x),
@@ -579,13 +642,38 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
               0.0f
           )
       );
-      runtimeWorldMaterial.SetColor("_Tint", biomeTint);
-      ApplyBlockMaterialLookups();
+      material.SetColor("_Tint", biomeTint);
 
-      if (runtimeWorldMaterial == null || !IsUsableShader(runtimeWorldMaterial.shader))
+      if (material.HasProperty("_TextureScale"))
       {
-        runtimeWorldMaterial = worldMaterial;
+        material.SetFloat("_TextureScale", 0.25f);
       }
+
+      if (material.HasProperty("_TriplanarSharpness"))
+      {
+        material.SetFloat("_TriplanarSharpness", 4.0f);
+      }
+
+    }
+
+    private void DestroyRuntimeMaterial(ref Material runtimeMaterial, Material serializedMaterial)
+    {
+      if (runtimeMaterial == null || runtimeMaterial == serializedMaterial)
+      {
+        runtimeMaterial = null;
+        return;
+      }
+
+      if (Application.isPlaying)
+      {
+        Destroy(runtimeMaterial);
+      }
+      else
+      {
+        DestroyImmediate(runtimeMaterial);
+      }
+
+      runtimeMaterial = null;
     }
 
     private static bool IsUsableShader(Shader shader)
@@ -609,9 +697,9 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
       return shader.passCount > 0;
     }
 
-    private void ApplyBlockMaterialLookups()
+    private void ApplyBlockMaterialLookups(Material material)
     {
-      if (runtimeWorldMaterial == null)
+      if (material == null)
       {
         return;
       }
@@ -696,10 +784,106 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
       bottomLookupTexture.Apply(false, false);
       propsLookupTexture.Apply(false, false);
 
-      runtimeWorldMaterial.SetTexture("_TopLookup", topLookupTexture);
-      runtimeWorldMaterial.SetTexture("_SideLookup", sideLookupTexture);
-      runtimeWorldMaterial.SetTexture("_BottomLookup", bottomLookupTexture);
-      runtimeWorldMaterial.SetTexture("_PropsLookup", propsLookupTexture);
+      material.SetTexture("_TopLookup", topLookupTexture);
+      material.SetTexture("_SideLookup", sideLookupTexture);
+      material.SetTexture("_BottomLookup", bottomLookupTexture);
+      material.SetTexture("_PropsLookup", propsLookupTexture);
+    }
+
+    private void ApplyDensityMaterialLookups(Material material)
+    {
+      if (material == null)
+      {
+        return;
+      }
+
+      EnsureLookupTextures();
+
+      int texelCount = LookupTextureSize * LookupTextureSize;
+      Color32[] densityPixels = new Color32[texelCount];
+      Color32[] propsPixels = new Color32[texelCount];
+
+      for (int id = 0; id < texelCount; id++)
+      {
+        ushort fallbackTileId = id == 0 ? (ushort)1 : (ushort)Mathf.Clamp(id, 1, 64);
+
+        densityPixels[id] = EncodeU16(fallbackTileId);
+
+        propsPixels[id] = new Color32(
+            (byte)BlockRenderCategory.Opaque,
+            (byte)BlockLightingCategory.Lit,
+            0,
+            255
+        );
+      }
+
+      ApplyDefaultDensityMaterialMapping(densityPixels, propsPixels);
+
+      if (blockMaterialDatabase != null && blockMaterialDatabase.Definitions != null)
+      {
+        for (int i = 0; i < blockMaterialDatabase.Definitions.Count; i++)
+        {
+          BlockMaterialDefinition def = blockMaterialDatabase.Definitions[i];
+
+          if (def == null)
+          {
+            continue;
+          }
+
+          int materialId = Mathf.Clamp(def.MaterialId, 1, 65535);
+
+          // For density terrain we need one smooth material tile, not top/side/bottom.
+          // Use SideTileId as the first pass because side textures usually look best
+          // on slopes and caves. Later this should become def.DensityTileId.
+          densityPixels[materialId] = EncodeU16(
+              (ushort)Mathf.Clamp(def.SideTileId, 1, 64)
+          );
+
+          propsPixels[materialId] = new Color32(
+              (byte)def.RenderCategory,
+              (byte)def.LightingCategory,
+              (byte)Mathf.Clamp(
+                  Mathf.RoundToInt(def.EmissionIntensity * 31.875f),
+                  0,
+                  255
+              ),
+              255
+          );
+        }
+      }
+
+      topLookupTexture.SetPixels32(densityPixels);
+      propsLookupTexture.SetPixels32(propsPixels);
+
+      topLookupTexture.Apply(false, false);
+      propsLookupTexture.Apply(false, false);
+
+      // Use both names so your new shader can call it either _DensityLookup or
+      // _TopLookup while you are wiring it up.
+      material.SetTexture("_DensityLookup", topLookupTexture);
+      material.SetTexture("_TopLookup", topLookupTexture);
+      material.SetTexture("_PropsLookup", propsLookupTexture);
+    }
+
+    private static void ApplyDefaultDensityMaterialMapping(
+    Color32[] densityPixels,
+    Color32[] propsPixels)
+    {
+      for (int materialId = 1; materialId <= 20; materialId++)
+      {
+        int tileId = materialId;
+
+        densityPixels[materialId] = EncodeU16(
+            (ushort)Mathf.Clamp(tileId, 1, 64)
+        );
+
+        propsPixels[materialId] = new Color32(
+            (byte)BlockRenderCategory.Opaque,
+            (byte)BlockLightingCategory.Lit,
+            0,
+            255
+        );
+      }
     }
 
     private static void ApplyDefaultMaterialMapping(

@@ -35,6 +35,16 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
     public WorldManifest LoadedManifest => loadedManifest;
     public string WorldId => string.IsNullOrWhiteSpace(worldId) ? "demo_world" : worldId.Trim();
 
+    public WorldStorageBackend Backend => backend;
+
+    /// <summary>
+    /// Optional factory used to build the chunk store for the <see cref="WorldStorageBackend.SpacetimeDb"/>
+    /// and <see cref="WorldStorageBackend.Custom"/> backends. Networking integrations (e.g. the SpacetimeDB
+    /// demo) register a factory here before the storage component's <c>Awake</c> runs so a server-backed
+    /// store is created instead of falling back to local files. Returning null falls back to local files.
+    /// </summary>
+    public static Func<CubusWorldStorage, IWorldChunkStore> ExternalStoreFactory;
+
     // The streamer uses ActiveStore for lazy chunk reads. When the saved manifest belongs
     // to another terrain system, returning the raw store lets block mode load density
     // records (or vice versa), after which the streamer never generates replacement chunks.
@@ -409,12 +419,28 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
           return new FileWorldChunkStore(Path.Combine(Application.persistentDataPath, "CubusCore", "Worlds"));
 
         case WorldStorageBackend.SpacetimeDb:
-          Debug.LogWarning("SpacetimeDB backend is selected, but the SpacetimeDB integration package is not installed. Falling back to local file storage.");
+          if (ExternalStoreFactory != null)
+          {
+            IWorldChunkStore provided = ExternalStoreFactory(this);
+            if (provided != null)
+            {
+              return provided;
+            }
+          }
+          Debug.LogWarning("SpacetimeDB backend is selected, but no SpacetimeDB store provider is registered (CubusWorldStorage.ExternalStoreFactory). Falling back to local file storage.");
           return new FileWorldChunkStore(Path.Combine(Application.persistentDataPath, "CubusCore", "Worlds"));
 
         case WorldStorageBackend.Custom:
         default:
-          Debug.LogWarning("Custom backend selected, but no custom store provider is assigned. Falling back to local file storage.");
+          if (ExternalStoreFactory != null)
+          {
+            IWorldChunkStore provided = ExternalStoreFactory(this);
+            if (provided != null)
+            {
+              return provided;
+            }
+          }
+          Debug.LogWarning("Custom backend selected, but no custom store provider is assigned (CubusWorldStorage.ExternalStoreFactory). Falling back to local file storage.");
           return new FileWorldChunkStore(Path.Combine(Application.persistentDataPath, "CubusCore", "Worlds"));
       }
     }

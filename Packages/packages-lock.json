@@ -1,5 +1,12 @@
 {
   "dependencies": {
+    "com.clockworklabs.spacetimedbsdk": {
+      "version": "https://github.com/clockworklabs/com.clockworklabs.spacetimedbsdk.git#v2.6.0",
+      "depth": 0,
+      "source": "git",
+      "dependencies": {},
+      "hash": "edfd8b62552347f3893fcf1309c0634fbc6d686b"
+    },
     "com.local.cubuscore": {
       "version": "file:com.michaelcuneo.cubuscore",
       "depth": 0,

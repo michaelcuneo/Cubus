@@ -63,6 +63,32 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Editing
         float traceDistance,
         BlockEditOperation operation)
     {
+      if (!TryResolveEditVoxel(ray, traceDistance, operation, out Vector3Int editVoxel))
+      {
+        return false;
+      }
+
+      DrawDebugVoxel(
+          editVoxel,
+          operation == BlockEditOperation.Add ? Color.green : Color.red
+      );
+
+      return ApplyEdit(editVoxel, operation).Changed;
+    }
+
+    /// <summary>
+    /// Resolves the voxel a ray edit would target without mutating the world.
+    /// Networked editing uses this to forward the intended edit to the server
+    /// instead of applying it locally.
+    /// </summary>
+    public bool TryResolveEditVoxel(
+        Ray ray,
+        float traceDistance,
+        BlockEditOperation operation,
+        out Vector3Int editVoxel)
+    {
+      editVoxel = default;
+
       if (world.Settings.TerrainSystem != TerrainSystem.Block)
       {
         return false;
@@ -89,17 +115,34 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Editing
         return false;
       }
 
-      Vector3Int editVoxel = GetEditVoxelFromHit(hit, operation);
+      editVoxel = GetEditVoxelFromHit(hit, operation);
 
       Debug.DrawRay(hit.point, hit.normal * 0.75f, Color.yellow, 1.0f);
       Debug.DrawLine(ray.origin, hit.point, Color.cyan, 1.0f);
 
-      DrawDebugVoxel(
-          editVoxel,
-          operation == BlockEditOperation.Add ? Color.green : Color.red
-      );
+      return true;
+    }
 
-      return ApplyEdit(editVoxel, operation).Changed;
+    /// <summary>
+    /// Applies a single authoritative voxel edit received from the network and
+    /// routes it through the same dirty-chunk remesh + persistence path used by
+    /// local edits. <paramref name="materialId"/> 0 removes the voxel.
+    /// </summary>
+    public void ApplyNetworkVoxelEdit(Vector3Int worldVoxel, ushort materialId)
+    {
+      if (world == null)
+      {
+        return;
+      }
+
+      if (!world.SetBlockMaterialAtWorldVoxel(worldVoxel, materialId))
+      {
+        return;
+      }
+
+      dirtyChunks.Clear();
+      world.AddDirtyChunkAndNeighbours(worldVoxel, dirtyChunks);
+      BlockChunksEdited?.Invoke(dirtyChunks);
     }
 
     private Vector3Int GetEditVoxelFromHit(

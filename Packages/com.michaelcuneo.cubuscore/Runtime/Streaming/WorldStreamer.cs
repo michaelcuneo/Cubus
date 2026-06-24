@@ -856,7 +856,11 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         knownEmptyChunks.Remove(r.ChunkCoord);
         Mesh mesh = r.MeshData.ToUnityMeshFast();
         MeshDataPool.Return(r.MeshData); r.MeshData = null;
-        worldRenderer.RenderUnityMesh(r.ChunkCoord, mesh, r.ChunkCoord == spawnTargetChunkCoord && !hasBroadcastInitialTerrainReady);
+        worldRenderer.RenderDensityChunkMesh(
+            r.ChunkCoord,
+            mesh,
+            r.ChunkCoord == spawnTargetChunkCoord && !hasBroadcastInitialTerrainReady
+        );
         totalDensityMeshApplies++;
         TryBroadcastInitialTerrainReady();
         count++;
