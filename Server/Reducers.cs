@@ -191,6 +191,35 @@ public static partial class Module
     }
   }
 
+  // Wipes ALL shared state for a world from the server: every authoritative voxel
+  // edit and any uploaded chunk rows. This lets the Unity editor's "Delete World
+  // Database" / "Clear World" actions reset SpacetimeDB too, not just the calling
+  // client's local cache, so the world is cleared consistently for every player.
+  [Reducer]
+  public static void ClearWorld(ReducerContext ctx, string worldId)
+  {
+    if (string.IsNullOrEmpty(worldId))
+    {
+      throw new Exception("ClearWorld requires a worldId.");
+    }
+
+    var editsRemoved = 0;
+    foreach (var edit in ctx.Db.voxel_edit.WorldId.Filter(worldId))
+    {
+      ctx.Db.voxel_edit.Key.Delete(edit.Key);
+      editsRemoved++;
+    }
+
+    var chunksRemoved = 0;
+    foreach (var chunk in ctx.Db.world_chunk.WorldId.Filter(worldId))
+    {
+      ctx.Db.world_chunk.Key.Delete(chunk.Key);
+      chunksRemoved++;
+    }
+
+    Log.Info($"ClearWorld '{worldId}': removed {editsRemoved} voxel edits and {chunksRemoved} chunks.");
+  }
+
   [Reducer]
   public static void SendChat(ReducerContext ctx, string text)
   {

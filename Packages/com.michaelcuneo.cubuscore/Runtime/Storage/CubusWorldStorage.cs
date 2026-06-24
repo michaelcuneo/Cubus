@@ -136,10 +136,15 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
       }
     }
 
-    // Persists the current state of an edited chunk. When an edit erased the whole
-    // chunk it no longer exists in memory, so SaveChunk has nothing to write and the
-    // stale pre-edit record would survive. In that case we write an explicit empty
-    // record so the erased state reloads correctly.
+    // Persists the current state of an edited chunk. The edit event also marks the
+    // edited chunk's NEIGHBOURS dirty (for remeshing), and those neighbours are
+    // usually NOT resident - especially while networked voxel_edit rows replay on
+    // connect before terrain has streamed in. We must therefore never blindly write
+    // an empty record for a non-resident chunk: that wipes real neighbour terrain to
+    // a void in both the cache and on disk, so edited areas reload as holes. Instead
+    // we reconstruct the authoritative state from seed + overrides; only chunks that
+    // were actually edited (have overrides) are persisted, and only as empty when the
+    // edits genuinely cleared them. Unedited neighbours are left untouched.
     public void SaveEditedChunk(Vector3Int chunkCoord)
     {
       EnsureStore();
@@ -149,11 +154,22 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
         return;
       }
 
-      WorldChunkRecord emptyRecord = world.Settings.TerrainSystem == TerrainSystem.Block
-          ? CubusChunkPayloadCodec.EncodeBlockChunk(WorldId, chunkCoord, new BlockChunkData(chunkCoord))
-          : CubusChunkPayloadCodec.EncodeDensityChunk(WorldId, chunkCoord, new DensityChunkData(chunkCoord));
+      // Not resident. Density erase-persistence is left to the override/edit layer
+      // (re-applied on reload) rather than risk the same neighbour-wipe.
+      if (world.Settings.TerrainSystem != TerrainSystem.Block)
+      {
+        return;
+      }
 
-      activeStore.SaveChunk(emptyRecord);
+      BlockChunkData reconstructed = world.ReconstructEditedBlockChunkOrNull(chunkCoord);
+      if (reconstructed == null)
+      {
+        // Never edited -> not a real change; leave its stored terrain intact.
+        return;
+      }
+
+      WorldChunkRecord record = CubusChunkPayloadCodec.EncodeBlockChunk(WorldId, chunkCoord, reconstructed);
+      activeStore.SaveChunk(record);
       storageReadsDisabledForTerrainSystem = false;
     }
 

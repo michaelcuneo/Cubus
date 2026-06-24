@@ -853,6 +853,24 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       return unloaded;
     }
 
+    // True when every in-bounds face neighbour of the chunk has loaded voxel data.
+    // An empty BLOCK mesh is only trustworthy under this condition: a neighbour
+    // that is still unloaded was treated as SOLID during the build (hiding the
+    // shared boundary face), so an empty result produced while a neighbour was
+    // missing can be a FALSE empty - blacklisting it leaves a permanent hole that
+    // the settled reconciliation can never clear (it skips known-empty chunks).
+    private bool HasAllInBoundsBlockNeighborsLoaded(Vector3Int root)
+    {
+      for (int i = 0; i < BlockMeshNeighborOffsets.Length; i++)
+      {
+        Vector3Int c = root + BlockMeshNeighborOffsets[i];
+        if (!world.Settings.IsInsideEffectiveWorldBounds3D(c)) continue;
+        if (!world.Data.BlockChunks.ContainsKey(c)) return false;
+      }
+
+      return true;
+    }
+
     private void ProcessCompletedBuildResults(int meshApplyBudget)
     {
       float applyStartTime = Time.realtimeSinceStartup;
@@ -901,7 +919,19 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
           if (r.IsEmpty || r.MeshData == null || r.MeshData.IsEmpty)
           {
-            knownEmptyChunks.Add(r.ChunkCoord);
+            // Only TRUST an empty mesh - and blacklist the chunk as known-empty -
+            // when it is genuinely empty: either it has no solid voxels at all, or
+            // it has solids but every in-bounds face neighbour was loaded at build
+            // time (a real buried/air chunk). A chunk that HAS solids and meshed
+            // empty while a face neighbour was still unloaded had that neighbour
+            // treated as SOLID, hiding its only visible face - a FALSE empty. Don't
+            // blacklist that, or it becomes a permanent hole; the neighbour is
+            // queued to load and a re-mesh (or settled reconciliation) fills it in.
+            bool hasSolids = world.Data.BlockChunks.TryGetValue(r.ChunkCoord, out BlockChunkData rb) && rb != null && rb.HasAnySolidVoxel();
+            if (!hasSolids || HasAllInBoundsBlockNeighborsLoaded(r.ChunkCoord))
+            {
+              knownEmptyChunks.Add(r.ChunkCoord);
+            }
             worldRenderer.RemoveChunk(r.ChunkCoord);
             ReturnMeshData(r.MeshData);
             blockCount++;

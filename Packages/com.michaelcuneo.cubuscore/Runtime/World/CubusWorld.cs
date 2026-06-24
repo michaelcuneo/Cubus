@@ -849,6 +849,26 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World
       dirtyChunks.Add(chunkCoord + new Vector3Int(0, 0, -1));
     }
 
+    // Rebuilds the authoritative state of a block chunk that isn't currently
+    // resident in memory, by regenerating it from the seed and re-applying its
+    // sparse edit overrides. Returns null when the chunk has NEVER been edited
+    // (no overrides) - in that case its terrain is unchanged and callers must
+    // leave any stored record alone rather than treating absence as "empty".
+    // The returned chunk may legitimately be empty when edits erased all of it.
+    public BlockChunkData ReconstructEditedBlockChunkOrNull(Vector3Int chunkCoord)
+    {
+      if (!worldData.BlockVoxelOverridesByChunk.TryGetValue(chunkCoord, out var overrides)
+          || overrides == null
+          || overrides.Count == 0)
+      {
+        return null;
+      }
+
+      BlockChunkData chunkData = new(chunkCoord);
+      new WorldGenerator(settings).GenerateBlockChunkDataWithOverrides(chunkData, overrides);
+      return chunkData;
+    }
+
     private void ApplyBlockVoxelOverridesToChunk(Vector3Int chunkCoord, BlockChunkData chunkData)
     {
       if (!worldData.BlockVoxelOverridesByChunk.TryGetValue(chunkCoord, out var overrides))

@@ -453,8 +453,8 @@ MonoBehaviour:
       ErosionRange: {x: 0.42, y: 1}
     WorldDefaultVariables: []
     UseFixedGenerationBounds: 0
-    GenerationMinChunk: {x: -12, y: -12, z: -12}
-    GenerationMaxChunk: {x: 12, y: 12, z: 12}
+    GenerationMinChunk: {x: -4, y: -4, z: -4}
+    GenerationMaxChunk: {x: 4, y: 4, z: 4}
     GenerationMinChunkXZ: {x: -8, y: -8}
     GenerationMaxChunkXZ: {x: 8, y: 8}
     BlockMinChunkY: -1
