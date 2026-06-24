@@ -622,6 +622,7 @@ namespace SpacetimeDB.Types
             var eventContext = (ReducerEventContext)context;
             return reducer switch
             {
+                Reducer.ClearWorld args => Reducers.InvokeClearWorld(eventContext, args),
                 Reducer.EditBlock args => Reducers.InvokeEditBlock(eventContext, args),
                 Reducer.SendChat args => Reducers.InvokeSendChat(eventContext, args),
                 Reducer.SetPlayerName args => Reducers.InvokeSetPlayerName(eventContext, args),

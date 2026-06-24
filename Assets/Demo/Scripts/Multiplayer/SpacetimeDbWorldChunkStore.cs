@@ -231,6 +231,27 @@ namespace Assets.Demo.Scripts.Multiplayer
       {
         cache.Clear();
         localCache.DeleteWorld(id);
+
+        // Also wipe the shared server state (voxel edits + any uploaded chunks) so a
+        // "Delete World Database" / "Clear World" in the editor resets SpacetimeDB
+        // too, not just this client's local cache. Requires a live connection; if
+        // offline only the local cache is cleared.
+        if (net != null)
+        {
+          net.RunOnMainThread(() =>
+          {
+            if (net.IsConnected && net.Conn != null)
+            {
+              net.Conn.Reducers.ClearWorld(id);
+            }
+            else
+            {
+              Debug.LogWarning(
+                  $"SpacetimeDbWorldChunkStore.DeleteWorld('{id}'): not connected, cleared local cache only. " +
+                  "Connect (enter play mode) and clear again to also wipe the server.");
+            }
+          });
+        }
       }
     }
 
