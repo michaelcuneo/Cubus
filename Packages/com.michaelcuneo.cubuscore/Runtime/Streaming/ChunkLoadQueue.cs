@@ -12,6 +12,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
   {
     private readonly Queue<ChunkLoadResult> completedResults = new();
     private readonly HashSet<Vector3Int> inFlightChunkCoords = new();
+    private readonly object stateLock = new();
 
     private int activeTaskCount;
     private int generationId;
@@ -21,7 +22,10 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
     public bool IsInFlight(Vector3Int chunkCoord)
     {
-      return inFlightChunkCoords.Contains(chunkCoord);
+      lock (stateLock)
+      {
+        return inFlightChunkCoords.Contains(chunkCoord);
+      }
     }
 
     public void IncrementGeneration()
@@ -44,6 +48,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         IReadOnlyDictionary<int, ushort> blockOverrides = null,
         IReadOnlyDictionary<int, DensityVoxelOverride> densityOverrides = null)
     {
+
       if (activeTaskCount >= maxActiveTasks) return false;
       if (inFlightChunkCoords.Contains(chunkCoord)) return false;
 

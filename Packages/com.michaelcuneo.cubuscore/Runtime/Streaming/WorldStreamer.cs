@@ -703,12 +703,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
           continue;
         }
 
-        if (HasChunkData(c))
-        {
-          if (desiredChunkCoords.Contains(c) || keepChunkCoords.Contains(c)) QueueRender(c);
-          continue;
-        }
-
         if (!world.Settings.IsInsideEffectiveWorldBounds3D(c))
         {
           knownEmptyChunks.Add(c);
