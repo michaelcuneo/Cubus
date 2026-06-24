@@ -35,8 +35,7 @@ namespace Assets.Demo.Scripts.Multiplayer
     [SerializeField] private bool enableExitMenu = true;
 
     [Tooltip("If the first connect fails (commonly a stale auth token saved while connected to a different server), clear the saved token and retry once with a fresh identity.")]
-    [SerializeField] private bool clearStaleTokenOnConnectError = true;
-
+    [SerializeField] private bool retryFreshIdentityOnConnectError = false;
     private readonly ConcurrentQueue<Action> mainThreadActions = new();
 
     private bool hasRetriedWithFreshToken;
@@ -95,15 +94,22 @@ namespace Assets.Demo.Scripts.Multiplayer
     {
       if (Conn != null)
       {
+        Debug.LogWarning("[CubusNetwork] Connect skipped because Conn is already non-null.");
         return;
       }
+
+      string token = AuthToken.Token;
+
+      Debug.Log(
+          $"[CubusNetwork] Connecting. Uri='{serverUri}' Module='{moduleName}' HasToken={!string.IsNullOrWhiteSpace(token)} TokenLength={(token == null ? 0 : token.Length)}"
+      );
 
       try
       {
         Conn = DbConnection.Builder()
             .WithUri(serverUri)
             .WithDatabaseName(moduleName)
-            .WithToken(AuthToken.Token)
+            .WithToken(token)
             .OnConnect(HandleConnect)
             .OnConnectError(HandleConnectError)
             .OnDisconnect(HandleDisconnect)
@@ -111,14 +117,18 @@ namespace Assets.Demo.Scripts.Multiplayer
       }
       catch (Exception ex)
       {
-        Debug.LogError($"[CubusNetwork] Failed to start connection: {ex.Message}");
+        Debug.LogError($"[CubusNetwork] Failed to start connection: {ex}");
         Conn = null;
       }
     }
 
     private void HandleConnect(DbConnection conn, Identity identity, string authToken)
     {
-      AuthToken.SaveToken(authToken);
+      if (!string.IsNullOrWhiteSpace(authToken))
+      {
+        AuthToken.SaveToken(authToken);
+      }
+
       hasRetriedWithFreshToken = false;
       LocalIdentity = identity;
       IsConnected = true;
@@ -159,7 +169,7 @@ namespace Assets.Demo.Scripts.Multiplayer
       if (verboseLogging)
       {
         Debug.Log("[CubusNetwork] Subscription applied.");
-      }
+      } 
       SubscriptionApplied?.Invoke(Conn);
     }
 
@@ -170,17 +180,20 @@ namespace Assets.Demo.Scripts.Multiplayer
 
     private void HandleConnectError(Exception ex)
     {
-      Debug.LogError($"[CubusNetwork] Connection error: {ex.Message}");
+      Debug.LogError($"[CubusNetwork] Connection error: {ex}");
       IsConnected = false;
-      Conn = null;
+      IsSubscriptionApplied = false;
 
-      if (clearStaleTokenOnConnectError && !hasRetriedWithFreshToken)
+      try
       {
-        hasRetriedWithFreshToken = true;
-        Debug.LogWarning("[CubusNetwork] Clearing saved auth token and retrying with a fresh identity (the saved token may have been issued by a different server).");
-        AuthToken.SaveToken(string.Empty);
-        Connect();
+        Conn?.Disconnect();
       }
+      catch
+      {
+        // Ignore cleanup failures after a failed connect.
+      }
+
+      Conn = null;
     }
 
     private void HandleDisconnect(DbConnection conn, Exception ex)
@@ -204,6 +217,27 @@ namespace Assets.Demo.Scripts.Multiplayer
       {
         mainThreadActions.Enqueue(action);
       }
+    }
+
+    public void ClearSavedIdentityAndReconnect()
+    {
+      try
+      {
+        Conn?.Disconnect();
+      }
+      catch
+      {
+        // Ignore disconnect failures during manual auth reset.
+      }
+
+      Conn = null;
+      IsConnected = false;
+      IsSubscriptionApplied = false;
+      LocalIdentity = default;
+      hasRetriedWithFreshToken = false;
+
+      AuthToken.SaveToken(string.Empty);
+      Connect();
     }
 
     private void Update()

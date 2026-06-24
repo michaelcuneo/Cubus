@@ -32,6 +32,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       BlockChunkData chunkData = new(chunkCoord);
       Voxel[] voxels = chunkData.GetRawVoxelArray();
 
+      // New voxel arrays are zero-filled, so air voxels do not need to be written.
       hasAnySolidVoxel = false;
 
       int chunkMinWorldY = chunkCoord.y * size;
@@ -43,51 +44,53 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
       for (int z = 0; z < size; z++)
       {
+        int worldZ = chunkCoord.z * size + z;
+
         for (int x = 0; x < size; x++)
         {
-          Vector3Int columnBaseWorldVoxel = chunkData.LocalToWorldVoxel(x, 0, z);
+          int worldX = chunkCoord.x * size + x;
 
           column.Prepare(
               snapshot,
-              columnBaseWorldVoxel.x,
-              columnBaseWorldVoxel.z,
+              worldX,
+              worldZ,
               1.0f
           );
 
-          if (chunkMinWorldY > Mathf.FloorToInt(column.SurfaceHeight))
+          int surfaceY = Mathf.FloorToInt(column.SurfaceHeight);
+
+          if (chunkMinWorldY > surfaceY)
           {
             continue;
           }
 
           for (int y = 0; y < size; y++)
           {
-            Vector3Int worldVoxel = chunkData.LocalToWorldVoxel(x, y, z);
+            int worldY = chunkMinWorldY + y;
 
+            if (worldY > surfaceY)
+            {
+              continue;
+            }
+
+            Vector3Int worldVoxel = new(worldX, worldY, worldZ);
             TerrainSample sample = column.SampleAt(worldVoxel, 1.0f);
 
-            // Use the column's double-blended surface (matches the Burst job and
-            // the boundary sampler) so solidity is consistent everywhere.
-            bool isBelowSurface = worldVoxel.y <= Mathf.FloorToInt(column.SurfaceHeight);
-
-            ushort materialId = isBelowSurface
-                ? (ushort)Mathf.Clamp(sample.SolidMaterialId > 0 ? sample.SolidMaterialId : 1, 1, 65535)
-                : (ushort)0;
+            ushort materialId = (ushort)Mathf.Clamp(
+                sample.SolidMaterialId > 0 ? sample.SolidMaterialId : 1,
+                1,
+                65535
+            );
 
             int voxelIndex = VoxelMath.FlattenIndex(x, y, z);
             voxels[voxelIndex] = new Voxel(materialId);
-
-            if (materialId != 0)
-            {
-              hasAnySolidVoxel = true;
-            }
+            hasAnySolidVoxel = true;
           }
         }
       }
 
-      if (overrides != null)
+      if (ApplyOverrides(chunkData, overrides))
       {
-        ApplyOverrides(chunkData, overrides);
-
         Voxel[] finalVoxels = chunkData.GetRawVoxelArray();
         hasAnySolidVoxel = false;
 
@@ -199,7 +202,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         ruleProfiles.Dispose();
       }
 
-      if (overrides != null)
+      if (ApplyOverrides(chunkData, overrides))
       {
         ApplyOverrides(chunkData, overrides);
 
@@ -245,14 +248,16 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
           : (ushort)0;
     }
 
-    public static void ApplyOverrides(
+    public static bool ApplyOverrides(
         BlockChunkData chunkData,
         IReadOnlyDictionary<int, ushort> overrides)
     {
       if (chunkData == null || overrides == null)
       {
-        return;
+        return false;
       }
+
+      bool changedAnyVoxel = false;
 
       foreach (KeyValuePair<int, ushort> pair in overrides)
       {
@@ -267,8 +272,11 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         int y = voxelIndex / VoxelConstants.ChunkSize % VoxelConstants.ChunkSize;
         int z = voxelIndex / (VoxelConstants.ChunkSize * VoxelConstants.ChunkSize);
 
-        chunkData.SetVoxel(x, y, z, new Voxel(pair.Value));
+        chunkData.SetVoxelRaw(x, y, z, new Voxel(pair.Value));
+        changedAnyVoxel = true;
       }
+
+      return changedAnyVoxel;
     }
 
     public static MeshData GenerateMesh(

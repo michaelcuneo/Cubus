@@ -148,14 +148,14 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 14242219738bc7c4c8c0f958f9886927, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Assets.Demo.Scripts.Multiplayer.CubusNetworkManager
-  serverUri: https://cubus.michaelcuneo.com.au:3030
+  serverUri: http://cubus.michaelcuneo.com.au
   moduleName: cubus
   subscribeToWorldChunks: 1
   connectOnStart: 1
   verboseLogging: 1
   enableChatOverlay: 1
   enableExitMenu: 1
-  clearStaleTokenOnConnectError: 1
+  retryFreshIdentityOnConnectError: 1
 --- !u!4 &515115132
 Transform:
   m_ObjectHideFlags: 0
