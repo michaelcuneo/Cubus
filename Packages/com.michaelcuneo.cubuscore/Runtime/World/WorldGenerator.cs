@@ -225,20 +225,31 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World
                 ? (ushort)Mathf.Clamp(sample.SolidMaterialId, 1, 65535)
                 : (ushort)0;
 
-            int voxelIndex = VoxelMath.FlattenIndex(x, y, z);
-
-            if (overrides != null &&
-                overrides.TryGetValue(voxelIndex, out ushort overrideMaterialId))
-            {
-              materialId = overrideMaterialId;
-            }
-
             chunkData.SetVoxel(
                 x,
                 y,
                 z,
                 new Voxel(materialId)
             );
+          }
+        }
+      }
+
+      if (overrides != null)
+      {
+        for (int z = 0; z < size; z++)
+        {
+          for (int x = 0; x < size; x++)
+          {
+            for (int y = 0; y < size; y++)
+            {
+              int voxelIndex = VoxelMath.FlattenIndex(x, y, z);
+
+              if (overrides.TryGetValue(voxelIndex, out ushort overrideMaterialId))
+              {
+                chunkData.SetVoxel(x, y, z, new Voxel(overrideMaterialId));
+              }
+            }
           }
         }
       }

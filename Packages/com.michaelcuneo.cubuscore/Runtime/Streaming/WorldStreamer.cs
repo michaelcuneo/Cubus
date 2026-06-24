@@ -678,7 +678,30 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         Vector3Int c = pendingLoadQueue.Dequeue();
         pendingLoadSet.Remove(c);
 
-        if ((!desiredChunkCoords.Contains(c) && !keepChunkCoords.Contains(c)) || worldRenderer.HasChunkView(c) || knownEmptyChunks.Contains(c)) continue;
+        bool isDesiredChunk = desiredChunkCoords.Contains(c);
+        bool isKeepChunk = keepChunkCoords.Contains(c);
+
+        if (world.Settings.TerrainSystem == TerrainSystem.Block)
+        {
+          if (!isDesiredChunk)
+          {
+            continue;
+          }
+        }
+        else if (!isDesiredChunk && !isKeepChunk)
+        {
+          continue;
+        }
+
+        if (HasChunkData(c))
+        {
+          if (desiredChunkCoords.Contains(c))
+          {
+            QueueRender(c);
+          }
+
+          continue;
+        }
 
         if (HasChunkData(c))
         {
@@ -1069,13 +1092,19 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
     private Dictionary<Vector3Int, BlockChunkData> CreateBlockMeshChunkSnapshots(Vector3Int root)
     {
-      Dictionary<Vector3Int, BlockChunkData> snapshots = new();
+      Dictionary<Vector3Int, BlockChunkData> snapshots = null;
 
       for (int i = 0; i < BlockMeshNeighborOffsets.Length; i++)
       {
         Vector3Int offset = BlockMeshNeighborOffsets[i];
         Vector3Int c = root + offset;
-        if (!world.Data.BlockChunks.TryGetValue(c, out BlockChunkData source) || source == null) continue;
+
+        if (!world.Data.BlockChunks.TryGetValue(c, out BlockChunkData source) || source == null)
+        {
+          continue;
+        }
+
+        snapshots ??= new Dictionary<Vector3Int, BlockChunkData>();
         snapshots[c] = CloneNeighborBoundaryFace(source, offset);
       }
 

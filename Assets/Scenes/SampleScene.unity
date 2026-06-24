@@ -462,7 +462,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: CubusCore.Runtime::CubusCore.World.CubusWorld
   settings:
     TerrainSystem: 0
-    WorldSeed: 83994624
+    WorldSeed: 2147483647
     ViewDistanceInChunks: 16
     VoxelSize: 1
     EnableLodTerrain: 0

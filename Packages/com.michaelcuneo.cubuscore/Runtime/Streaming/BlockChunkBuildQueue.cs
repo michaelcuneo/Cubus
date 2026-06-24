@@ -140,10 +140,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         if (completedResults.Count > 0)
         {
           result = completedResults.Dequeue();
-
-          activeTaskCount = Mathf.Max(0, activeTaskCount - 1);
-          inFlightChunkCoords.Remove(result.ChunkCoord);
-
           return true;
         }
       }
@@ -177,9 +173,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       MeshData meshData = null;
       if (hasAnySolidVoxel)
       {
-        request.NeighborChunkSnapshots ??= new Dictionary<Vector3Int, BlockChunkData>();
-        request.NeighborChunkSnapshots[chunkData.ChunkCoord] = chunkData;
-
         // Boundary voxels with no neighbor snapshot fall back to terrain
         // sampling. Cache a sampler per (x, z) column so the surface noise is
         // resolved once per column instead of once per boundary voxel.
