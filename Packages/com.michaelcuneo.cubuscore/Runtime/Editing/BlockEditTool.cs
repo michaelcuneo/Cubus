@@ -58,6 +58,39 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Editing
       world = GetComponent<CubusWorld>();
     }
 
+    /// <summary>
+    /// Whether this tool is attached to a <see cref="CubusWorld"/> it can edit.
+    /// Resolves lazily so it is correct regardless of Awake ordering.
+    /// </summary>
+    public bool HasWorld
+    {
+      get
+      {
+        if (world == null)
+        {
+          world = GetComponent<CubusWorld>();
+        }
+        return world != null;
+      }
+    }
+
+    /// <summary>
+    /// Finds the active <see cref="BlockEditTool"/> that owns a <see cref="CubusWorld"/>.
+    /// Networked components use this to avoid binding to a world-less tool that a
+    /// RequireComponent added on a different GameObject.
+    /// </summary>
+    public static BlockEditTool FindWorldEditTool()
+    {
+      foreach (BlockEditTool tool in FindObjectsByType<BlockEditTool>(FindObjectsSortMode.None))
+      {
+        if (tool.HasWorld)
+        {
+          return tool;
+        }
+      }
+      return null;
+    }
+
     public bool TryEditFromRay(
         Ray ray,
         float traceDistance,

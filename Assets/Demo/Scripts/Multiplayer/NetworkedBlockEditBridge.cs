@@ -26,6 +26,12 @@ namespace Assets.Demo.Scripts.Multiplayer
       {
         editTool = GetComponent<BlockEditTool>();
       }
+      if (editTool == null || !editTool.HasWorld)
+      {
+        // The RequireComponent above guarantees a local BlockEditTool, but that
+        // one has no CubusWorld. Bind to the world-owning tool so edits apply.
+        editTool = BlockEditTool.FindWorldEditTool() ?? editTool;
+      }
     }
 
     private void OnEnable()
