@@ -22,9 +22,11 @@ namespace Assets.Demo.Scripts.Multiplayer
       {
         editTool = GetComponent<BlockEditTool>();
       }
-      if (editTool == null)
+      if (editTool == null || !editTool.HasWorld)
       {
-        editTool = FindAnyObjectByType<BlockEditTool>();
+        // Bind to the tool that actually owns a CubusWorld, never a world-less
+        // one auto-added by a RequireComponent on the networking object.
+        editTool = BlockEditTool.FindWorldEditTool() ?? editTool;
       }
       if (bridge == null)
       {

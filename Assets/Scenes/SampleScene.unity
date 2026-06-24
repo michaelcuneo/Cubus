@@ -379,9 +379,11 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Assets.Demo.Scripts.Multiplayer.CubusNetworkManager
   serverUri: http://192.168.1.10:3030
   moduleName: cubus
-  subscribeToAllTables: 1
+  subscribeToWorldChunks: 0
   connectOnStart: 1
   verboseLogging: 1
+  enableChatOverlay: 1
+  clearStaleTokenOnConnectError: 1
 --- !u!4 &515115132
 Transform:
   m_ObjectHideFlags: 0
@@ -1046,8 +1048,8 @@ MonoBehaviour:
   addMaterialId: 1
   sphereRadiusVoxels: 3
   boxSize: {x: 4, y: 4, z: 4}
-  protectedTransform: {fileID: 0}
-  protectedCharacterController: {fileID: 0}
+  protectedTransform: {fileID: 1517188426}
+  protectedCharacterController: {fileID: 1517188428}
   preventAddingInsideProtectedBounds: 1
   protectedBoundsPadding: 0.05
 --- !u!114 &1517188434
