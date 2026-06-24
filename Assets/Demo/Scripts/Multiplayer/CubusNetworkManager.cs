@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using SpacetimeDB;
 using SpacetimeDB.Types;
 using UnityEngine;
@@ -21,13 +22,21 @@ namespace Assets.Demo.Scripts.Multiplayer
     [Tooltip("Published module name (e.g. the name used in `spacetime publish <name>`).")]
     [SerializeField] private string moduleName = "cubus";
 
-    [Tooltip("Subscribe to every table on connect. Convenient for the demo; replace with scoped queries for larger worlds.")]
-    [SerializeField] private bool subscribeToAllTables = true;
+    [Tooltip("Subscribe to the authoritative world_chunk table. Off by default: a blanket subscription downloads every stored chunk at once, which does not scale (use a near-player subscription before enabling).")]
+    [SerializeField] private bool subscribeToWorldChunks = false;
 
     [SerializeField] private bool connectOnStart = true;
     [SerializeField] private bool verboseLogging = true;
 
+    [Tooltip("Automatically attach the in-game chat overlay (CubusChatUI) to this object on startup.")]
+    [SerializeField] private bool enableChatOverlay = true;
+
+    [Tooltip("If the first connect fails (commonly a stale auth token saved while connected to a different server), clear the saved token and retry once with a fresh identity.")]
+    [SerializeField] private bool clearStaleTokenOnConnectError = true;
+
     private readonly ConcurrentQueue<Action> mainThreadActions = new();
+
+    private bool hasRetriedWithFreshToken;
 
     public static CubusNetworkManager Instance { get; private set; }
 
@@ -36,6 +45,9 @@ namespace Assets.Demo.Scripts.Multiplayer
     public bool IsConnected { get; private set; }
     public bool IsSubscriptionApplied { get; private set; }
     public string WorldId { get; set; } = "demo_world";
+
+    /// <summary>Whether authoritative world_chunk sync (subscription + uploads) is enabled.</summary>
+    public bool WorldChunkSyncEnabled => subscribeToWorldChunks;
 
     /// <summary>Raised on the main thread once the connection is established and identity known.</summary>
     public event Action<DbConnection, Identity> Connected;
@@ -56,6 +68,11 @@ namespace Assets.Demo.Scripts.Multiplayer
 
       Instance = this;
       DontDestroyOnLoad(gameObject);
+
+      if (enableChatOverlay && GetComponent<CubusChatUI>() == null)
+      {
+        gameObject.AddComponent<CubusChatUI>();
+      }
     }
 
     private void Start()
@@ -94,6 +111,7 @@ namespace Assets.Demo.Scripts.Multiplayer
     private void HandleConnect(DbConnection conn, Identity identity, string authToken)
     {
       AuthToken.SaveToken(authToken);
+      hasRetriedWithFreshToken = false;
       LocalIdentity = identity;
       IsConnected = true;
 
@@ -108,20 +126,23 @@ namespace Assets.Demo.Scripts.Multiplayer
           .OnApplied(HandleSubscriptionApplied)
           .OnError(HandleSubscriptionError);
 
-      if (subscribeToAllTables)
+      // Never use SubscribeToAllTables(): it pulls the entire world_chunk table,
+      // whose binary payloads can exceed the SDK's decode buffer and crash the
+      // client ("Stream was too long"). Always subscribe to scoped queries and
+      // only include world_chunk when explicitly opted in.
+      var queries = new List<string>
       {
-        builder.SubscribeToAllTables();
-      }
-      else
+        "SELECT * FROM player",
+        "SELECT * FROM chat_message",
+        $"SELECT * FROM voxel_edit WHERE WorldId = '{WorldId}'",
+      };
+
+      if (subscribeToWorldChunks)
       {
-        builder.Subscribe(new[]
-        {
-          "SELECT * FROM player",
-          "SELECT * FROM chat_message",
-          $"SELECT * FROM voxel_edit WHERE WorldId = '{WorldId}'",
-          $"SELECT * FROM world_chunk WHERE WorldId = '{WorldId}'",
-        });
+        queries.Add($"SELECT * FROM world_chunk WHERE WorldId = '{WorldId}'");
       }
+
+      builder.Subscribe(queries.ToArray());
     }
 
     private void HandleSubscriptionApplied(SubscriptionEventContext ctx)
@@ -143,6 +164,15 @@ namespace Assets.Demo.Scripts.Multiplayer
     {
       Debug.LogError($"[CubusNetwork] Connection error: {ex.Message}");
       IsConnected = false;
+      Conn = null;
+
+      if (clearStaleTokenOnConnectError && !hasRetriedWithFreshToken)
+      {
+        hasRetriedWithFreshToken = true;
+        Debug.LogWarning("[CubusNetwork] Clearing saved auth token and retrying with a fresh identity (the saved token may have been issued by a different server).");
+        AuthToken.SaveToken(string.Empty);
+        Connect();
+      }
     }
 
     private void HandleDisconnect(DbConnection conn, Exception ex)

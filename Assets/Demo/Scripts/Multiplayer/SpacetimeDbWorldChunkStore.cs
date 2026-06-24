@@ -130,6 +130,14 @@ namespace Assets.Demo.Scripts.Multiplayer
       // Cache locally immediately so a just-generated chunk is treated as known.
       cache[chunk.ChunkCoord] = chunk;
 
+      // Uploading every generated chunk floods world_chunk (tens of thousands of
+      // rows) and makes the initial subscription too large to decode. Only push
+      // to the server when authoritative chunk sync is explicitly enabled.
+      if (!net.WorldChunkSyncEnabled)
+      {
+        return;
+      }
+
       // Reducer calls must run on the connection's main thread.
       net.RunOnMainThread(() =>
       {

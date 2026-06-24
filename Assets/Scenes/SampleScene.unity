@@ -377,7 +377,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 14242219738bc7c4c8c0f958f9886927, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Assets.Demo.Scripts.Multiplayer.CubusNetworkManager
-  serverUri: http://127.0.0.1:3000
+  serverUri: http://192.168.1.10:3030
   moduleName: cubus
   subscribeToAllTables: 1
   connectOnStart: 1
