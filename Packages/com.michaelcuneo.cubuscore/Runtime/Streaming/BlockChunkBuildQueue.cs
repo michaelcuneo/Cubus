@@ -19,6 +19,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     private readonly Queue<BlockChunkBuildResult> completedResults = new();
     private readonly HashSet<Vector3Int> inFlightChunkCoords = new();
 
+    private readonly object stateLock = new();
+
     private int activeTaskCount;
     private int generationId;
 
@@ -38,7 +40,10 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
     public bool IsInFlight(Vector3Int chunkCoord)
     {
-      return inFlightChunkCoords.Contains(chunkCoord);
+      lock (stateLock)
+      {
+        return inFlightChunkCoords.Contains(chunkCoord);
+      }
     }
 
     public void IncrementGeneration()
@@ -60,18 +65,21 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         return false;
       }
 
-      if (activeTaskCount >= maxActiveTasks)
+      lock (stateLock)
       {
-        return false;
-      }
+        if (activeTaskCount >= maxActiveTasks)
+        {
+          return false;
+        }
 
-      if (inFlightChunkCoords.Contains(request.ChunkCoord))
-      {
-        return false;
-      }
+        if (inFlightChunkCoords.Contains(request.ChunkCoord))
+        {
+          return false;
+        }
 
-      inFlightChunkCoords.Add(request.ChunkCoord);
-      activeTaskCount++;
+        inFlightChunkCoords.Add(request.ChunkCoord);
+        activeTaskCount++;
+      }
 
       _ = Task.Run(() => Build(request)).ContinueWith(task =>
       {
@@ -115,9 +123,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       return true;
     }
 
-    // Neighbour snapshots are throwaway; return their pooled backing arrays once
-    // the build has finished reading them. The root chunk's own snapshot becomes
-    // the canonical chunk data (result.ChunkData) and must never be pooled.
     private static void ReturnNeighborSnapshotsToPool(BlockChunkBuildRequest request)
     {
       if (request?.NeighborChunkSnapshots == null)
