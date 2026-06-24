@@ -136,12 +136,15 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
         if (mode == TerrainSystem.Block)
         {
-          // Use the Burst-compiled generator (SIMD, designed to run on these
-          // worker threads). It produces output identical to the managed
-          // column sampler but is dramatically faster, and generation is the
-          // dominant per-chunk streaming cost. Falls back to managed C#
-          // automatically when the Burst package is unavailable.
-          result.BlockChunkData = BlockChunkBuilder.GenerateChunkDataJob(chunkCoord, snapshot, blockOverrides, out _);
+          // Generate on this background worker with the MANAGED column sampler.
+          // The Burst job path (GenerateChunkDataJob -> job.Run) must NOT be used
+          // here: Unity's Job System only permits running/scheduling jobs from the
+          // main thread, so calling it from this Task.Run worker throws every time
+          // (chunk load fails -> re-queued -> retries forever => ~1 chunk/minute).
+          // The managed sampler is thread-safe, allocation-light (one reusable
+          // column sampler, biome resolved once per column, columns fully above
+          // the surface skipped) and is the fast pre-Burst streaming path.
+          result.BlockChunkData = BlockChunkBuilder.GenerateChunkData(chunkCoord, snapshot, blockOverrides, out _);
           return result;
         }
 

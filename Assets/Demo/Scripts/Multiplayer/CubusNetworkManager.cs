@@ -31,6 +31,9 @@ namespace Assets.Demo.Scripts.Multiplayer
     [Tooltip("Automatically attach the in-game chat overlay (CubusChatUI) to this object on startup.")]
     [SerializeField] private bool enableChatOverlay = true;
 
+    [Tooltip("Automatically attach the Escape exit-to-Windows overlay (CubusExitMenu) to this object on startup.")]
+    [SerializeField] private bool enableExitMenu = true;
+
     [Tooltip("If the first connect fails (commonly a stale auth token saved while connected to a different server), clear the saved token and retry once with a fresh identity.")]
     [SerializeField] private bool clearStaleTokenOnConnectError = true;
 
@@ -72,6 +75,11 @@ namespace Assets.Demo.Scripts.Multiplayer
       if (enableChatOverlay && GetComponent<CubusChatUI>() == null)
       {
         gameObject.AddComponent<CubusChatUI>();
+      }
+
+      if (enableExitMenu && GetComponent<CubusExitMenu>() == null)
+      {
+        gameObject.AddComponent<CubusExitMenu>();
       }
     }
 

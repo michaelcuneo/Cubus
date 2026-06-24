@@ -34,7 +34,9 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Lod
     /// <param name="viewDistanceInChunks">Full-detail radius (LOD0) in base chunks.</param>
     /// <param name="levelCount">Number of LOD levels to emit (clamped to [0, MaxLodLevel]).</param>
     /// <param name="ringWidthInTiles">Thickness of each level's ring, in that level's tiles (min 1).</param>
-    /// <param name="verticalRadiusInTiles">Tiles above/below the surface tile to include (min 0).</param>
+    /// <param name="verticalRadiusInTiles">Extra tiles above/below the surface tile to include on top of the full world span (min 0).</param>
+    /// <param name="worldMinChunkY">Bottom of the world's vertical chunk extent. The band always covers down to here.</param>
+    /// <param name="worldMaxChunkY">Top of the world's vertical chunk extent. The band always covers up to here.</param>
     /// <param name="surfaceChunkYProvider">(chunkX, chunkZ) =&gt; surface base-chunk Y. Required.</param>
     /// <param name="inBounds">Base-chunk coord =&gt; inside the world. Null means unbounded.</param>
     /// <param name="results">Destination list (appended to).</param>
@@ -44,6 +46,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Lod
       int levelCount,
       int ringWidthInTiles,
       int verticalRadiusInTiles,
+      int worldMinChunkY,
+      int worldMaxChunkY,
       Func<int, int, int> surfaceChunkYProvider,
       Func<Vector3Int, bool> inBounds,
       List<LodTileKey> results)
@@ -97,10 +101,18 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Lod
             int surfaceChunkY = surfaceChunkYProvider(centreChunkX, centreChunkZ);
             int surfaceTileY = VoxelMath.FloorDiv(surfaceChunkY, strideChunks);
 
-            for (int dy = -verticalRadius; dy <= verticalRadius; dy++)
-            {
-              int tileY = surfaceTileY + dy;
+            // Cover the world's ENTIRE vertical extent at this column, not a thin
+            // band around the surface. Following the surface with an above/below
+            // limit left voids wherever distant terrain rose or fell past the
+            // band, which showed up as floating island fragments at the horizon.
+            // verticalRadius still extends past the world span as a safety margin.
+            int worldMinTileY = VoxelMath.FloorDiv(worldMinChunkY, strideChunks);
+            int worldMaxTileY = VoxelMath.FloorDiv(worldMaxChunkY, strideChunks);
+            int minTileY = Mathf.Min(worldMinTileY, surfaceTileY - verticalRadius);
+            int maxTileY = Mathf.Max(worldMaxTileY, surfaceTileY + verticalRadius);
 
+            for (int tileY = minTileY; tileY <= maxTileY; tileY++)
+            {
               if (inBounds != null)
               {
                 var centreChunkCoord = new Vector3Int(centreChunkX, tileY * strideChunks + halfStride, centreChunkZ);

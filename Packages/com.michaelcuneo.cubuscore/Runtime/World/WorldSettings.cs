@@ -252,6 +252,29 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World
       maxChunkZ = Mathf.Max(GenerationMinChunk.z, GenerationMaxChunk.z);
     }
 
+    // Vertical chunk extent of the world for the active terrain system. This is
+    // the authoritative "how tall is the world" answer used by streaming: the
+    // full-detail and LOD systems fill this entire span rather than a thin band
+    // around the surface, so undulating terrain never leaves voids.
+    public void GetActiveVerticalChunkBounds(out int minChunkY, out int maxChunkY)
+    {
+      int lo;
+      int hi;
+      if (TerrainSystem == TerrainSystem.SmoothDensity)
+      {
+        lo = DensityMinChunkY;
+        hi = DensityMaxChunkY;
+      }
+      else
+      {
+        lo = BlockMinChunkY;
+        hi = BlockMaxChunkY;
+      }
+
+      minChunkY = Mathf.Min(lo, hi);
+      maxChunkY = Mathf.Max(lo, hi);
+    }
+
     public void GetGenerationChunkBoundsXZ(
         out int minChunkX,
         out int maxChunkX,

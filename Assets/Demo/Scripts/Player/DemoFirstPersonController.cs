@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
+using Assets.Demo.Scripts.Multiplayer;
 
 namespace Assets.Demo.Scripts.Player
 {
@@ -46,6 +47,15 @@ namespace Assets.Demo.Scripts.Player
 
     private void Update()
     {
+      // While an overlay (chat typing / exit menu) is capturing input, stand
+      // down completely: no look, no movement, and crucially no cursor re-lock,
+      // so the cursor stays free to click menu buttons and keystrokes go to the
+      // chat field instead of the player.
+      if (CubusUiInput.IsCapturing)
+      {
+        return;
+      }
+
       HandleCursor();
       HandleLook();
       HandleMovement();

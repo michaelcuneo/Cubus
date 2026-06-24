@@ -28,17 +28,10 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     [SerializeField] private bool evictCachedChunkDataOutsideKeepSet = true;
     [SerializeField] private bool generateWorldDatabaseBeforeStreaming = false;
     [SerializeField] private bool persistStreamedChunks = true;
-    [SerializeField] private bool enforcePrePr30BlockPerformanceProfile = true;
-
-    [Header("Distant-Horizon LOD Hand-off")]
-    [Tooltip("When LOD terrain is enabled, removes a full-detail chunk's mesh the moment it leaves the render radius (its voxel data stays cached out to the keep radius for instant return). This makes the full-detail region and the LOD band share exactly one boundary, so the same area is never drawn twice. Disable to restore the old unload-hysteresis behaviour where meshes linger out to the keep radius.")]
-    [SerializeField] private bool hideFullDetailOutsideRenderRadius = true;
 
     [Header("Initial Streaming Stage")]
     [SerializeField][Min(0)] private int initialStreamingRadiusInChunks = 1;
     [SerializeField] private bool useInitialStreamingStage = true;
-    [SerializeField][Min(0)] private int initialChunksBelowSurface = 1;
-    [SerializeField][Min(0)] private int initialChunksAboveSurface = 1;
     [SerializeField][Min(0)] private int initialKeepPaddingInChunks = 1;
 
     private readonly HashSet<Vector3Int> desiredChunkCoords = new();
@@ -54,7 +47,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     private readonly List<Vector3Int> candidateChunksBuffer = new();
     private readonly List<Vector3Int> queueSortBuffer = new();
     private readonly List<Vector3Int> unloadChunksBuffer = new();
-    private readonly List<Vector3Int> hideMeshBuffer = new();
 
     private readonly BlockChunkBuildQueue buildQueue = new();
     private readonly DensityChunkBuildQueue densityBuildQueue = new();
@@ -69,6 +61,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     private Coroutine bootstrapCoroutine;
     private Vector3Int lastViewerChunkCoord;
     private bool hasLastViewerChunkCoord;
+    private Vector3Int viewerHeading;
     private Vector3Int spawnTargetChunkCoord;
     private bool hasBroadcastInitialTerrainReady;
     private bool pendingQueuesNeedPrioritization;
@@ -138,32 +131,10 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
     private bool UseInitialStreamingStageNow => useInitialStreamingStage && !hasBroadcastInitialTerrainReady;
 
-    // Strict hand-off is only active once past the initial spawn stage and only
-    // when the LOD field exists to cover everything beyond the render radius;
-    // otherwise full-detail meshes are kept to the keep radius as before so no
-    // hole is ever left uncovered.
-    private bool StrictFullDetailCulling =>
-        hideFullDetailOutsideRenderRadius
-        && !UseInitialStreamingStageNow
-        && world != null && world.Settings != null && world.Settings.EnableLodTerrain;
-
-    // A full-detail chunk mesh should exist only inside the render (desired) set
-    // plus the spawn anchor. When strict culling is off, keep-set chunks keep
-    // their mesh too (legacy hysteresis behaviour). Only ever called for coords
-    // already known to be in the desired or keep set.
-    private bool ShouldRenderFullDetailMesh(Vector3Int chunkCoord)
-    {
-      if (desiredChunkCoords.Contains(chunkCoord) || chunkCoord == spawnTargetChunkCoord) return true;
-      return !StrictFullDetailCulling;
-    }
     private int ActiveDesiredRadiusInChunks => UseInitialStreamingStageNow ? Mathf.Max(0, initialStreamingRadiusInChunks) : Mathf.Max(1, world.Settings.ViewDistanceInChunks);
     private int ActiveKeepRadiusInChunks => ActiveDesiredRadiusInChunks + (UseInitialStreamingStageNow ? Mathf.Max(0, initialKeepPaddingInChunks) : UnloadPaddingInChunks);
-    private int ActiveChunksBelowSurface => UseInitialStreamingStageNow ? Mathf.Max(0, initialChunksBelowSurface) : ChunksBelowSurface;
-    private int ActiveChunksAboveSurface => UseInitialStreamingStageNow ? Mathf.Max(0, initialChunksAboveSurface) : ChunksAboveSurface;
 
     private int UnloadPaddingInChunks => Mathf.Max(2, settings != null ? settings.UnloadPaddingInChunks : 4);
-    private int ChunksBelowSurface => Mathf.Max(0, settings != null ? settings.ChunksBelowSurface : 8);
-    private int ChunksAboveSurface => Mathf.Max(0, settings != null ? settings.ChunksAboveSurface : 8);
     private int ChunksLoadedPerFrame => Mathf.Clamp(
       settings != null
         ? (UseInitialStreamingStageNow ? settings.InitialChunksGeneratedPerFrame : settings.ChunksGeneratedPerFrame)
@@ -443,30 +414,63 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       Vector3Int viewerChunkCoord = WorldToChunkCoord(GetSpawnReferencePosition());
       if (!force && hasLastViewerChunkCoord && viewerChunkCoord == lastViewerChunkCoord) return;
 
+      // Remember which way the viewer is travelling (in chunk space) so the build
+      // queues can be biased toward the frontier ahead instead of always nearest-
+      // first. Without this the chunks you are walking INTO are the lowest priority
+      // and only get built once you are on top of them, leaving gaps at the edge.
+      if (hasLastViewerChunkCoord)
+      {
+        Vector3Int delta = viewerChunkCoord - lastViewerChunkCoord;
+        if (delta.x != 0 || delta.z != 0)
+        {
+          viewerHeading = delta;
+        }
+      }
+
       lastViewerChunkCoord = viewerChunkCoord;
       hasLastViewerChunkCoord = true;
-      BuildChunkSet(viewerChunkCoord, ActiveDesiredRadiusInChunks, ActiveChunksBelowSurface, ActiveChunksAboveSurface, desiredChunkCoords);
-      BuildChunkSet(viewerChunkCoord, ActiveKeepRadiusInChunks, ActiveChunksBelowSurface, ActiveChunksAboveSurface, keepChunkCoords);
+      BuildChunkSet(viewerChunkCoord, ActiveDesiredRadiusInChunks, desiredChunkCoords);
+      BuildChunkSet(viewerChunkCoord, ActiveKeepRadiusInChunks, keepChunkCoords);
       QueueGeneratedChunksForRender(viewerChunkCoord);
       QueueSpawnTargetForRender();
-      HideFullDetailOutsideDesiredSet();
       UnloadOutsideKeepSet();
       pendingQueuesNeedPrioritization = true;
     }
 
-    private void BuildChunkSet(Vector3Int viewerChunkCoord, int horizontalRadius, int chunksBelowSurface, int chunksAboveSurface, HashSet<Vector3Int> targetSet)
+    // Number of chunks of vertical headroom kept above each column's surface
+    // chunk so the chunk straddling the surface (and any thin overhang) is always
+    // streamed.
+    // Vertical reach of the streamed/rendered set, in chunks, measured from each
+    // column's surface chunk. The set FOLLOWS the surface per column (coverage is
+    // gap-free across undulating terrain) and reaches a couple of chunks below
+    // (valleys, overhangs, shallow caves) and above (cliffs, overhangs) so the
+    // viewer can actually see terrain above and below them. Crucially this is
+    // DECOUPLED from the configured world band: a tall band no longer forces every
+    // column to stream its full height, which is what ballooned the set to tens of
+    // thousands of mostly-invisible chunks.
+    private const int SurfaceVerticalChunksBelow = 2;
+    private const int SurfaceVerticalChunksAbove = 2;
+
+    private void BuildChunkSet(Vector3Int viewerChunkCoord, int horizontalRadius, HashSet<Vector3Int> targetSet)
     {
       targetSet.Clear();
+      world.Settings.GetActiveVerticalChunkBounds(out _, out int maxChunkY);
+
       for (int z = -horizontalRadius; z <= horizontalRadius; z++)
         for (int x = -horizontalRadius; x <= horizontalRadius; x++)
         {
           int chunkX = viewerChunkCoord.x + x;
           int chunkZ = viewerChunkCoord.z + z;
-          int surfaceChunkY = GetSurfaceChunkYForColumn(chunkX, chunkZ, viewerChunkCoord.y * VoxelConstants.ChunkSize);
-          int minY = surfaceChunkY - chunksBelowSurface;
-          int maxY = surfaceChunkY + chunksAboveSurface;
 
-          for (int y = minY; y <= maxY; y++)
+          int surfaceChunkY = GetSurfaceChunkYForColumn(chunkX, chunkZ, maxChunkY * VoxelConstants.ChunkSize);
+
+          // Surface-relative window. The surface chunk is always covered; the small
+          // +/- reach lets the viewer see a couple chunks up and down without
+          // streaming the whole world column.
+          int columnMinY = surfaceChunkY - SurfaceVerticalChunksBelow;
+          int columnMaxY = surfaceChunkY + SurfaceVerticalChunksAbove;
+
+          for (int y = columnMinY; y <= columnMaxY; y++)
           {
             Vector3Int chunkCoord = new(chunkX, y, chunkZ);
             if (world.Settings.IsInsideEffectiveWorldBounds3D(chunkCoord)) targetSet.Add(chunkCoord);
@@ -477,6 +481,15 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     private void QueueGeneratedChunksForRender(Vector3Int viewerChunkCoord)
     {
       candidateChunksBuffer.Clear();
+      // Proactively load + mesh ONLY the desired (view-radius) set. The keep set
+      // is a DATA / hysteresis cache, not a render region: meshing the whole keep
+      // set is catastrophic when the unload padding is large (e.g. view 16 +
+      // padding 16 => keep radius 32 => ~4x the desired chunk count), which buries
+      // the worker pool under tens of thousands of invisible chunks and stalls the
+      // frontier ("walk to the edge and it never loads"). Already-built meshes are
+      // left untouched out to the keep radius (UnloadOutsideKeepSet only removes
+      // beyond it), so terrain still lingers smoothly as you move - we just stop
+      // GENERATING terrain you cannot see past the render radius.
       foreach (Vector3Int chunkCoord in desiredChunkCoords)
       {
         if (worldRenderer.HasChunkView(chunkCoord) || pendingLoadSet.Contains(chunkCoord) || pendingRenderSet.Contains(chunkCoord) || knownEmptyChunks.Contains(chunkCoord) || chunkLoadQueue.IsInFlight(chunkCoord)) continue;
@@ -484,11 +497,19 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         candidateChunksBuffer.Add(chunkCoord);
       }
 
-      candidateChunksBuffer.Sort(GetChunkPriorityComparison(viewerChunkCoord));
+      candidateChunksBuffer.Sort(GetChunkPriorityComparison(ComputeSortPivot()));
       for (int i = 0; i < candidateChunksBuffer.Count; i++)
       {
-        if (HasChunkData(candidateChunksBuffer[i])) QueueRender(candidateChunksBuffer[i]);
-        else QueueLoad(candidateChunksBuffer[i]);
+        Vector3Int c = candidateChunksBuffer[i];
+        if (!HasChunkData(c)) { QueueLoad(c); continue; }
+
+        // Data is present: only mesh it if the player could actually SEE it. A
+        // chunk with no renderable surface (pure air above the terrain) is flagged
+        // known-empty instead of burning a mesh build on geometry nobody can see.
+        // Buried-solid chunks pass this cheap test but mesh to nothing and are
+        // flagged empty once built, so they are never rendered either.
+        if (HasRenderableSurface(c)) QueueRender(c);
+        else knownEmptyChunks.Add(c);
       }
     }
 
@@ -499,6 +520,25 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       sortPivotChunkCoord = pivotChunkCoord;
       chunkPriorityComparison ??= CompareChunkPriorityByPivot;
       return chunkPriorityComparison;
+    }
+
+    // The point the build queues sort around. Normally the viewer, but shifted
+    // forward along the recent heading by half the desired radius so chunks in the
+    // direction of travel are generated BEFORE the viewer arrives (predictive
+    // prefetch). Falls back to the viewer when stationary.
+    private Vector3Int ComputeSortPivot()
+    {
+      if (!hasLastViewerChunkCoord) return lastViewerChunkCoord;
+
+      int lead = Mathf.Max(2, ActiveDesiredRadiusInChunks / 2);
+      Vector3 heading = new(viewerHeading.x, 0.0f, viewerHeading.z);
+      if (heading.sqrMagnitude < 0.0001f) return lastViewerChunkCoord;
+
+      heading.Normalize();
+      return new Vector3Int(
+        lastViewerChunkCoord.x + Mathf.RoundToInt(heading.x * lead),
+        lastViewerChunkCoord.y,
+        lastViewerChunkCoord.z + Mathf.RoundToInt(heading.z * lead));
     }
 
     private int CompareChunkPriorityByPivot(Vector3Int a, Vector3Int b) => CompareChunkPriority(a, b, sortPivotChunkCoord);
@@ -582,7 +622,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         queueSortBuffer.Add(c);
       }
 
-      queueSortBuffer.Sort(GetChunkPriorityComparison(lastViewerChunkCoord));
+      queueSortBuffer.Sort(GetChunkPriorityComparison(ComputeSortPivot()));
       for (int i = 0; i < queueSortBuffer.Count; i++) queue.Enqueue(queueSortBuffer[i]);
     }
 
@@ -873,17 +913,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
           }
 
           knownEmptyChunks.Remove(r.ChunkCoord);
-          if (!ShouldRenderFullDetailMesh(r.ChunkCoord))
-          {
-            // Keep-only chunk under strict hand-off: data is already stored above
-            // for instant return, but the LOD band covers this region so the
-            // full-detail mesh is not drawn.
-            worldRenderer.RemoveChunk(r.ChunkCoord);
-            ReturnMeshData(r.MeshData);
-            r.MeshData = null;
-            blockCount++;
-            continue;
-          }
           worldRenderer.RenderBlockChunkMesh(r.ChunkCoord, r.MeshData);
           totalBlockMeshApplies++;
           r.MeshData = null;
@@ -926,15 +955,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         }
 
         knownEmptyChunks.Remove(r.ChunkCoord);
-        if (!ShouldRenderFullDetailMesh(r.ChunkCoord))
-        {
-          // Keep-only chunk under strict hand-off: data retained above, mesh
-          // skipped because the LOD band covers this region.
-          worldRenderer.RemoveChunk(r.ChunkCoord);
-          ReturnMeshData(r);
-          count++;
-          continue;
-        }
         Mesh mesh = r.MeshData.ToUnityMeshFast();
         MeshDataPool.Return(r.MeshData); r.MeshData = null;
         worldRenderer.RenderDensityChunkMesh(
@@ -1130,6 +1150,17 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       _ => false
     };
 
+    // True when a loaded chunk presents a surface the viewer could actually see -
+    // i.e. it has renderable geometry. Air chunks (no solid voxels / no density
+    // surface crossing) are invisible and must never be meshed. Gates mesh builds
+    // so work is only spent on chunks the player can see.
+    private bool HasRenderableSurface(Vector3Int c) => world.Settings.TerrainSystem switch
+    {
+      TerrainSystem.Block => world.Data.BlockChunks.TryGetValue(c, out BlockChunkData b) && b != null && b.HasAnySolidVoxel(),
+      TerrainSystem.SmoothDensity => world.Data.DensityChunks.TryGetValue(c, out DensityChunkData d) && d != null && d.HasSurfaceCrossing(),
+      _ => false
+    };
+
     public void RebuildDensityChunks(IEnumerable<Vector3Int> dirtyChunks)
     {
       if (!EnsureRuntimeReferences() || world.Settings.TerrainSystem != TerrainSystem.SmoothDensity) return;
@@ -1209,33 +1240,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       Vector2Int column = new(x, z);
       if (surfaceChunkYCache.TryGetValue(column, out int cached)) return cached;
       int y = generator.GetSurfaceChunkYForChunkColumn(column); surfaceChunkYCache[column] = y; return y;
-    }
-
-    // Removes full-detail chunk MESHES that have fallen outside the render
-    // (desired) set but are still inside the keep set, leaving their voxel data
-    // cached so they re-mesh instantly (never regenerate) when re-entered. This
-    // is what makes the full-detail region end exactly where the LOD band begins
-    // instead of lingering through the unload-hysteresis padding ring. Chunks
-    // outside the keep set are left to UnloadOutsideKeepSet for a full unload.
-    private void HideFullDetailOutsideDesiredSet()
-    {
-      if (!StrictFullDetailCulling) return;
-
-      hideMeshBuffer.Clear();
-      foreach (Vector3Int c in worldRenderer.ActiveChunkViews.Keys)
-      {
-        if (c == spawnTargetChunkCoord) continue;
-        if (desiredChunkCoords.Contains(c)) continue;
-        if (!keepChunkCoords.Contains(c)) continue;
-        hideMeshBuffer.Add(c);
-      }
-
-      for (int i = 0; i < hideMeshBuffer.Count; i++)
-      {
-        // Removes only the rendered mesh/view; the chunk's voxel data remains in
-        // world.Data because the coord is still inside the keep set.
-        worldRenderer.RemoveChunk(hideMeshBuffer[i]);
-      }
     }
 
     private void UnloadOutsideKeepSet()

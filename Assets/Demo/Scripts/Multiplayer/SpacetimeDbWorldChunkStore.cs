@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.IO;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain;
 using SpacetimeDB;
@@ -11,15 +12,18 @@ namespace Assets.Demo.Scripts.Multiplayer
 {
   /// <summary>
   /// A server-authoritative <see cref="IWorldChunkStore"/> backed by the SpacetimeDB <c>world_chunk</c>
-  /// table. Chunks the server already holds are streamed into a thread-safe cache and returned by
-  /// <see cref="TryLoadChunk"/>; chunks the local client generates are uploaded so other players share
-  /// the same world. Missing chunks return <c>false</c> so the streamer can generate them locally.
+  /// table for shared edits, layered over a local on-disk <see cref="FileWorldChunkStore"/> cache for
+  /// the deterministic base terrain. Base chunks are written to disk so re-entry and restarts load
+  /// blisteringly fast instead of regenerating, while the (large, binary) base terrain is NEVER bulk
+  /// uploaded to the DB - only edits replicate via <c>voxel_edit</c>. Missing chunks return
+  /// <c>false</c> so the streamer generates them locally, then they are cached to disk.
   /// </summary>
   public sealed class SpacetimeDbWorldChunkStore : IAuthoritativeWorldChunkStore
   {
     private readonly CubusNetworkManager net;
     private readonly string worldId;
     private readonly ConcurrentDictionary<Vector3Int, WorldChunkRecord> cache = new();
+    private readonly FileWorldChunkStore localCache;
 
     private bool callbacksRegistered;
 
@@ -27,6 +31,8 @@ namespace Assets.Demo.Scripts.Multiplayer
     {
       this.net = net;
       this.worldId = string.IsNullOrWhiteSpace(worldId) ? "demo_world" : worldId;
+      this.localCache = new FileWorldChunkStore(
+          Path.Combine(Application.persistentDataPath, "CubusCore", "Worlds"));
 
       if (net != null)
       {
@@ -106,18 +112,19 @@ namespace Assets.Demo.Scripts.Multiplayer
 
     // IWorldChunkStore -------------------------------------------------------
 
-    public bool HasWorld(string id) => id == worldId && !cache.IsEmpty;
+    public bool HasWorld(string id) => id == worldId && (!cache.IsEmpty || localCache.HasWorld(id));
 
     public void SaveWorldManifest(WorldManifest manifest)
     {
-      // The SpacetimeDB world has no separate manifest table; world bounds are
-      // owned by the scene's WorldSettings. Nothing to persist here.
+      // The SpacetimeDB world has no manifest table (bounds live on WorldSettings),
+      // but persist one to the local disk cache so a saved world is recognised on
+      // restart and chunks load from disk instead of regenerating.
+      localCache.SaveWorldManifest(manifest);
     }
 
     public bool TryLoadWorldManifest(string id, out WorldManifest manifest)
     {
-      manifest = null;
-      return false;
+      return localCache.TryLoadWorldManifest(id, out manifest);
     }
 
     public void SaveChunk(WorldChunkRecord chunk)
@@ -129,6 +136,11 @@ namespace Assets.Demo.Scripts.Multiplayer
 
       // Cache locally immediately so a just-generated chunk is treated as known.
       cache[chunk.ChunkCoord] = chunk;
+
+      // Persist the deterministic base chunk to disk so re-entry and restarts load
+      // fast instead of regenerating. This is the local, per-client cache - not the
+      // shared DB - so it never bloats world_chunk.
+      localCache.SaveChunk(chunk);
 
       // Uploading every generated chunk floods world_chunk (tens of thousands of
       // rows) and makes the initial subscription too large to decode. Only push
@@ -162,8 +174,24 @@ namespace Assets.Demo.Scripts.Multiplayer
 
     public bool TryLoadChunk(string id, Vector3Int chunkCoord, out WorldChunkRecord chunk)
     {
-      if (id == worldId && cache.TryGetValue(chunkCoord, out chunk))
+      if (id != worldId)
       {
+        chunk = default;
+        return false;
+      }
+
+      // RAM cache first (chunks generated/received this session), then the on-disk
+      // cache (chunks saved by previous sessions) - both far cheaper than
+      // regenerating the terrain.
+      if (cache.TryGetValue(chunkCoord, out chunk))
+      {
+        return true;
+      }
+
+      if (localCache.TryLoadChunk(id, chunkCoord, out chunk))
+      {
+        // Promote to the RAM cache so subsequent reads this session skip disk IO.
+        cache[chunkCoord] = chunk;
         return true;
       }
 
@@ -178,9 +206,22 @@ namespace Assets.Demo.Scripts.Multiplayer
         yield break;
       }
 
+      HashSet<Vector3Int> seen = new();
+
       foreach (Vector3Int coord in cache.Keys)
       {
-        yield return coord;
+        if (seen.Add(coord))
+        {
+          yield return coord;
+        }
+      }
+
+      foreach (Vector3Int coord in localCache.EnumerateChunkCoords(id))
+      {
+        if (seen.Add(coord))
+        {
+          yield return coord;
+        }
       }
     }
 
@@ -189,6 +230,7 @@ namespace Assets.Demo.Scripts.Multiplayer
       if (id == worldId)
       {
         cache.Clear();
+        localCache.DeleteWorld(id);
       }
     }
 
