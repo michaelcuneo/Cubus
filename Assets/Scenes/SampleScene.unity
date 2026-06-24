@@ -506,24 +506,19 @@ MonoBehaviour:
   m_EditorClassIdentifier: CubusCore.Runtime::CubusCore.Streaming.WorldStreamer
   viewer: {fileID: 1517188426}
   settings:
-    UnloadPaddingInChunks: 16
-    ChunksBelowSurface: 1
-    ChunksAboveSurface: 1
-    ChunksGeneratedPerFrame: 16
-    InitialChunksGeneratedPerFrame: 24
+    UnloadPaddingInChunks: 4
+    ChunksGeneratedPerFrame: 8
+    InitialChunksGeneratedPerFrame: 4
     ChunksRenderedPerFrame: 16
     MeshAppliesPerFrame: 8
     MeshApplyTimeBudgetMs: 6
-    UseAsyncGeneration: 1
-    MaxAsyncChunkTasks: 16
+    MaxAsyncChunkTasks: 12
   initialSpawnRequiredRenderedChunks: 1
   desiredInitialSpawnLocation: {x: 0, y: 0, z: 0}
   initialSpawnClearance: 2
   evictCachedChunkDataOutsideKeepSet: 1
   generateWorldDatabaseBeforeStreaming: 0
   persistStreamedChunks: 1
-  enforcePrePr30BlockPerformanceProfile: 0
-  hideFullDetailOutsideRenderRadius: 1
   initialStreamingRadiusInChunks: 1
   useInitialStreamingStage: 1
   initialKeepPaddingInChunks: 1
