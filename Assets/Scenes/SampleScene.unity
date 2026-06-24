@@ -171,6 +171,84 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &616502403 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 1714448373971688800, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
+  m_PrefabInstance: {fileID: 844205374}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &616502405 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 1974823580454898308, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
+  m_PrefabInstance: {fileID: 844205374}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 616502403}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6a46283b0b60485418d668150e6d1c7b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+--- !u!114 &616502407
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 616502403}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 35e8a34e61bb5af4d9ff27bf04e7d9f9, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Assets.Demo.Scripts.Sky.AzureRandomEventDirector
+  azureCore: {fileID: 616502405}
+  templatePreset: {fileID: 643807740}
+  autoSubscribe: 1
+  transitionTime: 18
+  newWeatherEachDay: 1
+  hourlyChangeChance: 0.25
+  rareNightEventChance: 0.12
+  grandYearEventChance: 0.5
+  stormThunderChancePerMinute: 0.03
+  randomness: 0.45
+  colorJitter: 0.08
+  randomizeColors: 1
+  useKeywordBias: 1
+  thunderVariantCount: 1
+  summerDayLength: 60
+  normalDayLength: 120
+  winterDayLength: 240
+  onBloodMoon:
+    m_PersistentCalls:
+      m_Calls: []
+  onAurora:
+    m_PersistentCalls:
+      m_Calls: []
+  onMeteorShower:
+    m_PersistentCalls:
+      m_Calls: []
+  onEclipse:
+    m_PersistentCalls:
+      m_Calls: []
+  onEerieFog:
+    m_PersistentCalls:
+      m_Calls: []
+  onLightningStrike:
+    m_PersistentCalls:
+      m_Calls: []
+  onCalmRestored:
+    m_PersistentCalls:
+      m_Calls: []
+  logEvents: 1
+--- !u!114 &643807740 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 7496194973537726388, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
+  m_PrefabInstance: {fileID: 844205374}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: dc14414660dbd0c41b2b7f8b4ab272d5, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
 --- !u!1 &832575517
 GameObject:
   m_ObjectHideFlags: 0
@@ -232,6 +310,18 @@ PrefabInstance:
       propertyPath: m_Name
       value: AzureCoreSystem
       objectReference: {fileID: 0}
+    - target: {fileID: 1974823580454898308, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
+      propertyPath: m_eventSystem.m_onMinuteChangeEvent.m_PersistentCalls.m_Calls.Array.size
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 1974823580454898308, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
+      propertyPath: m_eventSystem.m_onMinuteChangeEvent.m_PersistentCalls.m_Calls.Array.data[0].m_Mode
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 1974823580454898308, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
+      propertyPath: m_eventSystem.m_onMinuteChangeEvent.m_PersistentCalls.m_Calls.Array.data[0].m_CallState
+      value: 2
+      objectReference: {fileID: 0}
     - target: {fileID: 7953403546012018190, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
       propertyPath: m_LocalPosition.x
       value: 46.16227
@@ -276,6 +366,9 @@ PrefabInstance:
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
     m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 1714448373971688800, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 616502407}
     - targetCorrespondingSourceObject: {fileID: 4380352413285918650, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
       insertIndex: -1
       addedObject: {fileID: 844205376}
@@ -332,6 +425,7 @@ GameObject:
   - component: {fileID: 1298388486}
   - component: {fileID: 1298388487}
   - component: {fileID: 1298388488}
+  - component: {fileID: 1298388489}
   m_Layer: 0
   m_Name: VoxelWorld
   m_TagString: Untagged
@@ -487,6 +581,12 @@ MonoBehaviour:
   biomeAtlasGrid: {x: 8, y: 8}
   blockMaterialDatabase: {fileID: 11400000, guid: 9f3dd8c62d0f4e43a96e91bd7ea8be12, type: 2}
   biomeTint: {r: 1, g: 1, b: 1, a: 1}
+  biomeNormalAtlas: {fileID: 2800000, guid: 0902fdf5813ef7949a29cfce25590e23, type: 3}
+  normalStrength: 0.5
+  detailBumpStrength: 1
+  surfaceSmoothness: 0.12
+  specularStrength: 0.25
+  fresnelStrength: 0.15
   logRenderedChunkMeshes: 0
   collisionMode: 1
   collisionViewer: {fileID: 1517188426}
@@ -624,6 +724,31 @@ MonoBehaviour:
   maxConcurrentBuilds: 4
   buildsStartedPerFrame: 8
   tilesAppliedPerFrame: 8
+--- !u!114 &1298388489
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1298388476}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ec86df3a723b6d44c9e5047848376a4a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: CubusCore.Runtime::CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering.WorldDetailRenderer
+  enableFoliage: 1
+  scatterDatabase: {fileID: 11400000, guid: b7c4e91a2d6f4a3b8c1e5f9a0d2b7e64, type: 2}
+  foliageAtlas: {fileID: 2800000, guid: a602752a009550d41859240878c382af, type: 3}
+  foliageShaderName: Cubus/FoliageURP
+  densityMultiplier: 1
+  castShadows: 1
+  tint: {r: 1, g: 1, b: 1, a: 1}
+  alphaCutoff: 0.4
+  ambientBoost: 1
+  windStrength: 0.12
+  windSpeed: 1.5
+  windFrequency: 0.15
+  windDirection: {x: 1, y: 0.35}
 --- !u!1 &1453617040
 GameObject:
   m_ObjectHideFlags: 0
