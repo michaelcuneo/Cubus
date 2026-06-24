@@ -49,6 +49,11 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Chunks
       hasCachedSolidState = false;
     }
 
+    public void SetVoxelRaw(int x, int y, int z, Voxel voxel)
+    {
+      voxels[VoxelMath.FlattenIndex(x, y, z)] = voxel;
+    }
+
     public bool IsSolid(int x, int y, int z)
     {
       return GetVoxel(x, y, z).IsSolid;
