@@ -69,6 +69,9 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         {
           completedResults.Enqueue(result);
         }
+
+        activeTaskCount = Mathf.Max(0, activeTaskCount - 1);
+        inFlightChunkCoords.Remove(chunkCoord);
       });
 
       return true;
@@ -81,8 +84,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         if (completedResults.Count > 0)
         {
           result = completedResults.Dequeue();
-          activeTaskCount = Mathf.Max(0, activeTaskCount - 1);
-          inFlightChunkCoords.Remove(result.ChunkCoord);
           return true;
         }
       }

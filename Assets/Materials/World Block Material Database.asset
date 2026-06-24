@@ -525,3 +525,19 @@ MonoBehaviour:
     RenderCategory: 0
     LightingCategory: 0
     EmissionIntensity: 0
+  - MaterialId: 65
+    DisplayName: Tree Wood
+    TopTileId: 13
+    SideTileId: 14
+    BottomTileId: 13
+    RenderCategory: 0
+    LightingCategory: 0
+    EmissionIntensity: 0
+  - MaterialId: 66
+    DisplayName: Tree Leaves
+    TopTileId: 15
+    SideTileId: 15
+    BottomTileId: 15
+    RenderCategory: 0
+    LightingCategory: 0
+    EmissionIntensity: 0
