@@ -65,6 +65,14 @@ namespace Assets.Demo.Scripts.Multiplayer
         return;
       }
 
+      // The authoritative apply path (ApplyNetworkVoxelEdit) bypasses local edit
+      // guards, so enforce the protected bounds here before forwarding the intent.
+      // Stops adding blocks inside the player and deleting the floor underfoot.
+      if (!editTool.CanEditVoxelAt(voxel, operation))
+      {
+        return;
+      }
+
       ushort material = add ? editTool.AddMaterialId : (ushort)0;
       bridge.SendEdit(voxel, material);
     }

@@ -159,7 +159,10 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
       if (chunkData == null)
       {
-        chunkData = BlockChunkBuilder.GenerateChunkDataJob(
+        // Managed (thread-safe) generation. The Burst job path uses job.Run,
+        // which Unity only permits on the main thread; calling it from this
+        // worker thread throws and stalls streaming. See ChunkLoadQueue.Load.
+        chunkData = BlockChunkBuilder.GenerateChunkData(
             request.ChunkCoord,
             request.WorldSnapshot,
             request.OverrideSnapshot,

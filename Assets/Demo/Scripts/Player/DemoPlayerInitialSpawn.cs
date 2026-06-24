@@ -102,7 +102,8 @@ namespace Assets.Demo.Scripts.Player
         }
       }
 
-      BlockEditTool editTool = FindAnyObjectByType<BlockEditTool>();
+      BlockEditTool editTool = BlockEditTool.FindWorldEditTool()
+          ?? FindAnyObjectByType<BlockEditTool>();
 
       if (editTool != null)
       {

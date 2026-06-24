@@ -69,6 +69,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Lod
     private int generation;
     private Vector3Int lastViewerChunkCoord;
     private bool hasLastViewerChunkCoord;
+    private Vector3Int viewerHeading;
     private float baseVoxelSize = 1.0f;
     private bool snapshotInitialized;
 
@@ -149,6 +150,18 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Lod
       Vector3Int viewerChunkCoord = WorldToChunkCoord(viewer.position);
       if (!hasLastViewerChunkCoord || viewerChunkCoord != lastViewerChunkCoord)
       {
+        // Track heading so the build queue can prefetch the frontier ahead of
+        // travel rather than building strictly nearest-first (which leaves gaps
+        // at the horizon you are walking toward).
+        if (hasLastViewerChunkCoord)
+        {
+          Vector3Int delta = viewerChunkCoord - lastViewerChunkCoord;
+          if (delta.x != 0 || delta.z != 0)
+          {
+            viewerHeading = delta;
+          }
+        }
+
         lastViewerChunkCoord = viewerChunkCoord;
         hasLastViewerChunkCoord = true;
         RecomputeDesiredTiles(viewerChunkCoord);
@@ -195,12 +208,16 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Lod
           ? worldStreamer.FullDetailChunkRadius
           : Mathf.Max(1, world.Settings.ViewDistanceInChunks);
 
+      world.Settings.GetActiveVerticalChunkBounds(out int worldMinChunkY, out int worldMaxChunkY);
+
       LodBandPlanner.ComputeDesiredTiles(
         viewerChunkCoord,
         fullDetailRadius,
         world.Settings.LodLevelCount,
         world.Settings.LodRingWidthInTiles,
         world.Settings.LodVerticalRadiusInTiles,
+        worldMinChunkY,
+        worldMaxChunkY,
         surfaceProvider,
         boundsProvider,
         desiredBuffer);
@@ -225,11 +242,15 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Lod
       // fresh chance if the viewer returns later.
       knownEmptyTiles.RemoveWhere(key => !desiredKeys.Contains(key));
 
-      // Rebuild the pending queue, nearest-first, for anything not yet resident.
+      // Rebuild the pending queue for anything not yet resident. Sort by distance
+      // to a look-ahead focus (the viewer shifted forward along the recent heading)
+      // instead of the viewer itself, so the LOD band we are walking toward is built
+      // BEFORE we reach the horizon rather than last.
       pendingBuilds.Clear();
       pendingSet.Clear();
 
-      desiredBuffer.Sort((a, b) => DistanceSortKey(a, viewerChunkCoord).CompareTo(DistanceSortKey(b, viewerChunkCoord)));
+      Vector3Int sortFocus = ComputeSortFocus(viewerChunkCoord, fullDetailRadius);
+      desiredBuffer.Sort((a, b) => DistanceSortKey(a, sortFocus).CompareTo(DistanceSortKey(b, sortFocus)));
 
       for (int i = 0; i < desiredBuffer.Count; i++)
       {
@@ -254,6 +275,29 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Lod
       int dx = centreChunkX - viewerChunkCoord.x;
       int dz = centreChunkZ - viewerChunkCoord.z;
       return (long)dx * dx + (long)dz * dz;
+    }
+
+    // Shifts the sort pivot forward along the viewer's recent heading so tiles in
+    // the direction of travel get priority (predictive prefetch). Falls back to the
+    // viewer position when stationary.
+    private Vector3Int ComputeSortFocus(Vector3Int viewerChunkCoord, int leadChunks)
+    {
+      if (leadChunks <= 0)
+      {
+        return viewerChunkCoord;
+      }
+
+      Vector3 heading = new(viewerHeading.x, 0.0f, viewerHeading.z);
+      if (heading.sqrMagnitude < 0.0001f)
+      {
+        return viewerChunkCoord;
+      }
+
+      heading.Normalize();
+      return new Vector3Int(
+        viewerChunkCoord.x + Mathf.RoundToInt(heading.x * leadChunks),
+        viewerChunkCoord.y,
+        viewerChunkCoord.z + Mathf.RoundToInt(heading.z * leadChunks));
     }
 
     private void StartPendingBuilds()

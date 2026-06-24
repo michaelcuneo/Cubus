@@ -230,6 +230,22 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Editing
     {
       dirtyChunks.Clear();
 
+      // Guard removes against the protected bounds here too (the per-shape paths
+      // only gate Add). This stops a local remove from deleting the floor.
+      if (operation == BlockEditOperation.Remove)
+      {
+        Vector3Int removeCenter = new(
+            Mathf.FloorToInt(worldVoxelPosition.x),
+            Mathf.FloorToInt(worldVoxelPosition.y),
+            Mathf.FloorToInt(worldVoxelPosition.z)
+        );
+
+        if (!CanEditVoxelAt(removeCenter, operation))
+        {
+          return new BlockEditResult(0, new HashSet<Vector3Int>());
+        }
+      }
+
       int changedCount = 0;
 
       switch (editShape)
@@ -362,45 +378,82 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Editing
       }
     }
 
-    private bool CanAddVoxelAt(Vector3Int worldVoxel)
+    private bool CanAddVoxelAt(Vector3Int worldVoxel) =>
+        CanEditVoxelAt(worldVoxel, BlockEditOperation.Add);
+
+    /// <summary>
+    /// Whether an edit may target <paramref name="worldVoxel"/> without violating
+    /// the protected bounds. <see cref="BlockEditOperation.Add"/> is rejected when
+    /// the voxel overlaps the protected capsule (so you can't entomb yourself).
+    /// <see cref="BlockEditOperation.Remove"/> additionally protects the voxel
+    /// directly beneath the capsule so you can't carve the floor out from under
+    /// the player. Always allowed when protection is disabled or no protected
+    /// target is set. Networked editing calls this before forwarding an intent to
+    /// the server, because the authoritative apply path bypasses local guards.
+    /// </summary>
+    public bool CanEditVoxelAt(Vector3Int worldVoxel, BlockEditOperation operation)
     {
       if (!preventAddingInsideProtectedBounds)
       {
         return true;
       }
 
-      Bounds protectedBounds;
-
-      if (protectedCharacterController != null)
-      {
-        protectedBounds = protectedCharacterController.bounds;
-      }
-      else if (protectedTransform != null)
-      {
-        protectedBounds = new Bounds(
-            protectedTransform.position,
-            Vector3.one * world.Settings.VoxelSize
-        );
-      }
-      else
+      if (world == null || world.Settings == null)
       {
         return true;
       }
 
+      if (!TryGetProtectedBounds(out Bounds protectedBounds))
+      {
+        return true;
+      }
+
+      float voxelSize = world.Settings.VoxelSize;
       protectedBounds.Expand(protectedBoundsPadding);
+
+      if (operation == BlockEditOperation.Remove)
+      {
+        // Extend the protected volume one voxel downward so the supporting floor
+        // voxel is covered and can't be removed beneath the player's feet.
+        protectedBounds.Encapsulate(new Vector3(
+            protectedBounds.center.x,
+            protectedBounds.min.y - voxelSize,
+            protectedBounds.center.z
+        ));
+      }
 
       Vector3 voxelWorldCenter = transform.TransformPoint(
           new Vector3(
               worldVoxel.x + 0.5f,
               worldVoxel.y + 0.5f,
               worldVoxel.z + 0.5f
-          ) * world.Settings.VoxelSize
+          ) * voxelSize
       );
 
-      Vector3 voxelWorldSize = Vector3.one * world.Settings.VoxelSize;
-      Bounds voxelBounds = new(voxelWorldCenter, voxelWorldSize);
+      Bounds voxelBounds = new(voxelWorldCenter, Vector3.one * voxelSize);
 
       return !protectedBounds.Intersects(voxelBounds);
+    }
+
+    private bool TryGetProtectedBounds(out Bounds protectedBounds)
+    {
+      if (protectedCharacterController != null)
+      {
+        protectedBounds = protectedCharacterController.bounds;
+        return true;
+      }
+
+      if (protectedTransform != null)
+      {
+        protectedBounds = new Bounds(
+            protectedTransform.position,
+            Vector3.one * world.Settings.VoxelSize
+        );
+        return true;
+      }
+
+      protectedBounds = default;
+      return false;
     }
   }
 }

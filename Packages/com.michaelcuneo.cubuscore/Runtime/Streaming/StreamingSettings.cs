@@ -6,7 +6,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
   [Serializable]
   public sealed class StreamingSettings : ISerializationCallbackReceiver
   {
-    private const int MaxRuntimeVerticalChunksAroundSurface = 1;
+    private const int MaxRuntimeUnloadPaddingInChunks = 4;
     private const int MaxRuntimeChunksGeneratedPerFrame = 32;
     private const int MaxRuntimeInitialChunksGeneratedPerFrame = 64;
     private const int MaxRuntimeChunksRenderedPerFrame = 64;
@@ -27,25 +27,9 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     // raises a conservatively-serialized component, never exceeds the cores.
     private const int MinRuntimeAsyncChunkTasks = 12;
 
-    public const int PrePr30BlockChunksGeneratedPerFrame = 16;
-    public const int PrePr30BlockInitialChunksGeneratedPerFrame = 64;
-    public const int PrePr30BlockChunksRenderedPerFrame = 32;
-    public const int PrePr30BlockMeshAppliesPerFrame = 8;
-    public const int PrePr30BlockMeshApplyTimeBudgetMs = 1;
-    public const int PrePr30BlockMaxAsyncChunkTasks = 8;
-
     [Header("Horizontal")]
     [Min(1)]
     public int UnloadPaddingInChunks = 3;
-
-    [Header("Vertical Around Surface")]
-    [Tooltip("Number of chunks below the sampled surface kept in the desired streaming set.")]
-    [Min(0)]
-    public int ChunksBelowSurface = 1;
-
-    [Tooltip("Number of chunks above the sampled surface kept in the desired streaming set.")]
-    [Min(0)]
-    public int ChunksAboveSurface = 1;
 
     [Header("Budgets")]
     [Min(1)]
@@ -67,8 +51,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     public int MeshApplyTimeBudgetMs = 4;
 
     [Header("Async")]
-    public bool UseAsyncGeneration = true;
-
     [Min(1)]
     public int MaxAsyncChunkTasks = 16;
 
@@ -83,27 +65,13 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
     public void NormalizeRuntimeBudgets()
     {
-      UnloadPaddingInChunks = Mathf.Max(1, UnloadPaddingInChunks);
-      ChunksBelowSurface = Mathf.Clamp(ChunksBelowSurface, 0, MaxRuntimeVerticalChunksAroundSurface);
-      ChunksAboveSurface = Mathf.Clamp(ChunksAboveSurface, 0, MaxRuntimeVerticalChunksAroundSurface);
+      UnloadPaddingInChunks = Mathf.Clamp(UnloadPaddingInChunks, 1, MaxRuntimeUnloadPaddingInChunks);
       ChunksGeneratedPerFrame = Mathf.Clamp(ChunksGeneratedPerFrame, MinRuntimeChunksGeneratedPerFrame, MaxRuntimeChunksGeneratedPerFrame);
       InitialChunksGeneratedPerFrame = Mathf.Clamp(InitialChunksGeneratedPerFrame, 1, MaxRuntimeInitialChunksGeneratedPerFrame);
       ChunksRenderedPerFrame = Mathf.Clamp(ChunksRenderedPerFrame, MinRuntimeChunksRenderedPerFrame, MaxRuntimeChunksRenderedPerFrame);
       MeshAppliesPerFrame = Mathf.Clamp(MeshAppliesPerFrame, MinRuntimeMeshAppliesPerFrame, MaxRuntimeMeshAppliesPerFrame);
       MeshApplyTimeBudgetMs = Mathf.Clamp(MeshApplyTimeBudgetMs, MinRuntimeMeshApplyTimeBudgetMs, MaxRuntimeMeshApplyTimeBudgetMs);
       MaxAsyncChunkTasks = Mathf.Clamp(MaxAsyncChunkTasks, MinRuntimeAsyncChunkTasks, MaxRuntimeAsyncChunkTasks);
-    }
-
-    public void ApplyPrePr30BlockFastProfile()
-    {
-      UseAsyncGeneration = true;
-      ChunksGeneratedPerFrame = PrePr30BlockChunksGeneratedPerFrame;
-      InitialChunksGeneratedPerFrame = PrePr30BlockInitialChunksGeneratedPerFrame;
-      ChunksRenderedPerFrame = PrePr30BlockChunksRenderedPerFrame;
-      MeshAppliesPerFrame = PrePr30BlockMeshAppliesPerFrame;
-      MeshApplyTimeBudgetMs = PrePr30BlockMeshApplyTimeBudgetMs;
-      MaxAsyncChunkTasks = PrePr30BlockMaxAsyncChunkTasks;
-      NormalizeRuntimeBudgets();
     }
   }
 }

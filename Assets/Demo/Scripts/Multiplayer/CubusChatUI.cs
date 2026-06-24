@@ -2,27 +2,28 @@ using System.Collections.Generic;
 using SpacetimeDB;
 using SpacetimeDB.Types;
 using UnityEngine;
+using UnityEngine.InputSystem;
 
 namespace Assets.Demo.Scripts.Multiplayer
 {
   /// <summary>
   /// Minimal IMGUI chat overlay backed by the replicated <c>chat_message</c> table.
-  /// Press Enter to focus the input, type a message, and press Enter again to send.
+  /// Press Enter to start typing, Enter again to send (which hands control back to
+  /// the player), or Escape to cancel.
   /// </summary>
   public sealed class CubusChatUI : MonoBehaviour
   {
     [SerializeField] private int maxVisibleMessages = 12;
-    [SerializeField] private KeyCode toggleKey = KeyCode.Return;
+    [SerializeField] private KeyCode openKey = KeyCode.Return;
     [SerializeField] private Vector2 panelSize = new(460.0f, 260.0f);
 
     private readonly List<ChatMessage> messages = new();
 
     private CubusNetworkManager net;
     private bool callbacksRegistered;
-    private bool inputFocused;
+    private bool composing;
     private string draft = string.Empty;
     private Vector2 scroll;
-    private bool focusRequested;
 
     private void OnEnable()
     {
@@ -46,6 +47,7 @@ namespace Assets.Demo.Scripts.Multiplayer
         net.Disconnected -= HandleDisconnected;
       }
       UnregisterCallbacks();
+      EndComposing(clearDraft: true);
     }
 
     private void HandleConnected(DbConnection conn, Identity identity) => RegisterCallbacks(conn);
@@ -112,6 +114,10 @@ namespace Assets.Demo.Scripts.Multiplayer
         return;
       }
 
+      // Intercept the control keys BEFORE the TextField draws; a focused
+      // single-line field swallows the Return KeyDown otherwise.
+      HandleInputEvents();
+
       float x = 10.0f;
       float y = Screen.height - panelSize.y - 10.0f;
       GUILayout.BeginArea(new Rect(x, y, panelSize.x, panelSize.y), GUI.skin.box);
@@ -125,39 +131,120 @@ namespace Assets.Demo.Scripts.Multiplayer
       }
       GUILayout.EndScrollView();
 
-      GUI.SetNextControlName("ChatInput");
-      draft = GUILayout.TextField(draft, 500);
-
-      if (focusRequested)
+      if (composing)
       {
-        GUI.FocusControl("ChatInput");
-        focusRequested = false;
+        // Draft is built from Keyboard.current.onTextInput (see HandleTextInput)
+        // rather than an IMGUI TextField, which does not reliably receive text
+        // under the new Input System. Show it as a label with a caret.
+        GUILayout.Label($"> {draft}<color=#ffffffaa>_</color>");
+        GUILayout.Label("<i>Enter to send  -  Esc to cancel</i>");
+      }
+      else
+      {
+        GUILayout.Label("<i>Press Enter to chat</i>");
       }
 
       GUILayout.EndArea();
-
-      HandleInputEvents();
     }
 
     private void HandleInputEvents()
     {
       Event current = Event.current;
-      if (current.type != EventType.KeyDown || current.keyCode != toggleKey)
+      if (current.type != EventType.KeyDown)
       {
         return;
       }
 
-      if (!inputFocused)
+      bool isSubmit = current.keyCode == openKey || current.keyCode == KeyCode.KeypadEnter;
+
+      if (!composing)
       {
-        inputFocused = true;
-        focusRequested = true;
+        if (isSubmit)
+        {
+          BeginComposing();
+          current.Use();
+        }
+
+        return;
+      }
+
+      if (isSubmit)
+      {
+        TrySend();
+        EndComposing(clearDraft: true);
         current.Use();
         return;
       }
 
-      TrySend();
-      inputFocused = false;
-      current.Use();
+      if (current.keyCode == KeyCode.Escape)
+      {
+        EndComposing(clearDraft: true);
+        current.Use();
+        return;
+      }
+
+      if (current.keyCode == KeyCode.Backspace)
+      {
+        if (draft.Length > 0)
+        {
+          draft = draft.Substring(0, draft.Length - 1);
+        }
+
+        current.Use();
+      }
+    }
+
+    private void BeginComposing()
+    {
+      composing = true;
+      CubusUiInput.ChatComposing = true;
+
+      Keyboard keyboard = Keyboard.current;
+      if (keyboard != null)
+      {
+        keyboard.onTextInput += HandleTextInput;
+      }
+    }
+
+    private void EndComposing(bool clearDraft)
+    {
+      Keyboard keyboard = Keyboard.current;
+      if (keyboard != null)
+      {
+        keyboard.onTextInput -= HandleTextInput;
+      }
+
+      if (clearDraft)
+      {
+        draft = string.Empty;
+      }
+
+      composing = false;
+      CubusUiInput.ChatComposing = false;
+    }
+
+    // Receives printable characters straight from the keyboard device. This is
+    // the reliable text path under the new Input System; the IMGUI TextField did
+    // not consistently get keyboard focus/text. Control characters (enter,
+    // backspace, escape, tab) are handled via the IMGUI event path instead.
+    private void HandleTextInput(char character)
+    {
+      if (!composing)
+      {
+        return;
+      }
+
+      if (character < ' ' || character == (char)127)
+      {
+        return;
+      }
+
+      if (draft.Length >= 500)
+      {
+        return;
+      }
+
+      draft += character;
     }
 
     private void TrySend()

@@ -24,7 +24,9 @@ namespace CubusCore.Tests
       Vector3Int viewerChunkCoord,
       int verticalRadiusInTiles,
       Func<int, int, int> surfaceProvider = null,
-      Func<Vector3Int, bool> inBounds = null)
+      Func<Vector3Int, bool> inBounds = null,
+      int worldMinChunkY = 0,
+      int worldMaxChunkY = 0)
     {
       var results = new List<LodTileKey>();
       LodBandPlanner.ComputeDesiredTiles(
@@ -33,6 +35,8 @@ namespace CubusCore.Tests
         LevelCount,
         RingWidthInTiles,
         verticalRadiusInTiles,
+        worldMinChunkY,
+        worldMaxChunkY,
         surfaceProvider ?? ((x, z) => 0),
         inBounds,
         results);
@@ -145,7 +149,9 @@ namespace CubusCore.Tests
     public void SurfaceProvider_ShiftsVerticalBand()
     {
       // Surface at chunk Y = 16 -> level-1 surface tile Y = FloorDiv(16, 2) = 8.
-      List<LodTileKey> tiles = Plan(Vector3Int.zero, 0, surfaceProvider: (x, z) => 16);
+      // World vertical extent collapsed onto the surface so the band is a single
+      // row that tracks the surface (no full-extent fill for this case).
+      List<LodTileKey> tiles = Plan(Vector3Int.zero, 0, surfaceProvider: (x, z) => 16, worldMinChunkY: 16, worldMaxChunkY: 16);
 
       foreach (LodTileKey tile in tiles)
       {
