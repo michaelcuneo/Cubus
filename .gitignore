@@ -16,6 +16,8 @@
 /[Oo]bj/
 /[Bb]uild/
 /[Bb]uilds/
+# Player build output written to the product-named folder.
+/Cubus/
 /[Ll]ogs/
 /[Uu]ser[Ss]ettings/
 *.log
