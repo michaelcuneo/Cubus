@@ -348,55 +348,6 @@ PrefabInstance:
       insertIndex: -1
       addedObject: {fileID: 445987326}
   m_SourcePrefab: {fileID: 100100000, guid: ce922d513e782e84fb9f499c6d5fbcf8, type: 3}
---- !u!1 &515115130
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 515115132}
-  - component: {fileID: 515115131}
-  m_Layer: 0
-  m_Name: CubusNetworkManager
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!114 &515115131
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 515115130}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 14242219738bc7c4c8c0f958f9886927, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::Assets.Demo.Scripts.Multiplayer.CubusNetworkManager
-  serverUri: http://127.0.0.1:3000
-  moduleName: cubus
-  subscribeToAllTables: 1
-  connectOnStart: 1
-  verboseLogging: 1
---- !u!4 &515115132
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 515115130}
-  serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &832575517
 GameObject:
   m_ObjectHideFlags: 0
@@ -499,7 +450,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: CubusCore.Runtime::CubusCore.World.CubusWorld
   settings:
     TerrainSystem: 0
-    WorldSeed: 123123
+    WorldSeed: 123123123
     ViewDistanceInChunks: 12
     VoxelSize: 1
     EnableLodTerrain: 1
@@ -737,7 +688,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d0f8d956959d42c4ab17f097bb6f16c2, type: 3}
   m_Name: 
   m_EditorClassIdentifier: CubusCore.Runtime::CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage.CubusWorldStorage
-  backend: 1
+  backend: 0
   worldId: demo_world
   autoSaveAfterGeneration: 1
   autoLoadOnStart: 1
@@ -895,9 +846,6 @@ GameObject:
   - component: {fileID: 1517188427}
   - component: {fileID: 1517188429}
   - component: {fileID: 1517188430}
-  - component: {fileID: 1517188434}
-  - component: {fileID: 1517188433}
-  - component: {fileID: 1517188432}
   - component: {fileID: 1517188431}
   m_Layer: 0
   m_Name: DemoPlayer
@@ -1010,65 +958,12 @@ MonoBehaviour:
   m_GameObject: {fileID: 1517188425}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 4d156f7359c8b09459577edc7b1f778a, type: 3}
+  m_Script: {fileID: 11500000, guid: 59e7af19a37f4ba4bbc7a391223927c4, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::Assets.Demo.Scripts.Multiplayer.NetworkedBlockEditInput
-  editTool: {fileID: 1517188433}
-  bridge: {fileID: 1517188432}
+  m_EditorClassIdentifier: Assembly-CSharp::Assets.Demo.Scripts.Player.DemoBlockEditInput
+  editTool: {fileID: 1298388486}
   editCamera: {fileID: 1453617044}
   traceDistance: 100
---- !u!114 &1517188432
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1517188425}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 95822b93257947048a23b6d25334095c, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::Assets.Demo.Scripts.Multiplayer.NetworkedBlockEditBridge
-  editTool: {fileID: 1517188433}
---- !u!114 &1517188433
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1517188425}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: e0ad5387fb71da644a0d0cbdf7205041, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: CubusCore.Runtime::CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Editing.BlockEditTool
-  editShape: 0
-  addMaterialId: 1
-  sphereRadiusVoxels: 3
-  boxSize: {x: 4, y: 4, z: 4}
-  protectedTransform: {fileID: 0}
-  protectedCharacterController: {fileID: 0}
-  preventAddingInsideProtectedBounds: 1
-  protectedBoundsPadding: 0.05
---- !u!114 &1517188434
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1517188425}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 4f5c9fb758826854d84693b2a83e6222, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::Assets.Demo.Scripts.Multiplayer.NetworkedPlayerSync
-  localPlayer: {fileID: 1517188426}
-  localPitchSource: {fileID: 1453617041}
-  sendInterval: 0.1
-  positionThreshold: 0.02
-  remoteAvatarPrefab: {fileID: 0}
-  interpolationSpeed: 12
-  showNameLabels: 1
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
@@ -1078,4 +973,3 @@ SceneRoots:
   - {fileID: 1298388477}
   - {fileID: 1517188426}
   - {fileID: 456967102}
-  - {fileID: 515115132}
