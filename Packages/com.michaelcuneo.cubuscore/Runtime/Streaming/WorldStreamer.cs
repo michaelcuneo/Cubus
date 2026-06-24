@@ -440,21 +440,28 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     // Number of chunks of vertical headroom kept above each column's surface
     // chunk so the chunk straddling the surface (and any thin overhang) is always
     // streamed.
-    // Vertical reach of the streamed/rendered set, in chunks, measured from each
-    // column's surface chunk. The set FOLLOWS the surface per column (coverage is
-    // gap-free across undulating terrain) and reaches a couple of chunks below
-    // (valleys, overhangs, shallow caves) and above (cliffs, overhangs) so the
-    // viewer can actually see terrain above and below them. Crucially this is
-    // DECOUPLED from the configured world band: a tall band no longer forces every
-    // column to stream its full height, which is what ballooned the set to tens of
-    // thousands of mostly-invisible chunks.
-    private const int SurfaceVerticalChunksBelow = 2;
-    private const int SurfaceVerticalChunksAbove = 2;
+    // Number of chunks of vertical headroom kept above/below each column's
+    // surface chunk so the chunk straddling the surface (and any thin overhang)
+    // is always streamed.
+    private const int SurfaceVerticalChunkMargin = 1;
 
+    // Builds a desired/keep set whose horizontal extent is the view radius. The
+    // vertical extent is surface-AWARE AND honours the configured world band: for
+    // every (x, z) column we cover the UNION of the world band
+    // (BlockMin/MaxChunkY or DensityMin/MaxChunkY) and this column's surface chunk
+    // (+/- a small margin).
+    //
+    // The world-band union is the SAFETY NET: it guarantees every column always
+    // covers the full playable terrain band regardless of how the per-column
+    // surface sample lands, so steep/undulating terrain never drops the chunk that
+    // actually contains the surface (which shows up as missing chunks/holes). The
+    // surface term extends that coverage upward/downward when terrain rises above
+    // or sinks below the band. Empty chunks above the terrain are cheap - flagged
+    // known-empty as soon as they mesh to nothing.
     private void BuildChunkSet(Vector3Int viewerChunkCoord, int horizontalRadius, HashSet<Vector3Int> targetSet)
     {
       targetSet.Clear();
-      world.Settings.GetActiveVerticalChunkBounds(out _, out int maxChunkY);
+      world.Settings.GetActiveVerticalChunkBounds(out int minChunkY, out int maxChunkY);
 
       for (int z = -horizontalRadius; z <= horizontalRadius; z++)
         for (int x = -horizontalRadius; x <= horizontalRadius; x++)
@@ -464,11 +471,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
           int surfaceChunkY = GetSurfaceChunkYForColumn(chunkX, chunkZ, maxChunkY * VoxelConstants.ChunkSize);
 
-          // Surface-relative window. The surface chunk is always covered; the small
-          // +/- reach lets the viewer see a couple chunks up and down without
-          // streaming the whole world column.
-          int columnMinY = surfaceChunkY - SurfaceVerticalChunksBelow;
-          int columnMaxY = surfaceChunkY + SurfaceVerticalChunksAbove;
+          int columnMinY = Mathf.Min(minChunkY, surfaceChunkY - SurfaceVerticalChunkMargin);
+          int columnMaxY = Mathf.Max(maxChunkY, surfaceChunkY + SurfaceVerticalChunkMargin);
 
           for (int y = columnMinY; y <= columnMaxY; y++)
           {
@@ -500,16 +504,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       candidateChunksBuffer.Sort(GetChunkPriorityComparison(ComputeSortPivot()));
       for (int i = 0; i < candidateChunksBuffer.Count; i++)
       {
-        Vector3Int c = candidateChunksBuffer[i];
-        if (!HasChunkData(c)) { QueueLoad(c); continue; }
-
-        // Data is present: only mesh it if the player could actually SEE it. A
-        // chunk with no renderable surface (pure air above the terrain) is flagged
-        // known-empty instead of burning a mesh build on geometry nobody can see.
-        // Buried-solid chunks pass this cheap test but mesh to nothing and are
-        // flagged empty once built, so they are never rendered either.
-        if (HasRenderableSurface(c)) QueueRender(c);
-        else knownEmptyChunks.Add(c);
+        if (HasChunkData(candidateChunksBuffer[i])) QueueRender(candidateChunksBuffer[i]);
+        else QueueLoad(candidateChunksBuffer[i]);
       }
     }
 
@@ -1147,17 +1143,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     {
       TerrainSystem.Block => world.Data.BlockChunks.ContainsKey(c),
       TerrainSystem.SmoothDensity => world.Data.DensityChunks.ContainsKey(c),
-      _ => false
-    };
-
-    // True when a loaded chunk presents a surface the viewer could actually see -
-    // i.e. it has renderable geometry. Air chunks (no solid voxels / no density
-    // surface crossing) are invisible and must never be meshed. Gates mesh builds
-    // so work is only spent on chunks the player can see.
-    private bool HasRenderableSurface(Vector3Int c) => world.Settings.TerrainSystem switch
-    {
-      TerrainSystem.Block => world.Data.BlockChunks.TryGetValue(c, out BlockChunkData b) && b != null && b.HasAnySolidVoxel(),
-      TerrainSystem.SmoothDensity => world.Data.DensityChunks.TryGetValue(c, out DensityChunkData d) && d != null && d.HasSurfaceCrossing(),
       _ => false
     };
 

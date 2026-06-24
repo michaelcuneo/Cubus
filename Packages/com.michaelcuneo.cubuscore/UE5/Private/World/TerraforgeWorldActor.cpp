@@ -5294,29 +5294,12 @@ void ATerraforgeWorldActor::GenerateStreamingChunk(
         }
     }
 
-    TMap<FIntVector, FTerraforgeVoxelChunkData> BlockSnapshot;
+    TOptional<FTerraforgeVoxelChunkData> ExistingBlockChunkSnapshot;
 
-    for (int32 DZ = -1; DZ <= 1; ++DZ)
+    if (const FTerraforgeVoxelChunkData* ExistingBlockChunk =
+        BlockChunkDataByCoord.Find(ChunkCoord))
     {
-        for (int32 DY = -1; DY <= 1; ++DY)
-        {
-            for (int32 DX = -1; DX <= 1; ++DX)
-            {
-                const FIntVector SnapshotCoord =
-                    ChunkCoord + FIntVector(DX, DY, DZ);
-
-                const FTerraforgeVoxelChunkData* ExistingBlockChunk =
-                    BlockChunkDataByCoord.Find(SnapshotCoord);
-
-                if (ExistingBlockChunk != nullptr)
-                {
-                    BlockSnapshot.Add(
-                        SnapshotCoord,
-                        *ExistingBlockChunk
-                    );
-                }
-            }
-        }
+        ExistingBlockChunkSnapshot.Emplace(*ExistingBlockChunk);
     }
 
     TMap<FIntVector, TMap<int32, uint16>> BlockOverrideSnapshot;
@@ -5356,7 +5339,7 @@ void ATerraforgeWorldActor::GenerateStreamingChunk(
             CapturedTerrainSystem,
             CapturedDensityMeshStep,
             DensitySnapshot = MoveTemp(DensitySnapshot),
-            BlockSnapshot = MoveTemp(BlockSnapshot),
+            ExistingBlockChunkSnapshot = MoveTemp(ExistingBlockChunkSnapshot),
             BlockOverrideSnapshot = MoveTemp(BlockOverrideSnapshot)
         ]() mutable
         {
@@ -5367,10 +5350,7 @@ void ATerraforgeWorldActor::GenerateStreamingChunk(
 
             if (CapturedTerrainSystem == ETerraforgeTerrainSystem::Block)
             {
-                FTerraforgeVoxelChunkData* ExistingChunkData =
-                    BlockSnapshot.Find(ChunkCoord);
-
-                if (ExistingChunkData != nullptr)
+                if (ExistingBlockChunkSnapshot.IsSet())
                 {
                     Result.BlockChunkData = *ExistingChunkData;
                 }
@@ -5401,7 +5381,6 @@ void ATerraforgeWorldActor::GenerateStreamingChunk(
                 {
                     auto BlockMaterialLookup =
                         [
-                            &BlockSnapshot,
                             &BlockOverrideSnapshot,
                             this
                         ](const FIntVector& WorldVoxelCoord) -> uint16
@@ -5422,25 +5401,10 @@ void ATerraforgeWorldActor::GenerateStreamingChunk(
 
                             if (Overrides != nullptr)
                             {
-                                const uint16* OverrideMaterial =
-                                    Overrides->Find(VoxelIndex);
-
-                                if (OverrideMaterial != nullptr)
+                                if (const uint16* OverrideMaterial = Overrides->Find(VoxelIndex))
                                 {
                                     return *OverrideMaterial;
                                 }
-                            }
-
-                            const FTerraforgeVoxelChunkData* SnapshotChunk =
-                                BlockSnapshot.Find(LookupChunkCoord);
-
-                            if (SnapshotChunk != nullptr)
-                            {
-                                return SnapshotChunk->GetVoxel(
-                                    LocalCoord.X,
-                                    LocalCoord.Y,
-                                    LocalCoord.Z
-                                ).MaterialId;
                             }
 
                             const FTerraforgeTerrainSample Sample =
@@ -5456,7 +5420,7 @@ void ATerraforgeWorldActor::GenerateStreamingChunk(
                                 ? static_cast<uint16>(FMath::Clamp(Sample.SolidMaterialId, 1, 65535))
                                 : 0;
                         };
-
+                        
                     FTerraforgeVoxelMesher::GenerateGreedyMeshNeighbourAware(
                         Result.BlockChunkData,
                         BlockMaterialLookup,
