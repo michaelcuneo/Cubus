@@ -89,6 +89,11 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Editing
     {
       editVoxel = default;
 
+      if (world == null || world.Settings == null)
+      {
+        return false;
+      }
+
       if (world.Settings.TerrainSystem != TerrainSystem.Block)
       {
         return false;

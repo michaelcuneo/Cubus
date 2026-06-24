@@ -12,6 +12,13 @@ public static partial class Module
   // Maximum number of chat messages retained in the log.
   private const int MaxChatMessages = 200;
 
+  // Authoritative chunk storage is disabled: clients persisted EVERY generated
+  // chunk here, which grew world_chunk into tens of thousands of rows and made
+  // the initial subscription too large to decode ("Stream was too long").
+  // Base terrain is deterministic; only edits (voxel_edit) need to be shared.
+  // Re-enable only behind a near-player subscription design.
+  private const bool AcceptChunkUploads = false;
+
   [Reducer(ReducerKind.ClientConnected)]
   public static void ClientConnected(ReducerContext ctx)
   {
@@ -146,6 +153,12 @@ public static partial class Module
       bool hasSurface,
       byte[] payload)
   {
+    if (!AcceptChunkUploads)
+    {
+      // Ignore generated-chunk uploads to keep world_chunk from re-bloating.
+      return;
+    }
+
     if (string.IsNullOrEmpty(worldId))
     {
       throw new Exception("UploadChunk requires a worldId.");
