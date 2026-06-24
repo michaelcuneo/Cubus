@@ -107,6 +107,55 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
       return mesh;
     }
 
+    private static Color32 EncodeMaterialId(ushort materialId)
+    {
+      byte low = (byte)(materialId & 0xFF);
+      byte high = (byte)((materialId >> 8) & 0xFF);
+      return new Color32(low, high, 0, 255);
+    }
+
+    public void AddQuad(
+      Vector3 v0,
+      Vector3 v1,
+      Vector3 v2,
+      Vector3 v3,
+      Vector3 normal,
+      ushort materialId,
+      Vector2 uvScale)
+    {
+      int startIndex = Vertices.Count;
+
+      Vertices.Add(v0);
+      Vertices.Add(v1);
+      Vertices.Add(v2);
+      Vertices.Add(v3);
+
+      Triangles.Add(startIndex);
+      Triangles.Add(startIndex + 2);
+      Triangles.Add(startIndex + 1);
+
+      Triangles.Add(startIndex);
+      Triangles.Add(startIndex + 3);
+      Triangles.Add(startIndex + 2);
+
+      Normals.Add(normal);
+      Normals.Add(normal);
+      Normals.Add(normal);
+      Normals.Add(normal);
+
+      UVs.Add(Vector2.zero);
+      UVs.Add(new Vector2(0.0f, uvScale.y));
+      UVs.Add(uvScale);
+      UVs.Add(new Vector2(uvScale.x, 0.0f));
+
+      Color32 vertexColor = EncodeMaterialId(materialId);
+
+      Colors.Add(vertexColor);
+      Colors.Add(vertexColor);
+      Colors.Add(vertexColor);
+      Colors.Add(vertexColor);
+    }
+
     public Mesh ToUnityMeshFast()
     {
       int vertexCount = Vertices.Count;
