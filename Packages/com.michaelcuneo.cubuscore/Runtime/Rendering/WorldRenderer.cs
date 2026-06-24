@@ -24,6 +24,15 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
     [SerializeField] private Vector2Int biomeAtlasGrid = new(4, 4);
     [SerializeField] private BlockMaterialDatabase blockMaterialDatabase;
     [SerializeField] private Color biomeTint = Color.white;
+
+    [Header("Surface Detail")]
+    [SerializeField] private Texture2D biomeNormalAtlas;
+    [SerializeField][Range(0f, 2f)] private float normalStrength = 1.0f;
+    [SerializeField][Range(0f, 4f)] private float detailBumpStrength = 0.0f;
+    [SerializeField][Range(0f, 1f)] private float surfaceSmoothness = 0.12f;
+    [SerializeField][Range(0f, 2f)] private float specularStrength = 0.25f;
+    [SerializeField][Range(0f, 2f)] private float fresnelStrength = 0.15f;
+
     [SerializeField] private bool logRenderedChunkMeshes;
 
     [Header("Collision")]
@@ -57,6 +66,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
 
     private CubusWorld world;
     private ChunkPool chunkPool;
+    private WorldDetailRenderer detailRenderer;
+    private bool hasResolvedDetailRenderer;
 
     private Vector3Int lastCollisionViewerChunkCoord;
     private bool hasLastCollisionViewerChunkCoord;
@@ -165,6 +176,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
       chunkView.ApplyMesh(meshData, shouldGenerateCollision);
       MeshDataPool.Return(meshData);
       ApplyCollisionStateToChunk(chunkView);
+      ResolveDetailRenderer()?.RefreshChunkDetail(chunkCoord);
     }
 
     public void RenderUnityMesh(Vector3Int chunkCoord, Mesh unityMesh, bool generateCollision = false)
@@ -411,6 +423,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
       chunkView.ApplyMesh(meshData, shouldGenerateCollision);
       MeshDataPool.Return(meshData);
       ApplyCollisionStateToChunk(chunkView);
+      ResolveDetailRenderer()?.RefreshChunkDetail(chunkCoord);
     }
 
     public void RebuildBlockChunks(IEnumerable<Vector3Int> dirtyChunks)
@@ -446,6 +459,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
 
     public bool RemoveChunk(Vector3Int chunkCoord)
     {
+      ResolveDetailRenderer()?.RemoveChunkDetail(chunkCoord);
+
       if (!activeChunkViews.TryGetValue(chunkCoord, out ChunkView chunkView))
       {
         return false;
@@ -499,11 +514,23 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
 
       activeChunkViews.Clear();
       hasLastCollisionViewerChunkCoord = false;
+      ResolveDetailRenderer()?.ClearAllDetail();
     }
 
     public bool HasChunkView(Vector3Int chunkCoord)
     {
       return activeChunkViews.ContainsKey(chunkCoord);
+    }
+
+    private WorldDetailRenderer ResolveDetailRenderer()
+    {
+      if (!hasResolvedDetailRenderer)
+      {
+        detailRenderer = GetComponent<WorldDetailRenderer>();
+        hasResolvedDetailRenderer = true;
+      }
+
+      return detailRenderer;
     }
 
     private ChunkView GetOrCreateChunkView(Vector3Int chunkCoord, Material material)
@@ -652,6 +679,36 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
       if (material.HasProperty("_TriplanarSharpness"))
       {
         material.SetFloat("_TriplanarSharpness", 4.0f);
+      }
+
+      if (biomeNormalAtlas != null && material.HasProperty("_NormalAtlas"))
+      {
+        material.SetTexture("_NormalAtlas", biomeNormalAtlas);
+      }
+
+      if (material.HasProperty("_NormalStrength"))
+      {
+        material.SetFloat("_NormalStrength", normalStrength);
+      }
+
+      if (material.HasProperty("_DetailBumpStrength"))
+      {
+        material.SetFloat("_DetailBumpStrength", detailBumpStrength);
+      }
+
+      if (material.HasProperty("_Smoothness"))
+      {
+        material.SetFloat("_Smoothness", surfaceSmoothness);
+      }
+
+      if (material.HasProperty("_SpecularStrength"))
+      {
+        material.SetFloat("_SpecularStrength", specularStrength);
+      }
+
+      if (material.HasProperty("_FresnelStrength"))
+      {
+        material.SetFloat("_FresnelStrength", fresnelStrength);
       }
 
     }

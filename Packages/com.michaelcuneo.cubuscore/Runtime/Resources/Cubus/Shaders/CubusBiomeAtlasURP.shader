@@ -7,8 +7,14 @@ Shader "Cubus/BiomeAtlasURP"
     _SideLookup("Side Tile Lookup", 2D) = "black" {}
     _BottomLookup("Bottom Tile Lookup", 2D) = "black" {}
     _PropsLookup("Props Lookup", 2D) = "black" {}
+    _NormalAtlas("Biome Normal Atlas", 2D) = "bump" {}
     _AtlasGrid("Atlas Grid (X Columns, Y Rows)", Vector) = (4, 4, 0, 0)
     _Tint("Tint", Color) = (1, 1, 1, 1)
+    _NormalStrength("Normal Strength", Range(0, 2)) = 1.0
+    _DetailBumpStrength("Detail Bump From Albedo", Range(0, 4)) = 0.0
+    _Smoothness("Smoothness", Range(0, 1)) = 0.12
+    _SpecularStrength("Specular Strength", Range(0, 2)) = 0.25
+    _FresnelStrength("Fresnel Rim", Range(0, 2)) = 0.15
   }
 
   SubShader
@@ -58,6 +64,9 @@ Shader "Cubus/BiomeAtlasURP"
       TEXTURE2D(_PropsLookup);
       SAMPLER(sampler_PropsLookup);
 
+      TEXTURE2D(_NormalAtlas);
+      SAMPLER(sampler_NormalAtlas);
+
       struct Attributes
       {
         float4 positionOS : POSITION;
@@ -80,6 +89,11 @@ Shader "Cubus/BiomeAtlasURP"
       float4 _AtlasGrid;
       float4 _Tint;
       float4 _Atlas_TexelSize;
+      float _NormalStrength;
+      float _DetailBumpStrength;
+      float _Smoothness;
+      float _SpecularStrength;
+      float _FresnelStrength;
       CBUFFER_END
 
       float DecodeU16(float2 rg)
@@ -284,22 +298,83 @@ Shader "Cubus/BiomeAtlasURP"
         return lerp(color, fogData.rgb, fogData.a);
       }
 
-      float3 ApplyLighting(float3 albedoRgb, float3 positionWS, float3 normalWS)
+      float3 ApplyLighting(
+          float3 albedoRgb,
+          float3 positionWS,
+          float3 normalWS,
+          float smoothness,
+          float specularStrength,
+          float fresnelStrength)
       {
         float3 n = normalize(normalWS);
+        float3 viewDir = SafeNormalize(_WorldSpaceCameraPos - positionWS);
 
         // Receive the main directional light (the Azure sun/moon) with shadows.
         float4 shadowCoord = TransformWorldToShadowCoord(positionWS);
         Light mainLight = GetMainLight(shadowCoord);
 
+        float atten = mainLight.shadowAttenuation * mainLight.distanceAttenuation;
         float ndl = saturate(dot(n, mainLight.direction));
-        float3 direct = mainLight.color * (ndl * mainLight.shadowAttenuation);
+        float3 direct = mainLight.color * (ndl * atten);
+
+        // Blinn-Phong specular so the sun actually glints across surfaces. The
+        // smoothness drives the highlight tightness (exp2 keeps it perceptually
+        // even from broad satin to sharp glossy).
+        float3 halfVec = SafeNormalize(mainLight.direction + viewDir);
+        float ndh = saturate(dot(n, halfVec));
+        float shininess = exp2(lerp(3.0, 11.0, saturate(smoothness)));
+        float specTerm = pow(ndh, shininess) * specularStrength * ndl * atten;
+        float3 specular = mainLight.color * specTerm;
 
         // Dynamic environment ambient driven by Azure's sky (spherical harmonics)
         // instead of a flat constant, so terrain colour tracks the time of day.
         float3 ambient = SampleSH(n);
 
-        return albedoRgb * (ambient + direct);
+        // Subtle fresnel rim using the sky ambient adds depth at grazing angles.
+        float fresnel = pow(1.0 - saturate(dot(n, viewDir)), 5.0) * fresnelStrength;
+        float3 rim = ambient * fresnel;
+
+        return albedoRgb * (ambient + direct) + specular + rim;
+      }
+
+      // Build a world-space normal from a tangent-space normal WITHOUT mesh
+      // tangents (the voxel mesh only ships POSITION/NORMAL/COLOR/UV). Uses the
+      // screen-space cotangent frame (Schueler) which is exact for the
+      // axis-aligned voxel faces and any greedy-merged quad.
+      float3 PerturbNormal(float3 N, float3 worldPos, float2 uv, float3 tangentNormal)
+      {
+        float3 dp1 = ddx(worldPos);
+        float3 dp2 = ddy(worldPos);
+        float2 duv1 = ddx(uv);
+        float2 duv2 = ddy(uv);
+
+        float3 dp2perp = cross(dp2, N);
+        float3 dp1perp = cross(N, dp1);
+        float3 T = dp2perp * duv1.x + dp1perp * duv2.x;
+        float3 B = dp2perp * duv1.y + dp1perp * duv2.y;
+
+        float invmax = rsqrt(max(dot(T, T), dot(B, B)));
+        float3x3 tbn = float3x3(T * invmax, B * invmax, N);
+        return SafeNormalize(mul(tangentNormal, tbn));
+      }
+
+      // Sample the atlas albedo at an arbitrary in-tile UV, reusing the same
+      // half-texel inset + gradient mapping as the main albedo fetch so detail
+      // taps never bleed across tile borders.
+      half3 SampleAtlasRGB(
+          float2 inTileUv,
+          float2 colRow,
+          float2 atlasGrid,
+          float2 atlasDx,
+          float2 atlasDy)
+      {
+        float2 tileUv = frac(inTileUv);
+        float2 tilePixelSize = max(_Atlas_TexelSize.zw / atlasGrid, 1.0);
+        float2 halfTexelInTile = 0.5 / tilePixelSize;
+        tileUv = clamp(tileUv, halfTexelInTile, 1.0 - halfTexelInTile);
+
+        float2 atlasUv = (tileUv + colRow) / atlasGrid;
+        return SAMPLE_TEXTURE2D_GRAD(_Atlas, sampler_Atlas, atlasUv, atlasDx, atlasDy).rgb;
       }
 
       Varyings vert(Attributes IN)
@@ -364,7 +439,42 @@ Shader "Cubus/BiomeAtlasURP"
           discard;
         }
 
-        float3 lit = ApplyLighting(albedo.rgb * _Tint.rgb, IN.positionWS, IN.normalWS);
+        // --- Normal mapping -------------------------------------------------
+        // Tangent-space normal from the optional normal atlas (flat by default),
+        // sampled with the same atlas mapping/gradients as the albedo.
+        float2 colRow = float2(col, row);
+        float3 normalAtlasSample = SAMPLE_TEXTURE2D_GRAD(
+            _NormalAtlas, sampler_NormalAtlas, atlasUv, atlasDx, atlasDy).rgb;
+        float3 tangentNormal = normalAtlasSample * 2.0 - 1.0;
+        tangentNormal.xy *= _NormalStrength;
+
+        // Optional procedural micro-relief from albedo luminance so surfaces read
+        // as bumpy even without an authored normal atlas (strength 0 = disabled).
+        if (_DetailBumpStrength > 0.0)
+        {
+          float2 texelStep = 1.0 / max(tilePixelSize, 1.0);
+          float hC = Luminance(albedo.rgb);
+          float hX = Luminance(SampleAtlasRGB(unwrappedTileUv + float2(texelStep.x, 0.0), colRow, atlasGrid, atlasDx, atlasDy));
+          float hY = Luminance(SampleAtlasRGB(unwrappedTileUv + float2(0.0, texelStep.y), colRow, atlasGrid, atlasDx, atlasDy));
+          float2 grad = float2(hX - hC, hY - hC) * _DetailBumpStrength;
+          float3 detailTN = normalize(float3(-grad, 1.0));
+          tangentNormal = normalize(float3(tangentNormal.xy + detailTN.xy, tangentNormal.z * detailTN.z));
+        }
+        else
+        {
+          tangentNormal = normalize(tangentNormal);
+        }
+
+        float3 perturbedNormalWS = PerturbNormal(
+            normalize(IN.normalWS), IN.positionWS, unwrappedTileUv, tangentNormal);
+
+        float3 lit = ApplyLighting(
+            albedo.rgb * _Tint.rgb,
+            IN.positionWS,
+            perturbedNormalWS,
+            _Smoothness,
+            _SpecularStrength,
+            _FresnelStrength);
 
         // Prefer Azure's atmospheric scattering so the horizon matches the sky
         // exactly. _Azure_GlobalFogDistance is only > 0 when the Azure weather
@@ -406,6 +516,11 @@ Shader "Cubus/BiomeAtlasURP"
       float4 _AtlasGrid;
       float4 _Tint;
       float4 _Atlas_TexelSize;
+      float _NormalStrength;
+      float _DetailBumpStrength;
+      float _Smoothness;
+      float _SpecularStrength;
+      float _FresnelStrength;
       CBUFFER_END
 
       float3 _LightDirection;
@@ -474,6 +589,11 @@ Shader "Cubus/BiomeAtlasURP"
       float4 _AtlasGrid;
       float4 _Tint;
       float4 _Atlas_TexelSize;
+      float _NormalStrength;
+      float _DetailBumpStrength;
+      float _Smoothness;
+      float _SpecularStrength;
+      float _FresnelStrength;
       CBUFFER_END
 
       struct DepthAttributes

@@ -101,67 +101,91 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
     public void ApplyMesh(MeshData meshData, bool generateCollision)
     {
       EnsureComponents();
-      ClearMesh();
 
       if (meshData == null || meshData.IsEmpty)
       {
+        ClearMesh();
         return;
       }
 
+      Mesh oldMesh = currentMesh;
+
       currentMesh = meshData.ToUnityMeshFast();
+
       if (AssignDebugMeshNames)
       {
         currentMesh.name = $"Chunk Mesh {ChunkCoord.x}, {ChunkCoord.y}, {ChunkCoord.z}";
       }
+
       currentMesh.MarkDynamic();
 
       meshFilter.sharedMesh = currentMesh;
 
-      meshCollider.enabled = false;
-      meshCollider.sharedMesh = null;
-      hasCollisionMesh = false;
-
       if (generateCollision)
       {
+        meshCollider.enabled = false;
+        meshCollider.sharedMesh = null;
         meshCollider.sharedMesh = currentMesh;
         meshCollider.enabled = true;
         hasCollisionMesh = true;
+      }
+      else
+      {
+        meshCollider.enabled = false;
+        meshCollider.sharedMesh = null;
+        hasCollisionMesh = false;
       }
 
       if (meshRenderer != null)
       {
         meshRenderer.enabled = true;
       }
+
+      if (oldMesh != null)
+      {
+        Mesh newMesh = currentMesh;
+        currentMesh = oldMesh;
+        DestroyMesh(currentMesh);
+        currentMesh = newMesh;
+      }
     }
 
     public void ApplyMesh(Mesh unityMesh, bool generateCollision)
     {
       EnsureComponents();
-      ClearMesh();
 
       if (unityMesh == null)
       {
+        ClearMesh();
         return;
       }
 
+      Mesh oldMesh = currentMesh;
+
       currentMesh = unityMesh;
+
       if (AssignDebugMeshNames)
       {
         currentMesh.name = $"Chunk Mesh {ChunkCoord.x}, {ChunkCoord.y}, {ChunkCoord.z}";
       }
+
       currentMesh.MarkDynamic();
 
       meshFilter.sharedMesh = currentMesh;
 
-      meshCollider.enabled = false;
-      meshCollider.sharedMesh = null;
-      hasCollisionMesh = false;
-
       if (generateCollision)
       {
+        meshCollider.enabled = false;
+        meshCollider.sharedMesh = null;
         meshCollider.sharedMesh = currentMesh;
         meshCollider.enabled = true;
         hasCollisionMesh = true;
+      }
+      else
+      {
+        meshCollider.enabled = false;
+        meshCollider.sharedMesh = null;
+        hasCollisionMesh = false;
       }
 
       if (meshRenderer != null)
@@ -172,6 +196,35 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
         }
 
         meshRenderer.enabled = true;
+      }
+
+      if (oldMesh != null)
+      {
+        Mesh newMesh = currentMesh;
+        currentMesh = oldMesh;
+        DestroyMesh(currentMesh);
+        currentMesh = newMesh;
+      }
+      else
+      {
+        DestroyImmediate(oldMesh);
+      }
+    }
+
+    private static void DestroyMesh(Mesh mesh)
+    {
+      if (mesh == null)
+      {
+        return;
+      }
+
+      if (Application.isPlaying)
+      {
+        Destroy(mesh);
+      }
+      else
+      {
+        DestroyImmediate(mesh);
       }
     }
 

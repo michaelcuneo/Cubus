@@ -431,10 +431,35 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       hasLastViewerChunkCoord = true;
       BuildChunkSet(viewerChunkCoord, ActiveDesiredRadiusInChunks, desiredChunkCoords);
       BuildChunkSet(viewerChunkCoord, ActiveKeepRadiusInChunks, keepChunkCoords);
-      QueueGeneratedChunksForRender(viewerChunkCoord);
+      PruneKnownEmptyChunksOutsideCurrentInterest(); QueueGeneratedChunksForRender(viewerChunkCoord);
       QueueSpawnTargetForRender();
       UnloadOutsideKeepSet();
       pendingQueuesNeedPrioritization = true;
+    }
+
+    private void PruneKnownEmptyChunksOutsideCurrentInterest()
+    {
+      if (knownEmptyChunks.Count == 0)
+      {
+        return;
+      }
+
+      candidateChunksBuffer.Clear();
+
+      foreach (Vector3Int chunkCoord in knownEmptyChunks)
+      {
+        if (!desiredChunkCoords.Contains(chunkCoord) && !keepChunkCoords.Contains(chunkCoord))
+        {
+          candidateChunksBuffer.Add(chunkCoord);
+        }
+      }
+
+      for (int i = 0; i < candidateChunksBuffer.Count; i++)
+      {
+        knownEmptyChunks.Remove(candidateChunksBuffer[i]);
+      }
+
+      candidateChunksBuffer.Clear();
     }
 
     // Number of chunks of vertical headroom kept above each column's surface
@@ -469,15 +494,25 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
           int chunkX = viewerChunkCoord.x + x;
           int chunkZ = viewerChunkCoord.z + z;
 
-          int surfaceChunkY = GetSurfaceChunkYForColumn(chunkX, chunkZ, maxChunkY * VoxelConstants.ChunkSize);
+          int surfaceChunkY = GetSurfaceChunkYForColumn(
+            chunkX,
+            chunkZ,
+            maxChunkY * VoxelConstants.ChunkSize
+          );
 
-          int columnMinY = Mathf.Min(minChunkY, surfaceChunkY - SurfaceVerticalChunkMargin);
-          int columnMaxY = Mathf.Max(maxChunkY, surfaceChunkY + SurfaceVerticalChunkMargin);
+          int columnMinY = surfaceChunkY - SurfaceVerticalChunkMargin;
+          int columnMaxY = surfaceChunkY + SurfaceVerticalChunkMargin;
+
+          columnMinY = Mathf.Clamp(columnMinY, minChunkY, maxChunkY);
+          columnMaxY = Mathf.Clamp(columnMaxY, minChunkY, maxChunkY);
 
           for (int y = columnMinY; y <= columnMaxY; y++)
           {
             Vector3Int chunkCoord = new(chunkX, y, chunkZ);
-            if (world.Settings.IsInsideEffectiveWorldBounds3D(chunkCoord)) targetSet.Add(chunkCoord);
+            if (world.Settings.IsInsideEffectiveWorldBounds3D(chunkCoord))
+            {
+              targetSet.Add(chunkCoord);
+            }
           }
         }
     }
@@ -722,7 +757,11 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
             storage.SaveChunk(c);
           }
 
-          if ((desiredChunkCoords.Contains(c) || keepChunkCoords.Contains(c)) && HasChunkData(c)) QueueRender(c);
+          if (desiredChunkCoords.Contains(c) && HasChunkData(c))
+          {
+            QueueRender(c);
+          }
+
           continue;
         }
 
@@ -744,7 +783,10 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         Vector3Int c = pendingRenderQueue.Dequeue();
         pendingRenderSet.Remove(c);
 
-        if (!desiredChunkCoords.Contains(c) && !keepChunkCoords.Contains(c)) continue;
+        if (!desiredChunkCoords.Contains(c))
+        {
+          continue;
+        }
 
         if (world.Settings.TerrainSystem == TerrainSystem.Block)
         {
@@ -825,17 +867,12 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       return allSampleChunksAvailable;
     }
 
-    // Block chunks are meshed IMMEDIATELY, without waiting for neighbour data.
-    // For each in-bounds face neighbour that hasn't loaded yet, we (a) record it
-    // so the mesher treats it as SOLID and hides the shared boundary face -
-    // instead of meshing it against the terrain fallback, which briefly draws a
-    // one-sided wall at the load frontier that vanishes when the real neighbour
-    // arrives (the spawn "vertical mesh" flicker) - and (b) make sure it is queued
-    // to load, so the chunk is re-meshed against the real voxels the moment the
-    // neighbour arrives (RequeueSettledBlockNeighbors). Out-of-bounds neighbours
-    // (genuine world edges) are left out of the set so the mesher keeps drawing
-    // their faces via terrain sampling. Returns null when nothing is missing
-    // (the common settled case) to avoid an allocation.
+    // Block chunks are meshed immediately, without waiting for neighbour data.
+    // For each in-bounds face neighbour that has not loaded yet, record it so the
+    // mesher treats that neighbour as solid and hides the shared boundary face.
+    // Missing neighbours are not force-loaded here; the streaming desired/keep sets
+    // remain the only authority for what should load. When a real neighbour later
+    // loads, RequeueSettledBlockNeighbors rebuilds adjacent chunk boundaries.
     private HashSet<Vector3Int> CollectUnloadedInBoundsBlockNeighbors(Vector3Int root)
     {
       HashSet<Vector3Int> unloaded = null;
@@ -843,11 +880,16 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       for (int i = 0; i < BlockMeshNeighborOffsets.Length; i++)
       {
         Vector3Int c = root + BlockMeshNeighborOffsets[i];
-        if (world.Data.BlockChunks.ContainsKey(c) || !world.Settings.IsInsideEffectiveWorldBounds3D(c)) continue;
+
+        if (
+          world.Data.BlockChunks.ContainsKey(c) ||
+          !world.Settings.IsInsideEffectiveWorldBounds3D(c)
+        )
+        {
+          continue;
+        }
 
         (unloaded ??= new HashSet<Vector3Int>()).Add(c);
-        keepChunkCoords.Add(c);
-        if (!chunkLoadQueue.IsInFlight(c) && !pendingLoadSet.Contains(c)) QueueLoad(c);
       }
 
       return unloaded;
@@ -891,18 +933,19 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
           if (r.ChunkData != null)
           {
-            // The freshly meshed snapshot becomes the chunk's canonical data.
-            // Recycle the array it replaces (only referenced by this dictionary
-            // entry; in-flight builds hold copies, never the live array) so the
-            // per-build clone stays GC-free instead of churning 64 KB each time.
-            if (world.Data.BlockChunks.TryGetValue(r.ChunkCoord, out BlockChunkData previousChunk)
-                && previousChunk != null
-                && !ReferenceEquals(previousChunk, r.ChunkData))
+            if (
+              world.Data.BlockChunks.TryGetValue(r.ChunkCoord, out BlockChunkData previousChunk) &&
+              previousChunk != null &&
+              !ReferenceEquals(previousChunk, r.ChunkData)
+            )
             {
               VoxelArrayPool.Return(previousChunk.GetRawVoxelArray());
+              world.Data.BlockChunks[r.ChunkCoord] = r.ChunkData;
             }
-
-            world.Data.BlockChunks[r.ChunkCoord] = r.ChunkData;
+            else if (!world.Data.BlockChunks.ContainsKey(r.ChunkCoord))
+            {
+              world.Data.BlockChunks[r.ChunkCoord] = r.ChunkData;
+            }
           }
 
           if (r.Failed)
@@ -1002,7 +1045,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         GenerationId = buildQueue.GenerationId,
         WorldSnapshot = worldSnapshot,
         VoxelSize = world.Settings.VoxelSize,
-        ChunkDataSnapshot = CloneBlockChunkData(chunkData),
+        ChunkDataSnapshot = chunkData,
         NeighborChunkSnapshots = CreateBlockMeshChunkSnapshots(chunkCoord),
         SolidFallbackNeighborChunks = CollectUnloadedInBoundsBlockNeighbors(chunkCoord)
       };
@@ -1099,7 +1142,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       {
         Vector3Int n = chunkCoord + BlockMeshNeighborOffsets[i];
 
-        if (!desiredChunkCoords.Contains(n) && !keepChunkCoords.Contains(n))
+        if (!desiredChunkCoords.Contains(n))
         {
           continue;
         }
