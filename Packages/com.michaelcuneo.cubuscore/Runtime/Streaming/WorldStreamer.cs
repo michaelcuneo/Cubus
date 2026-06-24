@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Chunks;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Core;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Editing;
+using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Lod;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage;
@@ -29,6 +30,10 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     [SerializeField] private bool persistStreamedChunks = true;
     [SerializeField] private bool enforcePrePr30BlockPerformanceProfile = true;
 
+    [Header("Distant-Horizon LOD Hand-off")]
+    [Tooltip("When LOD terrain is enabled, removes a full-detail chunk's mesh the moment it leaves the render radius (its voxel data stays cached out to the keep radius for instant return). This makes the full-detail region and the LOD band share exactly one boundary, so the same area is never drawn twice. Disable to restore the old unload-hysteresis behaviour where meshes linger out to the keep radius.")]
+    [SerializeField] private bool hideFullDetailOutsideRenderRadius = true;
+
     [Header("Initial Streaming Stage")]
     [SerializeField][Min(0)] private int initialStreamingRadiusInChunks = 1;
     [SerializeField] private bool useInitialStreamingStage = true;
@@ -49,6 +54,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     private readonly List<Vector3Int> candidateChunksBuffer = new();
     private readonly List<Vector3Int> queueSortBuffer = new();
     private readonly List<Vector3Int> unloadChunksBuffer = new();
+    private readonly List<Vector3Int> hideMeshBuffer = new();
 
     private readonly BlockChunkBuildQueue buildQueue = new();
     private readonly DensityChunkBuildQueue densityBuildQueue = new();
@@ -114,7 +120,42 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     public IReadOnlyCollection<Vector3Int> PendingRenderCoords => pendingRenderSet;
     public IReadOnlyCollection<Vector3Int> KnownEmptyChunks => knownEmptyChunks;
 
+    /// <summary>
+    /// Base-chunk radius the full-detail streamer fills around the viewer (the
+    /// LOD0 region). The LOD streamer reads this so both systems share a single
+    /// hand-off boundary instead of each deriving it independently. Uses the
+    /// steady-state view distance so the LOD boundary does not jump while the
+    /// transient initial-streaming stage is active.
+    /// </summary>
+    public int FullDetailChunkRadius =>
+        Mathf.Max(1, world != null && world.Settings != null ? world.Settings.ViewDistanceInChunks : 1);
+
+    /// <summary>
+    /// Outer base-chunk radius full-detail chunk meshes can still occupy before
+    /// they are unloaded (full-detail radius plus the unload-hysteresis padding).
+    /// </summary>
+    public int FullDetailKeepRadius => FullDetailChunkRadius + UnloadPaddingInChunks;
+
     private bool UseInitialStreamingStageNow => useInitialStreamingStage && !hasBroadcastInitialTerrainReady;
+
+    // Strict hand-off is only active once past the initial spawn stage and only
+    // when the LOD field exists to cover everything beyond the render radius;
+    // otherwise full-detail meshes are kept to the keep radius as before so no
+    // hole is ever left uncovered.
+    private bool StrictFullDetailCulling =>
+        hideFullDetailOutsideRenderRadius
+        && !UseInitialStreamingStageNow
+        && world != null && world.Settings != null && world.Settings.EnableLodTerrain;
+
+    // A full-detail chunk mesh should exist only inside the render (desired) set
+    // plus the spawn anchor. When strict culling is off, keep-set chunks keep
+    // their mesh too (legacy hysteresis behaviour). Only ever called for coords
+    // already known to be in the desired or keep set.
+    private bool ShouldRenderFullDetailMesh(Vector3Int chunkCoord)
+    {
+      if (desiredChunkCoords.Contains(chunkCoord) || chunkCoord == spawnTargetChunkCoord) return true;
+      return !StrictFullDetailCulling;
+    }
     private int ActiveDesiredRadiusInChunks => UseInitialStreamingStageNow ? Mathf.Max(0, initialStreamingRadiusInChunks) : Mathf.Max(1, world.Settings.ViewDistanceInChunks);
     private int ActiveKeepRadiusInChunks => ActiveDesiredRadiusInChunks + (UseInitialStreamingStageNow ? Mathf.Max(0, initialKeepPaddingInChunks) : UnloadPaddingInChunks);
     private int ActiveChunksBelowSurface => UseInitialStreamingStageNow ? Mathf.Max(0, initialChunksBelowSurface) : ChunksBelowSurface;
@@ -181,6 +222,25 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       cachedMaxHardwareConcurrency = Mathf.Max(1, SystemInfo.processorCount - 1);
       chunkPriorityComparison = CompareChunkPriorityByPivot;
       EnsureRuntimeReferences();
+      EnsureLodStreamer();
+    }
+
+    // The Distant-Horizon LOD lives in a sibling LodStreamer component. Ensure it
+    // exists when LOD terrain is enabled so far terrain fills in without manual
+    // scene wiring. If one was added/tuned by hand it is left untouched. The
+    // LodStreamer is fully gated (EnableLodTerrain + valid mode + world ready),
+    // so a stray instance does nothing when LOD is off.
+    private void EnsureLodStreamer()
+    {
+      if (world == null || world.Settings == null || !world.Settings.EnableLodTerrain)
+      {
+        return;
+      }
+
+      if (GetComponent<LodStreamer>() == null)
+      {
+        gameObject.AddComponent<LodStreamer>();
+      }
     }
 
     private bool EnsureRuntimeReferences()
@@ -389,6 +449,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       BuildChunkSet(viewerChunkCoord, ActiveKeepRadiusInChunks, ActiveChunksBelowSurface, ActiveChunksAboveSurface, keepChunkCoords);
       QueueGeneratedChunksForRender(viewerChunkCoord);
       QueueSpawnTargetForRender();
+      HideFullDetailOutsideDesiredSet();
       UnloadOutsideKeepSet();
       pendingQueuesNeedPrioritization = true;
     }
@@ -812,6 +873,17 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
           }
 
           knownEmptyChunks.Remove(r.ChunkCoord);
+          if (!ShouldRenderFullDetailMesh(r.ChunkCoord))
+          {
+            // Keep-only chunk under strict hand-off: data is already stored above
+            // for instant return, but the LOD band covers this region so the
+            // full-detail mesh is not drawn.
+            worldRenderer.RemoveChunk(r.ChunkCoord);
+            ReturnMeshData(r.MeshData);
+            r.MeshData = null;
+            blockCount++;
+            continue;
+          }
           worldRenderer.RenderBlockChunkMesh(r.ChunkCoord, r.MeshData);
           totalBlockMeshApplies++;
           r.MeshData = null;
@@ -854,6 +926,15 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         }
 
         knownEmptyChunks.Remove(r.ChunkCoord);
+        if (!ShouldRenderFullDetailMesh(r.ChunkCoord))
+        {
+          // Keep-only chunk under strict hand-off: data retained above, mesh
+          // skipped because the LOD band covers this region.
+          worldRenderer.RemoveChunk(r.ChunkCoord);
+          ReturnMeshData(r);
+          count++;
+          continue;
+        }
         Mesh mesh = r.MeshData.ToUnityMeshFast();
         MeshDataPool.Return(r.MeshData); r.MeshData = null;
         worldRenderer.RenderDensityChunkMesh(
@@ -1128,6 +1209,33 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       Vector2Int column = new(x, z);
       if (surfaceChunkYCache.TryGetValue(column, out int cached)) return cached;
       int y = generator.GetSurfaceChunkYForChunkColumn(column); surfaceChunkYCache[column] = y; return y;
+    }
+
+    // Removes full-detail chunk MESHES that have fallen outside the render
+    // (desired) set but are still inside the keep set, leaving their voxel data
+    // cached so they re-mesh instantly (never regenerate) when re-entered. This
+    // is what makes the full-detail region end exactly where the LOD band begins
+    // instead of lingering through the unload-hysteresis padding ring. Chunks
+    // outside the keep set are left to UnloadOutsideKeepSet for a full unload.
+    private void HideFullDetailOutsideDesiredSet()
+    {
+      if (!StrictFullDetailCulling) return;
+
+      hideMeshBuffer.Clear();
+      foreach (Vector3Int c in worldRenderer.ActiveChunkViews.Keys)
+      {
+        if (c == spawnTargetChunkCoord) continue;
+        if (desiredChunkCoords.Contains(c)) continue;
+        if (!keepChunkCoords.Contains(c)) continue;
+        hideMeshBuffer.Add(c);
+      }
+
+      for (int i = 0; i < hideMeshBuffer.Count; i++)
+      {
+        // Removes only the rendered mesh/view; the chunk's voxel data remains in
+        // world.Data because the coord is still inside the keep set.
+        worldRenderer.RemoveChunk(hideMeshBuffer[i]);
+      }
     }
 
     private void UnloadOutsideKeepSet()
