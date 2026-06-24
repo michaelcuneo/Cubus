@@ -18,7 +18,12 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
     {
       MeshData mesh = MeshDataPool.Rent(4096, 6144);
 
-      GenerateNeighbourAware(chunkData, materialLookup, voxelSize, mesh);
+      GenerateNeighbourAware(
+          chunkData,
+          materialLookup,
+          voxelSize,
+          mesh
+      );
 
       return mesh;
     }
@@ -30,7 +35,38 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
     {
       MeshData mesh = MeshDataPool.Rent(4096, 6144);
 
-      GenerateNeighbourAware(chunkData, snapshot, voxelSize, mesh);
+      GenerateNeighbourAware(
+          chunkData,
+          snapshot,
+          voxelSize,
+          mesh
+      );
+
+      return mesh;
+    }
+
+    public static MeshData GenerateNeighbourAware(
+    BlockChunkData chunkData,
+    BlockChunkNeighborhood neighborhood,
+    float voxelSize)
+    {
+      MeshData mesh = MeshDataPool.Rent(4096, 6144);
+
+      GenerateNeighbourAware(
+          chunkData,
+          worldVoxelCoord =>
+          {
+            Vector3Int local = worldVoxelCoord - new Vector3Int(
+                chunkData.ChunkCoord.x * VoxelConstants.ChunkSize,
+                chunkData.ChunkCoord.y * VoxelConstants.ChunkSize,
+                chunkData.ChunkCoord.z * VoxelConstants.ChunkSize
+            );
+
+            return neighborhood.GetMaterial(local.x, local.y, local.z);
+          },
+          voxelSize,
+          mesh
+      );
 
       return mesh;
     }
@@ -39,7 +75,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
         BlockChunkData chunkData,
         WorldGenerationSnapshot snapshot,
         float voxelSize,
-        MeshData mesh)
+        MeshData mesh,
+        bool? knownHasAnySolidVoxel = null)
     {
       mesh.Reset();
 
@@ -51,33 +88,48 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
         int u = (axis + 1) % 3;
         int v = (axis + 2) % 3;
 
-        Span<int> x = stackalloc int[3];
-        Span<int> q = stackalloc int[3];
+        int q0 = axis == 0 ? 1 : 0;
+        int q1 = axis == 1 ? 1 : 0;
+        int q2 = axis == 2 ? 1 : 0;
 
-        q[axis] = 1;
-
-        for (x[axis] = -1; x[axis] < size;)
+        for (int axisCoord = -1; axisCoord < size;)
         {
+          int baseX = axis == 0 ? axisCoord : 0;
+          int baseY = axis == 1 ? axisCoord : 0;
+          int baseZ = axis == 2 ? axisCoord : 0;
+
           int n = 0;
 
-          for (x[v] = 0; x[v] < size; x[v]++)
+          for (int vv = 0; vv < size; vv++)
           {
-            for (x[u] = 0; x[u] < size; x[u]++)
+            for (int uu = 0; uu < size; uu++)
             {
+              int lx = baseX;
+              int ly = baseY;
+              int lz = baseZ;
+
+              if (u == 0) lx = uu;
+              else if (u == 1) ly = uu;
+              else lz = uu;
+
+              if (v == 0) lx = vv;
+              else if (v == 1) ly = vv;
+              else lz = vv;
+
               ushort materialA = GetMaterialNeighbourAware(
                   chunkData,
                   snapshot,
-                  x[0],
-                  x[1],
-                  x[2]
+                  lx,
+                  ly,
+                  lz
               );
 
               ushort materialB = GetMaterialNeighbourAware(
                   chunkData,
                   snapshot,
-                  x[0] + q[0],
-                  x[1] + q[1],
-                  x[2] + q[2]
+                  lx + q0,
+                  ly + q1,
+                  lz + q2
               );
 
               bool solidA = materialA != 0;
@@ -89,25 +141,16 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
               }
               else if (solidA)
               {
-                // Face is owned by voxel A (at x[axis]); only emit it when A is
-                // inside this chunk. On the x[axis] == -1 boundary plane A is the
-                // neighbour voxel, whose face belongs to the neighbour chunk's
-                // own mesh - emitting it here would double-draw the face (and,
-                // when the neighbour is the unloaded solid fallback, paint a
-                // phantom one-sided cap with the fallback material).
-                mask[n++] = x[axis] >= 0 ? materialA : 0;
+                mask[n++] = axisCoord >= 0 ? materialA : 0;
               }
               else
               {
-                // Face is owned by voxel B (at x[axis] + 1); only emit it when B
-                // is inside this chunk (the x[axis] == size - 1 plane has B as the
-                // neighbour voxel, owned by the neighbour chunk's mesh).
-                mask[n++] = (x[axis] + 1) < size ? -materialB : 0;
+                mask[n++] = (axisCoord + 1) < size ? -materialB : 0;
               }
             }
           }
 
-          x[axis]++;
+          axisCoord++;
 
           n = 0;
 
@@ -153,13 +196,17 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
                 height++;
               }
 
-              Span<int> start = stackalloc int[3];
-              start[0] = x[0];
-              start[1] = x[1];
-              start[2] = x[2];
+              int startX = axis == 0 ? axisCoord : 0;
+              int startY = axis == 1 ? axisCoord : 0;
+              int startZ = axis == 2 ? axisCoord : 0;
 
-              start[u] = i;
-              start[v] = j;
+              if (u == 0) startX = i;
+              else if (u == 1) startY = i;
+              else startZ = i;
+
+              if (v == 0) startX = j;
+              else if (v == 1) startY = j;
+              else startZ = j;
 
               bool positiveFace = currentMask > 0;
               ushort materialId = (ushort)Math.Abs(currentMask);
@@ -167,11 +214,9 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
               AddVoxelTiledGreedyQuad(
                   mesh,
                   axis,
-                  u,
-                  v,
-                  start[0],
-                  start[1],
-                  start[2],
+                  startX,
+                  startY,
+                  startZ,
                   width,
                   height,
                   positiveFace,
@@ -181,9 +226,9 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
 
               for (int y = 0; y < height; y++)
               {
-                for (int x2 = 0; x2 < width; x2++)
+                for (int x = 0; x < width; x++)
                 {
-                  mask[n + x2 + y * size] = 0;
+                  mask[n + x + y * size] = 0;
                 }
               }
 
@@ -194,40 +239,15 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
         }
       }
 
-      MarkCompleteWithoutGeometryIfSolid(chunkData, mesh);
-    }
-
-    public static MeshData GenerateNeighbourAware(
-        BlockChunkData chunkData,
-        BlockChunkNeighborhood neighborhood,
-        float voxelSize)
-    {
-      MeshData mesh = MeshDataPool.Rent(4096, 6144);
-
-      GenerateNeighbourAware(
-          chunkData,
-          worldVoxelCoord =>
-          {
-            Vector3Int local = worldVoxelCoord - new Vector3Int(
-                chunkData.ChunkCoord.x * VoxelConstants.ChunkSize,
-                chunkData.ChunkCoord.y * VoxelConstants.ChunkSize,
-                chunkData.ChunkCoord.z * VoxelConstants.ChunkSize
-            );
-
-            return neighborhood.GetMaterial(local.x, local.y, local.z);
-          },
-          voxelSize,
-          mesh
-      );
-
-      return mesh;
+      MarkCompleteWithoutGeometryIfSolid(chunkData, mesh, knownHasAnySolidVoxel);
     }
 
     public static void GenerateNeighbourAware(
         BlockChunkData chunkData,
         MaterialLookup materialLookup,
         float voxelSize,
-        MeshData mesh)
+        MeshData mesh,
+        bool? knownHasAnySolidVoxel = null)
     {
       mesh.Reset();
 
@@ -239,33 +259,48 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
         int u = (axis + 1) % 3;
         int v = (axis + 2) % 3;
 
-        Span<int> x = stackalloc int[3];
-        Span<int> q = stackalloc int[3];
+        int q0 = axis == 0 ? 1 : 0;
+        int q1 = axis == 1 ? 1 : 0;
+        int q2 = axis == 2 ? 1 : 0;
 
-        q[axis] = 1;
-
-        for (x[axis] = -1; x[axis] < size;)
+        for (int axisCoord = -1; axisCoord < size;)
         {
+          int baseX = axis == 0 ? axisCoord : 0;
+          int baseY = axis == 1 ? axisCoord : 0;
+          int baseZ = axis == 2 ? axisCoord : 0;
+
           int n = 0;
 
-          for (x[v] = 0; x[v] < size; x[v]++)
+          for (int vv = 0; vv < size; vv++)
           {
-            for (x[u] = 0; x[u] < size; x[u]++)
+            for (int uu = 0; uu < size; uu++)
             {
+              int lx = baseX;
+              int ly = baseY;
+              int lz = baseZ;
+
+              if (u == 0) lx = uu;
+              else if (u == 1) ly = uu;
+              else lz = uu;
+
+              if (v == 0) lx = vv;
+              else if (v == 1) ly = vv;
+              else lz = vv;
+
               ushort materialA = GetMaterialNeighbourAware(
                   chunkData,
                   materialLookup,
-                  x[0],
-                  x[1],
-                  x[2]
+                  lx,
+                  ly,
+                  lz
               );
 
               ushort materialB = GetMaterialNeighbourAware(
                   chunkData,
                   materialLookup,
-                  x[0] + q[0],
-                  x[1] + q[1],
-                  x[2] + q[2]
+                  lx + q0,
+                  ly + q1,
+                  lz + q2
               );
 
               bool solidA = materialA != 0;
@@ -277,25 +312,16 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
               }
               else if (solidA)
               {
-                // Face is owned by voxel A (at x[axis]); only emit it when A is
-                // inside this chunk. On the x[axis] == -1 boundary plane A is the
-                // neighbour voxel, whose face belongs to the neighbour chunk's
-                // own mesh - emitting it here would double-draw the face (and,
-                // when the neighbour is the unloaded solid fallback, paint a
-                // phantom one-sided cap with the fallback material).
-                mask[n++] = x[axis] >= 0 ? materialA : 0;
+                mask[n++] = axisCoord >= 0 ? materialA : 0;
               }
               else
               {
-                // Face is owned by voxel B (at x[axis] + 1); only emit it when B
-                // is inside this chunk (the x[axis] == size - 1 plane has B as the
-                // neighbour voxel, owned by the neighbour chunk's mesh).
-                mask[n++] = (x[axis] + 1) < size ? -materialB : 0;
+                mask[n++] = (axisCoord + 1) < size ? -materialB : 0;
               }
             }
           }
 
-          x[axis]++;
+          axisCoord++;
 
           n = 0;
 
@@ -314,9 +340,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
 
               int width = 1;
 
-              while (
-                  i + width < size &&
-                  mask[n + width] == currentMask)
+              while (i + width < size && mask[n + width] == currentMask)
               {
                 width++;
               }
@@ -343,13 +367,17 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
                 height++;
               }
 
-              Span<int> start = stackalloc int[3];
-              start[0] = x[0];
-              start[1] = x[1];
-              start[2] = x[2];
+              int startX = axis == 0 ? axisCoord : 0;
+              int startY = axis == 1 ? axisCoord : 0;
+              int startZ = axis == 2 ? axisCoord : 0;
 
-              start[u] = i;
-              start[v] = j;
+              if (u == 0) startX = i;
+              else if (u == 1) startY = i;
+              else startZ = i;
+
+              if (v == 0) startX = j;
+              else if (v == 1) startY = j;
+              else startZ = j;
 
               bool positiveFace = currentMask > 0;
               ushort materialId = (ushort)Math.Abs(currentMask);
@@ -357,11 +385,9 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
               AddVoxelTiledGreedyQuad(
                   mesh,
                   axis,
-                  u,
-                  v,
-                  start[0],
-                  start[1],
-                  start[2],
+                  startX,
+                  startY,
+                  startZ,
                   width,
                   height,
                   positiveFace,
@@ -371,9 +397,9 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
 
               for (int y = 0; y < height; y++)
               {
-                for (int x2 = 0; x2 < width; x2++)
+                for (int x = 0; x < width; x++)
                 {
-                  mask[n + x2 + y * size] = 0;
+                  mask[n + x + y * size] = 0;
                 }
               }
 
@@ -384,12 +410,22 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
         }
       }
 
-      MarkCompleteWithoutGeometryIfSolid(chunkData, mesh);
+      MarkCompleteWithoutGeometryIfSolid(chunkData, mesh, knownHasAnySolidVoxel);
     }
 
-    private static void MarkCompleteWithoutGeometryIfSolid(BlockChunkData chunkData, MeshData mesh)
+    private static void MarkCompleteWithoutGeometryIfSolid(
+        BlockChunkData chunkData,
+        MeshData mesh,
+        bool? knownHasAnySolidVoxel = null)
     {
-      if (chunkData != null && mesh != null && mesh.IsEmpty && chunkData.HasAnySolidVoxel())
+      if (chunkData == null || mesh == null || !mesh.IsEmpty)
+      {
+        return;
+      }
+
+      bool hasAnySolidVoxel = knownHasAnySolidVoxel ?? chunkData.HasAnySolidVoxel();
+
+      if (hasAnySolidVoxel)
       {
         mesh.MarkCompleteWithoutGeometry();
       }
@@ -456,14 +492,9 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
         ushort materialId,
         float voxelSize)
     {
-      int u = (axis + 1) % 3;
-      int v = (axis + 2) % 3;
-
       AddVoxelTiledGreedyQuad(
           mesh,
           axis,
-          u,
-          v,
           startX,
           startY,
           startZ,
@@ -478,8 +509,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
     private static void AddVoxelTiledGreedyQuad(
         MeshData mesh,
         int axis,
-        int u,
-        int v,
         int startX,
         int startY,
         int startZ,
@@ -489,60 +518,45 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
         ushort materialId,
         float voxelSize)
     {
-      Vector3 normal = Vector3.zero;
-      normal[axis] = positiveFace ? 1.0f : -1.0f;
+      Vector3 normal;
+      Vector3 p0;
+      Vector3 p1;
+      Vector3 p2;
+      Vector3 p3;
 
-      // Emit a SINGLE quad spanning the whole greedy rectangle instead of
-      // width*height unit quads. The CubusBiomeAtlasURP shader tiles the atlas
-      // tile per voxel via frac(uv) and samples with explicit gradients
-      // (SAMPLE_TEXTURE2D_GRAD using the unwrapped uv) so a UV that runs 0..N
-      // across the merged face reproduces the exact per-voxel texturing the
-      // old per-tile quads produced, with up to width*height fewer vertices.
-      Vector3Int start = new(startX, startY, startZ);
+      if (axis == 0)
+      {
+        normal = positiveFace ? Vector3.right : Vector3.left;
 
-      Vector3Int d1 = Vector3Int.zero;
-      Vector3Int d2 = Vector3Int.zero;
+        p0 = ToPosition(startX, startY, startZ, voxelSize);
+        p1 = ToPosition(startX, startY + width, startZ, voxelSize);
+        p2 = ToPosition(startX, startY + width, startZ + height, voxelSize);
+        p3 = ToPosition(startX, startY, startZ + height, voxelSize);
+      }
+      else if (axis == 1)
+      {
+        normal = positiveFace ? Vector3.up : Vector3.down;
 
-      d1[u] = width;
-      d2[v] = height;
+        p0 = ToPosition(startX, startY, startZ, voxelSize);
+        p1 = ToPosition(startX, startY, startZ + width, voxelSize);
+        p2 = ToPosition(startX + height, startY, startZ + width, voxelSize);
+        p3 = ToPosition(startX + height, startY, startZ, voxelSize);
+      }
+      else
+      {
+        normal = positiveFace ? Vector3.forward : Vector3.back;
 
-      Vector3 p0 = ToPosition(
-          start.x,
-          start.y,
-          start.z,
-          voxelSize
-      );
-
-      Vector3 p1 = ToPosition(
-          start.x + d1.x,
-          start.y + d1.y,
-          start.z + d1.z,
-          voxelSize
-      );
-
-      Vector3 p2 = ToPosition(
-          start.x + d1.x + d2.x,
-          start.y + d1.y + d2.y,
-          start.z + d1.z + d2.z,
-          voxelSize
-      );
-
-      Vector3 p3 = ToPosition(
-          start.x + d2.x,
-          start.y + d2.y,
-          start.z + d2.z,
-          voxelSize
-      );
+        p0 = ToPosition(startX, startY, startZ, voxelSize);
+        p1 = ToPosition(startX + width, startY, startZ, voxelSize);
+        p2 = ToPosition(startX + width, startY + height, startZ, voxelSize);
+        p3 = ToPosition(startX, startY + height, startZ, voxelSize);
+      }
 
       Vector3 v0;
       Vector3 v1;
       Vector3 v2;
       Vector3 v3;
 
-      // UV runs one unit per voxel so frac() in the shader tiles correctly. The
-      // winding (and therefore which face axis maps to uv.x vs uv.y) differs by
-      // face sign, so the scale is transposed for negative faces to keep the
-      // per-voxel texture orientation identical to the old per-tile output.
       Vector2 uvScale;
 
       if (positiveFace)
@@ -562,8 +576,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
         uvScale = new Vector2(height, width);
       }
 
-      AddQuad(
-          mesh,
+      mesh.AddQuad(
           v0,
           v1,
           v2,
@@ -581,56 +594,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
           y * voxelSize,
           z * voxelSize
       );
-    }
-
-    private static void AddQuad(
-        MeshData mesh,
-        Vector3 v0,
-        Vector3 v1,
-        Vector3 v2,
-        Vector3 v3,
-        Vector3 normal,
-        ushort materialId,
-        Vector2 uvScale)
-    {
-      int startIndex = mesh.Vertices.Count;
-
-      mesh.Vertices.Add(v0);
-      mesh.Vertices.Add(v1);
-      mesh.Vertices.Add(v2);
-      mesh.Vertices.Add(v3);
-
-      mesh.Triangles.Add(startIndex + 0);
-      mesh.Triangles.Add(startIndex + 2);
-      mesh.Triangles.Add(startIndex + 1);
-
-      mesh.Triangles.Add(startIndex + 0);
-      mesh.Triangles.Add(startIndex + 3);
-      mesh.Triangles.Add(startIndex + 2);
-
-      mesh.Normals.Add(normal);
-      mesh.Normals.Add(normal);
-      mesh.Normals.Add(normal);
-      mesh.Normals.Add(normal);
-
-      mesh.UVs.Add(new Vector2(0.0f, 0.0f));
-      mesh.UVs.Add(new Vector2(0.0f, uvScale.y));
-      mesh.UVs.Add(new Vector2(uvScale.x, uvScale.y));
-      mesh.UVs.Add(new Vector2(uvScale.x, 0.0f));
-
-      Color32 vertexColor = EncodeMaterialId(materialId);
-
-      mesh.Colors.Add(vertexColor);
-      mesh.Colors.Add(vertexColor);
-      mesh.Colors.Add(vertexColor);
-      mesh.Colors.Add(vertexColor);
-    }
-
-    private static Color32 EncodeMaterialId(ushort materialId)
-    {
-      byte low = (byte)(materialId & 0xFF);
-      byte high = (byte)((materialId >> 8) & 0xFF);
-      return new Color32(low, high, 0, 255);
     }
   }
 }

@@ -148,7 +148,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 14242219738bc7c4c8c0f958f9886927, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Assets.Demo.Scripts.Multiplayer.CubusNetworkManager
-  serverUri: http://cubus.michaelcuneo.com.au:3030
+  serverUri: https://cubus.michaelcuneo.com.au:3030
   moduleName: cubus
   subscribeToWorldChunks: 1
   connectOnStart: 1
@@ -463,9 +463,9 @@ MonoBehaviour:
   settings:
     TerrainSystem: 0
     WorldSeed: 2147483647
-    ViewDistanceInChunks: 16
+    ViewDistanceInChunks: 64
     VoxelSize: 1
-    EnableLodTerrain: 0
+    EnableLodTerrain: 1
     LodLevelCount: 6
     LodRingWidthInTiles: 4
     LodVerticalRadiusInTiles: 4
@@ -606,14 +606,14 @@ MonoBehaviour:
   m_EditorClassIdentifier: CubusCore.Runtime::CubusCore.Streaming.WorldStreamer
   viewer: {fileID: 1517188426}
   settings:
-    UnloadPaddingInChunks: 4
-    ChunksGeneratedPerFrame: 8
-    InitialChunksGeneratedPerFrame: 4
-    ChunksRenderedPerFrame: 16
-    MeshAppliesPerFrame: 8
-    MeshApplyTimeBudgetMs: 6
-    MaxAsyncChunkTasks: 12
-  initialSpawnRequiredRenderedChunks: 1
+    UnloadPaddingInChunks: 2
+    ChunksGeneratedPerFrame: 24
+    InitialChunksGeneratedPerFrame: 64
+    ChunksRenderedPerFrame: 48
+    MeshAppliesPerFrame: 24
+    MeshApplyTimeBudgetMs: 8
+    MaxAsyncChunkTasks: 16
+  initialSpawnRequiredRenderedChunks: 4
   desiredInitialSpawnLocation: {x: 0, y: 0, z: 0}
   initialSpawnClearance: 2
   evictCachedChunkDataOutsideKeepSet: 1

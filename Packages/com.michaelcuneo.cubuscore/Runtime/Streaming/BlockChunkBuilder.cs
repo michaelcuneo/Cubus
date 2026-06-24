@@ -101,6 +101,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         }
       }
 
+      chunkData.SetKnownHasAnySolidVoxel(hasAnySolidVoxel);
       return chunkData;
     }
 
@@ -215,6 +216,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         }
       }
 
+      chunkData.SetKnownHasAnySolidVoxel(hasAnySolidVoxel);
       return chunkData;
 #else
       return GenerateChunkData(chunkCoord, snapshot, overrides, out hasAnySolidVoxel);

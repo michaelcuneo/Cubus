@@ -64,7 +64,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     private Vector3Int viewerHeading;
     private Vector3Int spawnTargetChunkCoord;
     private bool hasBroadcastInitialTerrainReady;
-    private bool pendingQueuesNeedPrioritization;
+    private bool pendingLoadQueueNeedsPrioritization;
+    private bool pendingRenderQueueNeedsPrioritization;
     private bool renderReconciliationPending;
     // Cached once on the main thread; SystemInfo.processorCount is a native call
     // that was previously hit many times per frame inside the streaming loops.
@@ -392,7 +393,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       pendingRenderQueue.Clear(); pendingRenderSet.Clear();
       pendingUnloadQueue.Clear(); pendingUnloadSet.Clear();
       hasLastViewerChunkCoord = false;
-      pendingQueuesNeedPrioritization = false;
+      pendingLoadQueueNeedsPrioritization = false;
+      pendingRenderQueueNeedsPrioritization = false;
       UpdateStreamingSetIfNeeded(true);
     }
 
@@ -406,7 +408,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       buildQueue.IncrementGeneration(); densityBuildQueue.IncrementGeneration(); chunkLoadQueue.IncrementGeneration();
       hasLastViewerChunkCoord = false;
       hasBroadcastInitialTerrainReady = false;
-      pendingQueuesNeedPrioritization = false;
+      pendingLoadQueueNeedsPrioritization = false;
+      pendingRenderQueueNeedsPrioritization = false;
     }
 
     private void UpdateStreamingSetIfNeeded(bool force = false)
@@ -434,7 +437,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       PruneKnownEmptyChunksOutsideCurrentInterest(); QueueGeneratedChunksForRender(viewerChunkCoord);
       QueueSpawnTargetForRender();
       UnloadOutsideKeepSet();
-      pendingQueuesNeedPrioritization = true;
+      pendingLoadQueueNeedsPrioritization = true;
+      pendingRenderQueueNeedsPrioritization = true;
     }
 
     private void PruneKnownEmptyChunksOutsideCurrentInterest()
@@ -615,30 +619,50 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       if (HasChunkData(spawnTargetChunkCoord)) QueueRender(spawnTargetChunkCoord); else QueueLoad(spawnTargetChunkCoord);
     }
 
-    private void QueueLoad(Vector3Int chunkCoord)
+    private void QueueLoad(Vector3Int chunkCoord, bool requestPrioritization = true)
     {
       if (pendingLoadSet.Add(chunkCoord))
       {
         pendingLoadQueue.Enqueue(chunkCoord);
-        pendingQueuesNeedPrioritization = true;
+
+        if (requestPrioritization)
+        {
+          pendingLoadQueueNeedsPrioritization = true;
+        }
       }
     }
 
-    private void QueueRender(Vector3Int chunkCoord)
+    private void QueueRender(Vector3Int chunkCoord, bool requestPrioritization = true)
     {
       if (pendingRenderSet.Add(chunkCoord))
       {
         pendingRenderQueue.Enqueue(chunkCoord);
-        pendingQueuesNeedPrioritization = true;
+
+        if (requestPrioritization)
+        {
+          pendingRenderQueueNeedsPrioritization = true;
+        }
       }
     }
 
     private void PrioritizePendingQueues()
     {
-      if (!hasLastViewerChunkCoord || !pendingQueuesNeedPrioritization) return;
-      PrioritizeQueue(pendingLoadQueue, pendingLoadSet, true);
-      PrioritizeQueue(pendingRenderQueue, pendingRenderSet, false);
-      pendingQueuesNeedPrioritization = false;
+      if (!hasLastViewerChunkCoord)
+      {
+        return;
+      }
+
+      if (pendingLoadQueueNeedsPrioritization)
+      {
+        PrioritizeQueue(pendingLoadQueue, pendingLoadSet, true);
+        pendingLoadQueueNeedsPrioritization = false;
+      }
+
+      if (pendingRenderQueueNeedsPrioritization)
+      {
+        PrioritizeQueue(pendingRenderQueue, pendingRenderSet, false);
+        pendingRenderQueueNeedsPrioritization = false;
+      }
     }
 
     private void PrioritizeQueue(Queue<Vector3Int> queue, HashSet<Vector3Int> membership, bool allowKeepOnlyChunks)
@@ -693,6 +717,11 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
           continue;
         }
 
+        if (worldRenderer.HasChunkView(c) || knownEmptyChunks.Contains(c))
+        {
+          continue;
+        }
+
         if (HasChunkData(c))
         {
           if (desiredChunkCoords.Contains(c))
@@ -714,7 +743,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         int totalActiveAsyncTasks = chunkLoadQueue.ActiveTaskCount + buildQueue.ActiveTaskCount + densityBuildQueue.ActiveTaskCount;
         if (chunkLoadQueue.ActiveTaskCount >= maxLoadTasks || totalActiveAsyncTasks >= maxTotalTasks)
         {
-          QueueLoad(c);
+          QueueLoad(c, false);
           break;
         }
 
@@ -731,7 +760,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
           continue;
         }
 
-        QueueLoad(c);
+        QueueLoad(c, false);
         break;
       }
     }
@@ -811,14 +840,14 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
           {
             if (buildQueue.IsInFlight(c))
             {
-              QueueRender(c);
+              QueueRender(c, false);
               continue;
             }
 
             int totalActiveTasksForBlockBuild = chunkLoadQueue.ActiveTaskCount + buildQueue.ActiveTaskCount + densityBuildQueue.ActiveTaskCount;
             if (buildQueue.ActiveTaskCount >= MaxBlockAsyncTasks || totalActiveTasksForBlockBuild >= MaxTotalAsyncTasks)
             {
-              QueueRender(c);
+              QueueRender(c, false);
               break;
             }
 
@@ -828,11 +857,11 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
               continue;
             }
 
-            QueueRender(c);
+            QueueRender(c, false);
             continue;
           }
 
-          if (!knownEmptyChunks.Contains(c)) QueueLoad(c);
+          if (!knownEmptyChunks.Contains(c)) QueueLoad(c, false);
           continue;
         }
 
@@ -844,20 +873,20 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
         if (densityBuildQueue.IsInFlight(c))
         {
-          QueueRender(c);
+          QueueRender(c, false);
           continue;
         }
 
         if (!EnsureDensitySampleChunksAvailableForMesh(c))
         {
-          QueueRender(c);
+          QueueRender(c, false);
           continue;
         }
 
         int totalActiveAsyncTasks = chunkLoadQueue.ActiveTaskCount + buildQueue.ActiveTaskCount + densityBuildQueue.ActiveTaskCount;
         if (densityBuildQueue.ActiveTaskCount >= MaxDensityAsyncTasks || totalActiveAsyncTasks >= MaxTotalAsyncTasks)
         {
-          QueueRender(c);
+          QueueRender(c, false);
           break;
         }
 
@@ -971,7 +1000,10 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
             // genuinely empty, so it must not be marked known-empty: that would
             // leave a permanent hole that only a voxel edit could clear. The
             // chunk data is still present, so requeue it to retry the mesh build.
-            if (world.Data.BlockChunks.ContainsKey(r.ChunkCoord)) QueueRender(r.ChunkCoord);
+            if (world.Data.BlockChunks.ContainsKey(r.ChunkCoord))
+            {
+              QueueRender(r.ChunkCoord, false);
+            }
             ReturnMeshData(r.MeshData);
             blockCount++;
             continue;
@@ -1026,7 +1058,10 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         {
           // Transient background-build exception. Requeue to retry instead of
           // dropping the chunk and waiting on a later reconciliation pass.
-          if (world.Data.DensityChunks.ContainsKey(r.ChunkCoord)) QueueRender(r.ChunkCoord);
+          if (world.Data.DensityChunks.ContainsKey(r.ChunkCoord))
+          {
+            QueueRender(r.ChunkCoord, false);
+          }
           ReturnMeshData(r);
           count++;
           continue;

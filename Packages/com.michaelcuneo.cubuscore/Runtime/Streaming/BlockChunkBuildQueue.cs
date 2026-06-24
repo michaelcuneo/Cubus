@@ -123,6 +123,28 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       return true;
     }
 
+    private struct TerrainColumnLookupCache
+    {
+      public bool HasColumn;
+      public int X;
+      public int Z;
+      public TerrainColumnSampler Column;
+
+      public TerrainColumnSampler Get(WorldGenerationSnapshot snapshot, int x, int z)
+      {
+        if (!HasColumn || X != x || Z != z || Column == null)
+        {
+          Column = new TerrainColumnSampler();
+          Column.Prepare(snapshot, x, z, 1.0f);
+          X = x;
+          Z = z;
+          HasColumn = true;
+        }
+
+        return Column;
+      }
+    }
+
     private static void ReturnNeighborSnapshotsToPool(BlockChunkBuildRequest request)
     {
       if (request?.NeighborChunkSnapshots == null)
@@ -184,11 +206,11 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         // Boundary voxels with no neighbor snapshot fall back to terrain
         // sampling. Cache a sampler per (x, z) column so the surface noise is
         // resolved once per column instead of once per boundary voxel.
-        Dictionary<long, TerrainColumnSampler> meshColumnCache = new();
+        TerrainColumnLookupCache meshColumnCache = new();
 
         meshData = BlockGreedyMesher.GenerateNeighbourAware(
             chunkData,
-            worldVoxelCoord => ResolveMaterialForMeshing(request, worldVoxelCoord, meshColumnCache),
+            worldVoxelCoord => ResolveMaterialForMeshing(request, worldVoxelCoord, ref meshColumnCache),
             Mathf.Max(0.0001f, request.VoxelSize)
         );
       }
@@ -206,7 +228,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     private static ushort ResolveMaterialForMeshing(
         BlockChunkBuildRequest request,
         Vector3Int worldVoxelCoord,
-        Dictionary<long, TerrainColumnSampler> columnCache)
+        ref TerrainColumnLookupCache columnCache)
     {
       Vector3Int chunkCoord = VoxelMath.WorldVoxelToChunkCoord(worldVoxelCoord);
 
@@ -228,14 +250,11 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         return SolidBoundaryFallbackMaterial;
       }
 
-      long columnKey = ((long)worldVoxelCoord.x << 32) | (uint)worldVoxelCoord.z;
-
-      if (!columnCache.TryGetValue(columnKey, out TerrainColumnSampler column))
-      {
-        column = new TerrainColumnSampler();
-        column.Prepare(request.WorldSnapshot, worldVoxelCoord.x, worldVoxelCoord.z, 1.0f);
-        columnCache[columnKey] = column;
-      }
+      TerrainColumnSampler column = columnCache.Get(
+        request.WorldSnapshot,  
+        worldVoxelCoord.x,
+        worldVoxelCoord.z
+      );
 
       TerrainSample sample = column.SampleAt(worldVoxelCoord, 1.0f);
 
