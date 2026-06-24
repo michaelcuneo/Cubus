@@ -465,6 +465,7 @@ GameObject:
   - component: {fileID: 1298388485}
   - component: {fileID: 1298388486}
   - component: {fileID: 1298388487}
+  - component: {fileID: 1298388488}
   m_Layer: 0
   m_Name: VoxelWorld
   m_TagString: Untagged
@@ -502,13 +503,13 @@ MonoBehaviour:
   settings:
     TerrainSystem: 0
     WorldSeed: 123123
-    ViewDistanceInChunks: 12
+    ViewDistanceInChunks: 6
     VoxelSize: 1
     EnableLodTerrain: 1
     LodLevelCount: 4
     LodRingWidthInTiles: 4
     LodVerticalRadiusInTiles: 1
-    LodSkirtDepthInCells: 2
+    LodSkirtDepthInCells: 4
     DensityMeshStep: 1
     DensitySampleScale: 1
     BiomeRuleWorldScale: 8
@@ -747,6 +748,22 @@ MonoBehaviour:
   logCompressionStats: 0
   logTimingStats: 0
   logSingleChunkCompressionStats: 0
+--- !u!114 &1298388488
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1298388476}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 126597d45547282428787c279b025ce3, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: CubusCore.Runtime::CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Lod.LodStreamer
+  viewer: {fileID: 1517188426}
+  maxConcurrentBuilds: 8
+  buildsStartedPerFrame: 16
+  tilesAppliedPerFrame: 16
 --- !u!1 &1453617040
 GameObject:
   m_ObjectHideFlags: 0

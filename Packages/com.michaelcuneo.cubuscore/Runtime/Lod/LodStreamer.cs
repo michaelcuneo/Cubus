@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Core;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering;
+using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World;
 using UnityEngine;
@@ -47,6 +48,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Lod
 
     private CubusWorld world;
     private WorldRenderer worldRenderer;
+    private WorldStreamer worldStreamer;
     private WorldGenerator generator;
     private WorldGenerationSnapshot snapshot;
     private LodChunkRenderer lodRenderer;
@@ -74,6 +76,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Lod
     {
       world = GetComponent<CubusWorld>();
       worldRenderer = GetComponent<WorldRenderer>();
+      worldStreamer = GetComponent<WorldStreamer>();
     }
 
     private void Start()
@@ -185,9 +188,16 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Lod
     private void RecomputeDesiredTiles(Vector3Int viewerChunkCoord)
     {
       desiredBuffer.Clear();
+
+      // Share the full-detail boundary with the chunk streamer so the LOD starts
+      // exactly where full chunks end (no gap, no double-drawn overlap ring).
+      int fullDetailRadius = worldStreamer != null
+          ? worldStreamer.FullDetailChunkRadius
+          : Mathf.Max(1, world.Settings.ViewDistanceInChunks);
+
       LodBandPlanner.ComputeDesiredTiles(
         viewerChunkCoord,
-        Mathf.Max(1, world.Settings.ViewDistanceInChunks),
+        fullDetailRadius,
         world.Settings.LodLevelCount,
         world.Settings.LodRingWidthInTiles,
         world.Settings.LodVerticalRadiusInTiles,
