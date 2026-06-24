@@ -107,6 +107,9 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
             });
           }
         }
+
+        activeTaskCount = Mathf.Max(0, activeTaskCount - 1);
+        inFlightChunkCoords.Remove(request.ChunkCoord);
       });
 
       return true;
