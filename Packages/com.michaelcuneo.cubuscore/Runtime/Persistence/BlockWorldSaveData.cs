@@ -11,6 +11,12 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Persistence
     public int ChunkSize;
     public float VoxelSize;
     public List<SavedBlockChunk> SavedBlockChunks = new();
+
+    public List<SavedBlockChunk> SavedChunks
+    {
+      get => SavedBlockChunks;
+      set => SavedBlockChunks = value;
+    }
   }
 
   [Serializable]
