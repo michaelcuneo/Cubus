@@ -1,3 +1,4 @@
+using System.IO;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -17,7 +18,7 @@ namespace Assets.Demo.Scripts.Multiplayer
       Connected = 1,
     }
 
-    [SerializeField] private string gameplaySceneName = "SampleScene";
+    [SerializeField] private string gameplaySceneName = "CubusGame";
     [SerializeField] private string defaultServerUri = "http://cubus.michaelcuneo.com.au";
     [SerializeField] private string defaultModuleName = "cubus";
     [SerializeField] private string defaultWorldId = "demo_world";
@@ -160,7 +161,15 @@ namespace Assets.Demo.Scripts.Multiplayer
         return;
       }
 
-      SceneManager.LoadScene(gameplaySceneName);
+      if (!TryFindSceneInBuildSettings(gameplaySceneName.Trim(), out string scenePath))
+      {
+        status = $"Scene '{gameplaySceneName}' is not in Build Settings. Add it, or set Gameplay Scene Name to the exact scene name.";
+        Debug.LogError($"[CubusLauncher] Scene '{gameplaySceneName}' was not found in Build Settings.");
+        return;
+      }
+
+      status = $"Loading {scenePath}...";
+      SceneManager.LoadScene(scenePath);
     }
 
     private bool TryBuildLaunchContext()
@@ -209,8 +218,27 @@ namespace Assets.Demo.Scripts.Multiplayer
           new Vector2Int(parsedMinX, parsedMinZ),
           new Vector2Int(parsedMaxX, parsedMaxZ));
 
-      status = $"Loading {gameplaySceneName}...";
       return true;
+    }
+
+    private static bool TryFindSceneInBuildSettings(string requestedSceneName, out string scenePath)
+    {
+      scenePath = string.Empty;
+
+      for (int i = 0; i < SceneManager.sceneCountInBuildSettings; i++)
+      {
+        string path = SceneUtility.GetScenePathByBuildIndex(i);
+        string name = Path.GetFileNameWithoutExtension(path);
+
+        if (string.Equals(name, requestedSceneName, System.StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(path, requestedSceneName, System.StringComparison.OrdinalIgnoreCase))
+        {
+          scenePath = path;
+          return true;
+        }
+      }
+
+      return false;
     }
   }
 }
