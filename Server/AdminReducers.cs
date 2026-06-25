@@ -2,8 +2,9 @@ using SpacetimeDB;
 
 public static partial class Module
 {
-  // Deletes a single world instance from the server-side world database. This removes
-  // the deterministic world contract plus all edit/chunk rows for that WorldId.
+  // Deletes a single game world instance from the server-side world database. This removes
+  // the deterministic world contract plus all edit/chunk rows for that WorldId. Player and
+  // chat tables are intentionally left alone because they are not part of the terrain instance.
   [Reducer]
   public static void DeleteWorldInstance(ReducerContext ctx, string worldId)
   {
@@ -24,37 +25,6 @@ public static partial class Module
 
     Log.Info(
         $"DeleteWorldInstance '{normalizedWorldId}': removed {worldStateRemoved} world_state rows, " +
-        $"{editsRemoved} voxel edits and {chunksRemoved} chunks.");
-  }
-
-  // Clears every world instance from the server-side world database while leaving
-  // player presence and chat tables alone. Use this for dev/test server resets.
-  [Reducer]
-  public static void ClearAllWorldData(ReducerContext ctx)
-  {
-    var worldStatesRemoved = 0;
-    foreach (var state in ctx.Db.world_state.Iter())
-    {
-      ctx.Db.world_state.WorldId.Delete(state.WorldId);
-      worldStatesRemoved++;
-    }
-
-    var editsRemoved = 0;
-    foreach (var edit in ctx.Db.voxel_edit.Iter())
-    {
-      ctx.Db.voxel_edit.Key.Delete(edit.Key);
-      editsRemoved++;
-    }
-
-    var chunksRemoved = 0;
-    foreach (var chunk in ctx.Db.world_chunk.Iter())
-    {
-      ctx.Db.world_chunk.Key.Delete(chunk.Key);
-      chunksRemoved++;
-    }
-
-    Log.Info(
-        $"ClearAllWorldData: removed {worldStatesRemoved} world_state rows, " +
         $"{editsRemoved} voxel edits and {chunksRemoved} chunks.");
   }
 
