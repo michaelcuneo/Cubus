@@ -40,7 +40,7 @@ namespace Assets.Demo.Scripts.Multiplayer
 
     private SetupMode mode = SetupMode.Connected;
     private bool visible;
-    private bool capturedInput;
+    private bool cursorCaptured;
     private CursorLockMode previousCursorLockMode;
     private bool previousCursorVisible;
     private string serverUri;
@@ -61,6 +61,7 @@ namespace Assets.Demo.Scripts.Multiplayer
     private void Awake()
     {
       FindReferences();
+      visible = showOnStart;
 
       WorldSettings settings = world != null ? world.Settings : null;
 
@@ -97,25 +98,33 @@ namespace Assets.Demo.Scripts.Multiplayer
         maxChunkX = "1024";
         maxChunkZ = "1024";
       }
-
-      SetVisible(showOnStart);
     }
 
     private void OnDisable()
     {
-      ReleaseInputCapture();
+      ReleaseCursor();
     }
 
     private void OnDestroy()
     {
-      ReleaseInputCapture();
+      ReleaseCursor();
     }
 
     private void Update()
     {
       if (Input.GetKeyDown(toggleKey))
       {
-        SetVisible(!visible);
+        visible = !visible;
+        GUI.FocusControl(null);
+      }
+
+      if (visible)
+      {
+        CaptureCursor();
+      }
+      else
+      {
+        ReleaseCursor();
       }
     }
 
@@ -129,8 +138,8 @@ namespace Assets.Demo.Scripts.Multiplayer
       Event current = Event.current;
       if (current.type == EventType.KeyDown && current.keyCode == KeyCode.Escape)
       {
-        SetVisible(false);
-        current.Use();
+        visible = false;
+        GUI.FocusControl(null);
         return;
       }
 
@@ -148,7 +157,7 @@ namespace Assets.Demo.Scripts.Multiplayer
 
       GUILayout.Label("<b>Cubus World Setup</b>");
       GUILayout.Label("Create a local world, or create/join a connected world on SpaceTimeDB.");
-      GUILayout.Label($"<i>{toggleKey} or Esc closes this panel.</i>");
+      GUILayout.Label($"<i>{toggleKey} toggles this panel. Esc closes it.</i>");
       GUILayout.Space(8.0f);
 
       GUILayout.BeginHorizontal();
@@ -179,8 +188,6 @@ namespace Assets.Demo.Scripts.Multiplayer
 
       GUILayout.EndScrollView();
       GUILayout.EndArea();
-
-      ConsumeModalInput(current);
     }
 
     private void DrawWorldFields()
@@ -281,74 +288,29 @@ namespace Assets.Demo.Scripts.Multiplayer
       }
     }
 
-    public void SetVisible(bool value)
+    private void CaptureCursor()
     {
-      if (visible == value)
-      {
-        if (visible)
-        {
-          CaptureInput();
-        }
-        return;
-      }
-
-      visible = value;
-
-      if (visible)
-      {
-        CaptureInput();
-      }
-      else
-      {
-        ReleaseInputCapture();
-      }
-    }
-
-    private void CaptureInput()
-    {
-      if (!capturedInput)
+      if (!cursorCaptured)
       {
         previousCursorLockMode = Cursor.lockState;
         previousCursorVisible = Cursor.visible;
-        capturedInput = true;
+        cursorCaptured = true;
       }
 
       Cursor.lockState = CursorLockMode.None;
       Cursor.visible = true;
-      CubusUiInput.ChatComposing = true;
     }
 
-    private void ReleaseInputCapture()
+    private void ReleaseCursor()
     {
-      if (!capturedInput)
+      if (!cursorCaptured)
       {
         return;
       }
 
       Cursor.lockState = previousCursorLockMode;
       Cursor.visible = previousCursorVisible;
-      CubusUiInput.ChatComposing = false;
-      capturedInput = false;
-    }
-
-    private static void ConsumeModalInput(Event current)
-    {
-      if (current == null)
-      {
-        return;
-      }
-
-      switch (current.type)
-      {
-        case EventType.MouseDown:
-        case EventType.MouseUp:
-        case EventType.MouseDrag:
-        case EventType.ScrollWheel:
-        case EventType.KeyDown:
-        case EventType.KeyUp:
-          current.Use();
-          break;
-      }
+      cursorCaptured = false;
     }
 
     public void CreateLocalGame()
