@@ -9,7 +9,9 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Persistence
   public sealed class WorldSaveData
   {
     public int SaveVersion = WorldSaveFormat.CurrentWorldSaveVersion;
+    public int SchemaVersion = WorldSaveFormat.CurrentWorldSaveVersion;
     public TerrainSystem TerrainSystem = TerrainSystem.SmoothDensity;
+    public int WorldSeed;
     public int ChunkSize;
     public float VoxelSize;
     public int ViewDistanceInChunks;
