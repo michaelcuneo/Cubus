@@ -169,7 +169,7 @@ namespace Assets.Demo.Scripts.Multiplayer
       if (verboseLogging)
       {
         Debug.Log("[CubusNetwork] Subscription applied.");
-      } 
+      }
       SubscriptionApplied?.Invoke(Conn);
     }
 
@@ -207,10 +207,6 @@ namespace Assets.Demo.Scripts.Multiplayer
       Disconnected?.Invoke();
     }
 
-    /// <summary>
-    /// Queues an action to run on the main thread just before the next client tick.
-    /// Safe to call from background threads (e.g. the streaming chunk store).
-    /// </summary>
     public void RunOnMainThread(Action action)
     {
       if (action != null)
