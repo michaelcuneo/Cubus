@@ -24,7 +24,17 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     private int activeTaskCount;
     private int generationId;
 
-    public int ActiveTaskCount => activeTaskCount;
+    public int ActiveTaskCount
+    {
+      get
+      {
+        lock (stateLock)
+        {
+          return activeTaskCount;
+        }
+      }
+    }
+
     public int CompletedCount
     {
       get
@@ -36,7 +46,16 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       }
     }
 
-    public int GenerationId => generationId;
+    public int GenerationId
+    {
+      get
+      {
+        lock (stateLock)
+        {
+          return generationId;
+        }
+      }
+    }
 
     public bool IsInFlight(Vector3Int chunkCoord)
     {
@@ -48,9 +67,12 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
     public void IncrementGeneration()
     {
-      generationId++;
-      activeTaskCount = 0;
-      inFlightChunkCoords.Clear();
+      lock (stateLock)
+      {
+        generationId++;
+        activeTaskCount = 0;
+        inFlightChunkCoords.Clear();
+      }
 
       lock (completedResults)
       {
@@ -116,8 +138,11 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
           }
         }
 
-        activeTaskCount = Mathf.Max(0, activeTaskCount - 1);
-        inFlightChunkCoords.Remove(request.ChunkCoord);
+        lock (stateLock)
+        {
+          activeTaskCount = Mathf.Max(0, activeTaskCount - 1);
+          inFlightChunkCoords.Remove(request.ChunkCoord);
+        }
       });
 
       return true;
@@ -251,20 +276,13 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       }
 
       TerrainColumnSampler column = columnCache.Get(
-        request.WorldSnapshot,  
+        request.WorldSnapshot,
         worldVoxelCoord.x,
         worldVoxelCoord.z
       );
 
       TerrainSample sample = column.SampleAt(worldVoxelCoord, 1.0f);
-
-      // Solidity must match the generation job, which floors the column's
-      // double-precision blended surface. Using the per-voxel float-blended
-      // sample.SurfaceHeight here can disagree by a voxel at biome transitions
-      // and leave seam faces, so use column.SurfaceHeight instead.
-      bool isBelowSurface = worldVoxelCoord.y <= Mathf.FloorToInt(column.SurfaceHeight);
-
-      return isBelowSurface
+      return sample.Density > 0.0f
           ? (ushort)Mathf.Clamp(sample.SolidMaterialId > 0 ? sample.SolidMaterialId : 1, 1, 65535)
           : (ushort)0;
     }
