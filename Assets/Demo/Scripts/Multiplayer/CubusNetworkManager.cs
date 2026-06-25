@@ -152,6 +152,7 @@ namespace Assets.Demo.Scripts.Multiplayer
       {
         "SELECT * FROM player",
         "SELECT * FROM chat_message",
+        $"SELECT * FROM world_state WHERE WorldId = '{WorldId}'",
         $"SELECT * FROM voxel_edit WHERE WorldId = '{WorldId}'",
       };
 
