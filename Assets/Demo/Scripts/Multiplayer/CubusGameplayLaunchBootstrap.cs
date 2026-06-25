@@ -3,6 +3,7 @@ using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 namespace Assets.Demo.Scripts.Multiplayer
 {
@@ -13,6 +14,7 @@ namespace Assets.Demo.Scripts.Multiplayer
     [SerializeField] private CubusWorldStorage storage;
     [SerializeField] private CubusNetworkManager network;
     [SerializeField] private bool requireLauncherSelection = true;
+    [SerializeField] private string launcherSceneName = "CubusLauncher";
 
     private void Awake()
     {
@@ -26,9 +28,16 @@ namespace Assets.Demo.Scripts.Multiplayer
       {
         if (requireLauncherSelection)
         {
-          Debug.LogWarning("[CubusLaunch] Gameplay scene loaded without launcher selection. Startup is blocked.");
+          Debug.LogWarning("[CubusLaunch] Gameplay scene loaded without launcher selection. Loading launcher scene instead.");
           network?.Disconnect();
-          world?.ClearWorldAndOverrides();
+
+          Cursor.lockState = CursorLockMode.None;
+          Cursor.visible = true;
+
+          if (!string.IsNullOrWhiteSpace(launcherSceneName))
+          {
+            SceneManager.LoadScene(launcherSceneName);
+          }
         }
 
         return;
