@@ -40,17 +40,17 @@ namespace Assets.Demo.Scripts.Sky
         [SerializeField] private bool newWeatherEachDay = true;
 
         [Header("Probabilities (0 = never, 1 = always)")]
-        [Range(0f, 1f)] [SerializeField] private float hourlyChangeChance = 0.25f;
-        [Range(0f, 1f)] [SerializeField] private float rareNightEventChance = 0.15f;
-        [Range(0f, 1f)] [SerializeField] private float grandYearEventChance = 0.5f;
-        [Range(0f, 1f)] [SerializeField] private float stormThunderChancePerMinute = 0.03f;
+        [Range(0f, 1f)][SerializeField] private float hourlyChangeChance = 0.25f;
+        [Range(0f, 1f)][SerializeField] private float rareNightEventChance = 0.15f;
+        [Range(0f, 1f)][SerializeField] private float grandYearEventChance = 0.5f;
+        [Range(0f, 1f)][SerializeField] private float stormThunderChancePerMinute = 0.03f;
 
         [Header("Randomness")]
         [Tooltip("How far each value wanders from the baseline preset toward a random in-range value. " +
                  "0 = keep the baseline, 1 = fully random within the property's min/max.")]
-        [Range(0f, 1f)] [SerializeField] private float randomness = 0.45f;
+        [Range(0f, 1f)][SerializeField] private float randomness = 0.45f;
         [Tooltip("Hue / saturation / value jitter applied to colour properties.")]
-        [Range(0f, 0.5f)] [SerializeField] private float colorJitter = 0.08f;
+        [Range(0f, 0.5f)][SerializeField] private float colorJitter = 0.08f;
         [SerializeField] private bool randomizeColors = true;
         [Tooltip("Use property names (fog, cloud, light, etc.) to bias values per mood.")]
         [SerializeField] private bool useKeywordBias = true;
@@ -93,7 +93,7 @@ namespace Assets.Demo.Scripts.Sky
         private void Awake()
         {
             if (azureCore == null) azureCore = GetComponent<AzureCoreSystem>();
-            if (azureCore == null) azureCore = FindFirstObjectByType<AzureCoreSystem>();
+            if (azureCore == null) azureCore = FindAnyObjectByType<AzureCoreSystem>();
         }
 
         private void OnEnable()
@@ -311,23 +311,23 @@ namespace Assets.Demo.Scripts.Sky
                     {
                         case AzureWeatherPropertyType.Float:
                         case AzureWeatherPropertyType.Curve:
-                        {
-                            float min = owner.minValue, max = owner.maxValue;
-                            float baseVal = baseData[j].floatData;
-                            float rnd = Random.Range(min, max);
-                            rnd = BiasFloat(owner.name, mood, rnd, min, max);
-                            dstData[j].floatData = Mathf.Lerp(baseVal, rnd, randomness);
-                            break;
-                        }
+                            {
+                                float min = owner.minValue, max = owner.maxValue;
+                                float baseVal = baseData[j].floatData;
+                                float rnd = Random.Range(min, max);
+                                rnd = BiasFloat(owner.name, mood, rnd, min, max);
+                                dstData[j].floatData = Mathf.Lerp(baseVal, rnd, randomness);
+                                break;
+                            }
 
                         case AzureWeatherPropertyType.Color:
                         case AzureWeatherPropertyType.Gradient:
-                        {
-                            if (!randomizeColors) break;
-                            dstData[j].colorData = JitterColor(owner.name, mood, baseData[j].colorData);
-                            break;
-                        }
-                        // Direction / Position left at the cloned baseline (never randomized).
+                            {
+                                if (!randomizeColors) break;
+                                dstData[j].colorData = JitterColor(owner.name, mood, baseData[j].colorData);
+                                break;
+                            }
+                            // Direction / Position left at the cloned baseline (never randomized).
                     }
                 }
             }
