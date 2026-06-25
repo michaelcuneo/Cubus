@@ -32,10 +32,10 @@ namespace Assets.Demo.Scripts.Multiplayer
     private string voxelSize = "1";
     private string minChunkY = "-1";
     private string maxChunkY = "2";
-    private string minChunkX = "-1024";
-    private string minChunkZ = "-1024";
-    private string maxChunkX = "1024";
-    private string maxChunkZ = "1024";
+    private string minChunkX = "-8";
+    private string minChunkZ = "-8";
+    private string maxChunkX = "8";
+    private string maxChunkZ = "8";
     private TerrainSystem terrainSystem = TerrainSystem.Block;
     private string status = "Choose how to start Cubus.";
     private Vector2 scroll;
@@ -203,6 +203,17 @@ namespace Assets.Demo.Scripts.Multiplayer
       {
         status = "Minimum bounds must be <= maximum bounds.";
         return false;
+      }
+
+      if (mode == SetupMode.Local)
+      {
+        int chunkWidthX = parsedMaxX - parsedMinX + 1;
+        int chunkWidthZ = parsedMaxZ - parsedMinZ + 1;
+        if (chunkWidthX * chunkWidthZ > 1024)
+        {
+          status = "Local world bounds are too large for starter generation. Use roughly -8..8 first.";
+          return false;
+        }
       }
 
       CubusGameLaunchContext.Set(
