@@ -26,6 +26,35 @@ public static partial class Module
     public Timestamp LastSeen;
   }
 
+  // Authoritative deterministic generation contract for a world.
+  // Clients generate base terrain locally from this tiny row, then layer
+  // authoritative voxel_edit rows on top. Do not store generated chunks here.
+  [Table(Accessor = "world_state", Public = true)]
+  public partial struct WorldState
+  {
+    [PrimaryKey]
+    public string WorldId;
+
+    public int WorldSeed;
+    public uint GeneratorVersion;
+    public byte TerrainSystem;
+    public float VoxelSize;
+
+    public int MinChunkY;
+    public int MaxChunkY;
+
+    public int WorldMinChunkX;
+    public int WorldMinChunkZ;
+    public int WorldMaxChunkX;
+    public int WorldMaxChunkZ;
+
+    public string GenerationProfileId;
+    public string GenerationSignature;
+
+    public Identity UpdatedBy;
+    public Timestamp UpdatedAt;
+  }
+
   // A single authoritative voxel override (block add/remove).
   // Material 0 means the voxel was removed (air).
   [Table(Accessor = "voxel_edit", Public = true)]
