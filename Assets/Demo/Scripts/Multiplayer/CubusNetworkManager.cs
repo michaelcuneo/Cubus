@@ -47,6 +47,8 @@ namespace Assets.Demo.Scripts.Multiplayer
     public bool IsConnected { get; private set; }
     public bool IsSubscriptionApplied { get; private set; }
     public string WorldId { get; set; } = "demo_world";
+    public string ServerUri => serverUri;
+    public string ModuleName => moduleName;
 
     /// <summary>Whether authoritative world_chunk sync (subscription + uploads) is enabled.</summary>
     public bool WorldChunkSyncEnabled => subscribeToWorldChunks;
@@ -90,6 +92,30 @@ namespace Assets.Demo.Scripts.Multiplayer
       }
     }
 
+    public void ConfigureServer(string uri, string module, string worldId)
+    {
+      if (Conn != null)
+      {
+        Debug.LogWarning("[CubusNetwork] ConfigureServer ignored while connected. Disconnect first.");
+        return;
+      }
+
+      if (!string.IsNullOrWhiteSpace(uri))
+      {
+        serverUri = uri.Trim();
+      }
+
+      if (!string.IsNullOrWhiteSpace(module))
+      {
+        moduleName = module.Trim();
+      }
+
+      if (!string.IsNullOrWhiteSpace(worldId))
+      {
+        WorldId = worldId.Trim();
+      }
+    }
+
     public void Connect()
     {
       if (Conn != null)
@@ -119,6 +145,26 @@ namespace Assets.Demo.Scripts.Multiplayer
       {
         Debug.LogError($"[CubusNetwork] Failed to start connection: {ex}");
         Conn = null;
+      }
+    }
+
+    public void Disconnect()
+    {
+      try
+      {
+        Conn?.Disconnect();
+      }
+      catch
+      {
+        // Ignore disconnect failures during manual disconnect.
+      }
+      finally
+      {
+        Conn = null;
+        IsConnected = false;
+        IsSubscriptionApplied = false;
+        LocalIdentity = default;
+        Disconnected?.Invoke();
       }
     }
 
