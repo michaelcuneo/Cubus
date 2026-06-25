@@ -16,6 +16,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Persistence
     [SerializeField] private WorldPersistenceMode persistenceMode = WorldPersistenceMode.ManualOnly;
     [SerializeField] private bool autoSaveOnlyWhenModified = true;
 
+    public static bool SuppressAutoLoadOnStart { get; set; }
+
     private CubusWorld world;
     private WorldRenderer worldRenderer;
     private WorldStreamer streamer;
@@ -29,6 +31,12 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Persistence
 
     private void Start()
     {
+      if (SuppressAutoLoadOnStart)
+      {
+        Debug.Log("WorldPersistence auto-load suppressed by launch flow.");
+        return;
+      }
+
       if (persistenceMode == WorldPersistenceMode.AutoLoadOnly ||
           persistenceMode == WorldPersistenceMode.AutoLoadAndSave)
       {
@@ -110,8 +118,9 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Persistence
 
     public bool WillAutoLoadDefaultWorldOnStart()
     {
-      return persistenceMode == WorldPersistenceMode.AutoLoadOnly ||
-             persistenceMode == WorldPersistenceMode.AutoLoadAndSave;
+      return !SuppressAutoLoadOnStart &&
+             (persistenceMode == WorldPersistenceMode.AutoLoadOnly ||
+              persistenceMode == WorldPersistenceMode.AutoLoadAndSave);
     }
 
     public bool HasDefaultWorldSave()
@@ -321,10 +330,16 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Persistence
         return false;
       }
 
+      if (overrideActiveTerrainSystemOnLoad || loadTerrainPolicy == WorldLoadTerrainPolicy.UseSaveTerrainSystem)
+      {
+        world.Settings.TerrainSystem = TerrainSystem.Block;
+      }
+
       RefreshAfterLoad();
 
       Debug.Log(
-          $"Loaded Cubus block world. Path={path}, SavedChunks={saveData.SavedBlockChunks.Count}"
+          $"Loaded Cubus block world. Path={path}, " +
+          $"BlockOverrideChunks={saveData.SavedChunks.Count}"
       );
 
       return true;
@@ -332,143 +347,67 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Persistence
 
     public bool ClearBlockWorldSave(string saveName)
     {
-      if (string.IsNullOrWhiteSpace(saveName))
-      {
-        Debug.LogWarning("Cannot clear block world save with an empty save name.");
-        return false;
-      }
-
-      string path = GetSavePath(saveName);
-
-      if (!File.Exists(path))
-      {
-        Debug.LogWarning($"No Cubus block world save exists to clear. Path={path}");
-        return false;
-      }
-
-      File.Delete(path);
-
-      Debug.Log($"Cleared Cubus block world save. Path={path}");
-      return true;
+      return ClearWorldSave(saveName);
     }
 
     private void RefreshAfterLoad()
     {
-      if (worldRenderer != null)
-      {
-        worldRenderer.ClearAll();
-      }
-
-      if (streamer != null)
-      {
-        streamer.ClearStreamingState();
-        streamer.ForceRefreshStreamingSet();
-        return;
-      }
-
-      if (!world.IsWorldReady)
-      {
-        world.GenerateWorld();
-      }
-
-      if (worldRenderer != null)
-      {
-        worldRenderer.RebuildAll();
-      }
-    }
-
-    private void ApplyCompatibilityDefaults(WorldSaveData saveData)
-    {
-      saveData.SavedBlockChunks ??= new System.Collections.Generic.List<SavedBlockChunk>();
-      saveData.SavedDensityChunks ??= new System.Collections.Generic.List<SavedDensityChunk>();
-
-      if (saveData.VoxelSize <= 0.0f)
-      {
-        saveData.VoxelSize = world.Settings.VoxelSize;
-      }
-
-      if (saveData.ViewDistanceInChunks <= 0)
-      {
-        saveData.ViewDistanceInChunks = world.Settings.ViewDistanceInChunks;
-      }
-
-      bool hasLegacyStyleRanges =
-          saveData.SaveVersion <= 1 &&
-          saveData.BlockMinChunkY == 0 &&
-          saveData.BlockMaxChunkY == 0 &&
-          saveData.DensityMinChunkY == 0 &&
-          saveData.DensityMaxChunkY == 0;
-
-      if (hasLegacyStyleRanges)
-      {
-        saveData.BlockMinChunkY = world.Settings.BlockMinChunkY;
-        saveData.BlockMaxChunkY = world.Settings.BlockMaxChunkY;
-        saveData.DensityMinChunkY = world.Settings.DensityMinChunkY;
-        saveData.DensityMaxChunkY = world.Settings.DensityMaxChunkY;
-      }
-
-      // Older block-only saves have no terrain system metadata; infer block mode.
-      if (saveData.SaveVersion <= 1 &&
-          saveData.TerrainSystem == TerrainSystem.SmoothDensity &&
-          saveData.SavedDensityChunks.Count == 0 &&
-          saveData.SavedBlockChunks.Count > 0)
-      {
-        saveData.TerrainSystem = TerrainSystem.Block;
-      }
-    }
-
-    private static bool TryDeserializeWorldSave(string json, out WorldSaveData saveData)
-    {
-      saveData = JsonUtility.FromJson<WorldSaveData>(json);
-
-      if (saveData != null && saveData.ChunkSize > 0)
-      {
-        return true;
-      }
-
-      BlockWorldSaveData legacySave = JsonUtility.FromJson<BlockWorldSaveData>(json);
-
-      if (legacySave == null || legacySave.ChunkSize <= 0)
-      {
-        saveData = null;
-        return false;
-      }
-
-      saveData = new WorldSaveData
-      {
-        SaveVersion = legacySave.SaveVersion,
-        TerrainSystem = TerrainSystem.Block,
-        ChunkSize = legacySave.ChunkSize,
-        VoxelSize = legacySave.VoxelSize,
-        SavedBlockChunks = legacySave.SavedBlockChunks ?? new System.Collections.Generic.List<SavedBlockChunk>(),
-        SavedDensityChunks = new System.Collections.Generic.List<SavedDensityChunk>()
-      };
-
-      return true;
-    }
-
-    private static string GetSavePath(string saveName)
-    {
-      string safeName = saveName.Trim();
-      return Path.Combine(
-          GetSaveDirectoryPath(),
-          $"{safeName}.json"
-      );
+      worldRenderer?.BuildMesh();
+      streamer?.ForceRefreshAll();
     }
 
     private string GetModeSpecificDefaultSaveName(TerrainSystem terrainSystem)
     {
-      string safeBase = string.IsNullOrWhiteSpace(defaultSaveName)
-          ? "cubus_world"
-          : defaultSaveName.Trim();
-
       string suffix = terrainSystem == TerrainSystem.Block ? "block" : "density";
-      return $"{safeBase}_{suffix}";
+      return $"{defaultSaveName}_{suffix}";
+    }
+
+    private string GetSavePath(string saveName)
+    {
+      return Path.Combine(GetSaveDirectoryPath(), $"{saveName}.json");
     }
 
     private static string GetSaveDirectoryPath()
     {
       return Path.Combine(Application.persistentDataPath, "CubusCore");
+    }
+
+    private static void ApplyCompatibilityDefaults(WorldSaveData saveData)
+    {
+      if (saveData == null)
+      {
+        return;
+      }
+
+      if (saveData.SchemaVersion <= 0)
+      {
+        saveData.SchemaVersion = 1;
+      }
+
+      if (saveData.WorldSeed == 0 && saveData.TerrainSystem == 0)
+      {
+        // Old saves did not include generation settings. Leave their default values intact.
+      }
+    }
+
+    private static bool TryDeserializeWorldSave(string json, out WorldSaveData saveData)
+    {
+      saveData = null;
+
+      if (string.IsNullOrWhiteSpace(json))
+      {
+        return false;
+      }
+
+      try
+      {
+        saveData = JsonUtility.FromJson<WorldSaveData>(json);
+        return saveData != null;
+      }
+      catch
+      {
+        return false;
+      }
     }
   }
 }
