@@ -103,6 +103,76 @@ public static partial class Module
   }
 
   [Reducer]
+  public static void SetWorldState(
+      ReducerContext ctx,
+      string worldId,
+      int worldSeed,
+      uint generatorVersion,
+      byte terrainSystem,
+      float voxelSize,
+      int minChunkY,
+      int maxChunkY,
+      int worldMinChunkX,
+      int worldMinChunkZ,
+      int worldMaxChunkX,
+      int worldMaxChunkZ,
+      string generationProfileId,
+      string generationSignature)
+  {
+    UpsertWorldState(
+        ctx,
+        worldId,
+        worldSeed,
+        generatorVersion,
+        terrainSystem,
+        voxelSize,
+        minChunkY,
+        maxChunkY,
+        worldMinChunkX,
+        worldMinChunkZ,
+        worldMaxChunkX,
+        worldMaxChunkZ,
+        generationProfileId,
+        generationSignature);
+  }
+
+  [Reducer]
+  public static void ResetWorldState(
+      ReducerContext ctx,
+      string worldId,
+      int worldSeed,
+      uint generatorVersion,
+      byte terrainSystem,
+      float voxelSize,
+      int minChunkY,
+      int maxChunkY,
+      int worldMinChunkX,
+      int worldMinChunkZ,
+      int worldMaxChunkX,
+      int worldMaxChunkZ,
+      string generationProfileId,
+      string generationSignature)
+  {
+    UpsertWorldState(
+        ctx,
+        worldId,
+        worldSeed,
+        generatorVersion,
+        terrainSystem,
+        voxelSize,
+        minChunkY,
+        maxChunkY,
+        worldMinChunkX,
+        worldMinChunkZ,
+        worldMaxChunkX,
+        worldMaxChunkZ,
+        generationProfileId,
+        generationSignature);
+
+    ClearWorld(ctx, worldId);
+  }
+
+  [Reducer]
   public static void EditBlock(
       ReducerContext ctx,
       string worldId,
@@ -248,6 +318,61 @@ public static partial class Module
     TrimChatLog(ctx);
   }
 
+  private static void UpsertWorldState(
+      ReducerContext ctx,
+      string worldId,
+      int worldSeed,
+      uint generatorVersion,
+      byte terrainSystem,
+      float voxelSize,
+      int minChunkY,
+      int maxChunkY,
+      int worldMinChunkX,
+      int worldMinChunkZ,
+      int worldMaxChunkX,
+      int worldMaxChunkZ,
+      string generationProfileId,
+      string generationSignature)
+  {
+    if (string.IsNullOrWhiteSpace(worldId))
+    {
+      throw new Exception("World state requires a worldId.");
+    }
+
+    var state = new WorldState
+    {
+      WorldId = worldId.Trim(),
+      WorldSeed = worldSeed,
+      GeneratorVersion = generatorVersion,
+      TerrainSystem = terrainSystem,
+      VoxelSize = voxelSize,
+      MinChunkY = minChunkY,
+      MaxChunkY = maxChunkY,
+      WorldMinChunkX = worldMinChunkX,
+      WorldMinChunkZ = worldMinChunkZ,
+      WorldMaxChunkX = worldMaxChunkX,
+      WorldMaxChunkZ = worldMaxChunkZ,
+      GenerationProfileId = generationProfileId ?? string.Empty,
+      GenerationSignature = generationSignature ?? string.Empty,
+      UpdatedBy = ctx.Sender,
+      UpdatedAt = ctx.Timestamp,
+    };
+
+    if (ctx.Db.world_state.WorldId.Find(state.WorldId) is not null)
+    {
+      ctx.Db.world_state.WorldId.Update(state);
+    }
+    else
+    {
+      ctx.Db.world_state.Insert(state);
+    }
+
+    Log.Info(
+        $"SetWorldState '{state.WorldId}': Seed={state.WorldSeed}, GeneratorVersion={state.GeneratorVersion}, " +
+        $"TerrainSystem={state.TerrainSystem}, Y={state.MinChunkY}..{state.MaxChunkY}, " +
+        $"Bounds=({state.WorldMinChunkX},{state.WorldMinChunkZ}) -> ({state.WorldMaxChunkX},{state.WorldMaxChunkZ}).");
+  }
+
   private static void TrimChatLog(ReducerContext ctx)
   {
     var count = ctx.Db.chat_message.Count;
@@ -278,23 +403,25 @@ public static partial class Module
   private static string DefaultName(Identity identity)
   {
     var hex = identity.ToString();
-    var suffix = hex.Length >= 6 ? hex.Substring(hex.Length - 6) : hex;
-    return $"Player_{suffix}";
+    return hex.Length <= 8 ? $"Player {hex}" : $"Player {hex.Substring(0, 8)}";
   }
 
   private static uint ColorFromIdentity(Identity identity)
   {
-    // Deterministic, well-saturated color per identity (FNV-1a over the hex string).
-    var hex = identity.ToString();
-    uint hash = 2166136261u;
-    foreach (var c in hex)
+    var text = identity.ToString();
+    unchecked
     {
-      hash = (hash ^ c) * 16777619u;
-    }
+      uint hash = 2166136261;
+      foreach (char c in text)
+      {
+        hash ^= c;
+        hash *= 16777619;
+      }
 
-    byte r = (byte)(64 + (hash & 0x7F));
-    byte g = (byte)(64 + ((hash >> 8) & 0x7F));
-    byte b = (byte)(64 + ((hash >> 16) & 0x7F));
-    return ((uint)r << 24) | ((uint)g << 16) | ((uint)b << 8) | 0xFF;
+      byte r = (byte)(80 + hash % 176);
+      byte g = (byte)(80 + (hash >> 8) % 176);
+      byte b = (byte)(80 + (hash >> 16) % 176);
+      return ((uint)r << 24) | ((uint)g << 16) | ((uint)b << 8) | 0xFF;
+    }
   }
 }
