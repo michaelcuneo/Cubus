@@ -36,10 +36,13 @@ namespace Assets.Demo.Scripts.Multiplayer
     [Header("UI")]
     [SerializeField] private bool showOnStart = true;
     [SerializeField] private KeyCode toggleKey = KeyCode.F2;
-    [SerializeField] private Vector2 panelSize = new(460.0f, 620.0f);
+    [SerializeField] private Vector2 panelSize = new(560.0f, 660.0f);
 
     private SetupMode mode = SetupMode.Connected;
     private bool visible;
+    private bool capturedInput;
+    private CursorLockMode previousCursorLockMode;
+    private bool previousCursorVisible;
     private string serverUri;
     private string moduleName;
     private string worldId;
@@ -58,7 +61,6 @@ namespace Assets.Demo.Scripts.Multiplayer
     private void Awake()
     {
       FindReferences();
-      visible = showOnStart;
 
       WorldSettings settings = world != null ? world.Settings : null;
 
@@ -95,13 +97,25 @@ namespace Assets.Demo.Scripts.Multiplayer
         maxChunkX = "1024";
         maxChunkZ = "1024";
       }
+
+      SetVisible(showOnStart);
+    }
+
+    private void OnDisable()
+    {
+      ReleaseInputCapture();
+    }
+
+    private void OnDestroy()
+    {
+      ReleaseInputCapture();
     }
 
     private void Update()
     {
       if (Input.GetKeyDown(toggleKey))
       {
-        visible = !visible;
+        SetVisible(!visible);
       }
     }
 
@@ -112,13 +126,29 @@ namespace Assets.Demo.Scripts.Multiplayer
         return;
       }
 
-      float x = 20.0f;
-      float y = 20.0f;
-      GUILayout.BeginArea(new Rect(x, y, panelSize.x, panelSize.y), GUI.skin.box);
+      Event current = Event.current;
+      if (current.type == EventType.KeyDown && current.keyCode == KeyCode.Escape)
+      {
+        SetVisible(false);
+        current.Use();
+        return;
+      }
+
+      Rect fullScreen = new Rect(0.0f, 0.0f, Screen.width, Screen.height);
+      GUI.Box(fullScreen, GUIContent.none);
+
+      Rect panelRect = new Rect(
+          Mathf.Max(8.0f, (Screen.width - panelSize.x) * 0.5f),
+          Mathf.Max(8.0f, (Screen.height - panelSize.y) * 0.5f),
+          Mathf.Min(panelSize.x, Screen.width - 16.0f),
+          Mathf.Min(panelSize.y, Screen.height - 16.0f));
+
+      GUILayout.BeginArea(panelRect, GUI.skin.window);
       scroll = GUILayout.BeginScrollView(scroll);
 
       GUILayout.Label("<b>Cubus World Setup</b>");
       GUILayout.Label("Create a local world, or create/join a connected world on SpaceTimeDB.");
+      GUILayout.Label($"<i>{toggleKey} or Esc closes this panel.</i>");
       GUILayout.Space(8.0f);
 
       GUILayout.BeginHorizontal();
@@ -146,10 +176,11 @@ namespace Assets.Demo.Scripts.Multiplayer
 
       GUILayout.Space(10.0f);
       GUILayout.Label($"<b>Status:</b> {status}");
-      GUILayout.Label($"<i>Press {toggleKey} to hide/show this setup panel.</i>");
 
       GUILayout.EndScrollView();
       GUILayout.EndArea();
+
+      ConsumeModalInput(current);
     }
 
     private void DrawWorldFields()
@@ -247,6 +278,76 @@ namespace Assets.Demo.Scripts.Multiplayer
       if (GUILayout.Button("Delete Connected World Instance"))
       {
         DeleteConnectedWorldInstance();
+      }
+    }
+
+    public void SetVisible(bool value)
+    {
+      if (visible == value)
+      {
+        if (visible)
+        {
+          CaptureInput();
+        }
+        return;
+      }
+
+      visible = value;
+
+      if (visible)
+      {
+        CaptureInput();
+      }
+      else
+      {
+        ReleaseInputCapture();
+      }
+    }
+
+    private void CaptureInput()
+    {
+      if (!capturedInput)
+      {
+        previousCursorLockMode = Cursor.lockState;
+        previousCursorVisible = Cursor.visible;
+        capturedInput = true;
+      }
+
+      Cursor.lockState = CursorLockMode.None;
+      Cursor.visible = true;
+      CubusUiInput.ChatComposing = true;
+    }
+
+    private void ReleaseInputCapture()
+    {
+      if (!capturedInput)
+      {
+        return;
+      }
+
+      Cursor.lockState = previousCursorLockMode;
+      Cursor.visible = previousCursorVisible;
+      CubusUiInput.ChatComposing = false;
+      capturedInput = false;
+    }
+
+    private static void ConsumeModalInput(Event current)
+    {
+      if (current == null)
+      {
+        return;
+      }
+
+      switch (current.type)
+      {
+        case EventType.MouseDown:
+        case EventType.MouseUp:
+        case EventType.MouseDrag:
+        case EventType.ScrollWheel:
+        case EventType.KeyDown:
+        case EventType.KeyUp:
+          current.Use();
+          break;
       }
     }
 
