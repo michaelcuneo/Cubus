@@ -11,18 +11,19 @@ namespace Assets.Demo.Scripts.Multiplayer
 {
   /// <summary>
   /// Dedicated loading-scene controller. The launcher loads CubusLoading first;
-  /// this component then loads CubusGame additively and keeps drawing real terrain
-  /// preparation diagnostics until the gameplay world reports initial terrain ready.
+  /// this component then loads CubusGame additively and keeps the screen clean while
+  /// detailed world/streamer/network diagnostics are sent to Unity logging.
   /// </summary>
   public sealed class CubusLoadingController : MonoBehaviour
   {
     [SerializeField] private string gameplaySceneName = "CubusGame";
     [SerializeField] private string launcherSceneName = "CubusLauncher";
-    [SerializeField] private Vector2 panelSize = new(760.0f, 560.0f);
+    [SerializeField] private Vector2 panelSize = new(520.0f, 230.0f);
     [SerializeField] private float readyHoldSeconds = 0.35f;
     [SerializeField] private float preparationTimeoutSeconds = 180.0f;
     [SerializeField] private float settledTerrainFallbackSeconds = 2.0f;
     [SerializeField] private float fallbackSpawnClearance = 2.0f;
+    [SerializeField] private float consoleDiagnosticsIntervalSeconds = 2.0f;
     [SerializeField] private bool unloadLoadingSceneWhenReady = true;
 
     private string status = "Starting Cubus loading scene.";
@@ -32,6 +33,7 @@ namespace Assets.Demo.Scripts.Multiplayer
     private float sceneLoadProgress;
     private float terrainProgress;
     private float settledTerrainFallbackStartedAt = -1.0f;
+    private float lastConsoleDiagnosticsAt = -999.0f;
     private bool sceneLoadDone;
     private bool preparationDone;
     private bool failed;
@@ -98,6 +100,7 @@ namespace Assets.Demo.Scripts.Multiplayer
       status = "Ready";
       detail = "Initial terrain is ready. Entering CubusGame.";
       terrainProgress = 1.0f;
+      LogDiagnosticsSnapshot("Ready to enter game", true);
 
       if (readyHoldSeconds > 0.0f)
       {
@@ -133,36 +136,24 @@ namespace Assets.Demo.Scripts.Multiplayer
       float elapsed = Time.realtimeSinceStartup - startedAt;
       float combinedProgress = GetCombinedProgress();
 
-      GUILayout.Label($"Status: {status}");
-      GUILayout.Label($"Detail: {detail}");
+      GUILayout.Label(status);
+      GUILayout.Label(detail);
       GUILayout.Label($"Elapsed: {elapsed:0.0}s");
-      GUILayout.Label($"Overall: {combinedProgress * 100.0f:0}%");
+      GUILayout.Label($"Progress: {combinedProgress * 100.0f:0}%");
       DrawProgressBar(combinedProgress, 18.0f);
-
-      GUILayout.Space(10.0f);
-      GUILayout.Label("<b>Scene</b>");
-      GUILayout.Label($"Gameplay Scene: {(string.IsNullOrWhiteSpace(loadedGameplayScenePath) ? gameplaySceneName : loadedGameplayScenePath)}");
-      GUILayout.Label($"Scene Loaded: {sceneLoadDone} | Scene Progress: {sceneLoadProgress * 100.0f:0}%");
-      DrawProgressBar(sceneLoadProgress, 14.0f);
-
-      GUILayout.Space(10.0f);
-      DrawWorldDiagnostics();
-      GUILayout.Space(10.0f);
-      DrawStreamerDiagnostics();
-      GUILayout.Space(10.0f);
-      DrawNetworkDiagnostics();
 
       GUILayout.Space(10.0f);
       if (!preparationDone && !failed && GUILayout.Button("Enter Game Now", GUILayout.Height(30.0f)))
       {
         forceReleaseRequested = true;
       }
-      GUILayout.Label("Press Enter or click Enter Game Now to force release if terrain is visibly ready.");
+
+      GUILayout.Label("Detailed diagnostics are in the console. Press Enter to force release if terrain is visibly ready.");
 
       if (failed)
       {
-        GUILayout.Space(10.0f);
-        GUILayout.Label("Loading failed. Check the Console for the exact error.");
+        GUILayout.Space(8.0f);
+        GUILayout.Label("Loading failed. Check the console.");
       }
 
       GUILayout.EndArea();
@@ -187,7 +178,7 @@ namespace Assets.Demo.Scripts.Multiplayer
       while (!operation.isDone)
       {
         sceneLoadProgress = Mathf.Clamp01(operation.progress / 0.9f);
-        detail = $"Unity scene load progress: {sceneLoadProgress * 100.0f:0}%";
+        detail = $"Scene load {sceneLoadProgress * 100.0f:0}%";
         yield return null;
       }
 
@@ -206,7 +197,8 @@ namespace Assets.Demo.Scripts.Multiplayer
       }
 
       status = "Gameplay scene loaded";
-      detail = "Waiting for CubusGame bootstrap and terrain systems.";
+      detail = "Preparing terrain...";
+      LogDiagnosticsSnapshot("Gameplay scene loaded", true);
     }
 
     private IEnumerator WaitForGameplayReferences()
@@ -222,7 +214,7 @@ namespace Assets.Demo.Scripts.Multiplayer
           break;
         }
 
-        detail = "Waiting for CubusWorld in the additively loaded CubusGame scene.";
+        detail = "Waiting for CubusWorld...";
         if (Time.realtimeSinceStartup - start > 10.0f)
         {
           Fail("Timed out waiting for CubusWorld. Confirm CubusGame contains CubusWorld and is in Build Settings.");
@@ -233,6 +225,7 @@ namespace Assets.Demo.Scripts.Multiplayer
       }
 
       FindRuntimeReferences();
+      LogDiagnosticsSnapshot("Found gameplay systems", true);
     }
 
     private IEnumerator WaitForInitialTerrainReady()
@@ -253,6 +246,7 @@ namespace Assets.Demo.Scripts.Multiplayer
         FindRuntimeReferences();
         UpdateTerrainProgressAndDetail();
         TryReleaseSettledStreamedTerrain(start);
+        LogDiagnosticsSnapshot("Waiting for initial terrain", false);
 
         if (preparationTimeoutSeconds > 0.0f && Time.realtimeSinceStartup - start > preparationTimeoutSeconds)
         {
@@ -271,14 +265,14 @@ namespace Assets.Demo.Scripts.Multiplayer
       if (world == null)
       {
         terrainProgress = 0.0f;
-        detail = "CubusWorld not found yet.";
+        detail = "Waiting for world...";
         return;
       }
 
       if (streamer == null)
       {
         terrainProgress = Mathf.Clamp01(world.GenerationProgress);
-        detail = $"World generation: {world.GenerationStatus}";
+        detail = world.IsGeneratingWorld ? "Generating world..." : world.GenerationStatus;
         return;
       }
 
@@ -308,7 +302,9 @@ namespace Assets.Demo.Scripts.Multiplayer
         terrainProgress = 0.05f;
       }
 
-      detail = $"Desired={desired:0}, Applied={applied:0}, Pending={pending:0}, Active={active:0}, WorldStatus={world.GenerationStatus}";
+      detail = pending > 0.0f || active > 0.0f
+          ? $"Streaming terrain... Pending {pending:0}, Active {active:0}"
+          : "Finalising terrain...";
     }
 
     private void TryReleaseSettledStreamedTerrain(float waitStartedAt)
@@ -354,9 +350,8 @@ namespace Assets.Demo.Scripts.Multiplayer
       if (settledTerrainFallbackStartedAt < 0.0f)
       {
         settledTerrainFallbackStartedAt = Time.realtimeSinceStartup;
-        detail = fullySettled
-            ? "Terrain has settled; releasing player shortly."
-            : "Terrain appears ready but streamer did not broadcast; releasing shortly.";
+        detail = "Terrain ready. Entering shortly...";
+        LogDiagnosticsSnapshot(fullySettled ? "Streamer settled" : "Visible terrain fallback armed", true);
         return;
       }
 
@@ -376,7 +371,7 @@ namespace Assets.Demo.Scripts.Multiplayer
       }
 
       Vector3 spawn = CalculateFallbackSpawnLocation();
-      Debug.Log($"[CubusLoading] Releasing initial terrain via {reason}. Spawn={spawn}, Streamer={(streamer != null ? streamer.name : "none")}.");
+      Debug.Log($"[CubusLoading] Releasing initial terrain via {reason}. Spawn={spawn}. {BuildDebugSummary()}");
       world.BroadcastInitialTerrainReady(spawn);
       forceReleaseRequested = false;
     }
@@ -411,50 +406,33 @@ namespace Assets.Demo.Scripts.Multiplayer
       ));
     }
 
-    private void DrawWorldDiagnostics()
+    private void LogDiagnosticsSnapshot(string reason, bool force)
     {
-      GUILayout.Label("<b>World</b>");
-      if (world == null)
+      float now = Time.realtimeSinceStartup;
+      if (!force && now - lastConsoleDiagnosticsAt < Mathf.Max(0.25f, consoleDiagnosticsIntervalSeconds))
       {
-        GUILayout.Label("CubusWorld: missing");
         return;
       }
 
-      GUILayout.Label($"Mode: {CubusGameLaunchContext.Mode} | WorldId: {CubusGameLaunchContext.WorldId}");
-      GUILayout.Label($"WorldReady: {world.IsWorldReady} | InitialTerrainReady: {world.IsInitialTerrainReady}");
-      GUILayout.Label($"Generating: {world.IsGeneratingWorld} | GenerationProgress: {world.GenerationProgress * 100.0f:0}%");
-      GUILayout.Label($"Status: {world.GenerationStatus}");
-      GUILayout.Label($"Spawn: {world.SuggestedSpawnLocation}");
+      lastConsoleDiagnosticsAt = now;
+      Debug.Log($"[CubusLoading] {reason}. Status={status}; Detail={detail}; SceneLoaded={sceneLoadDone}; SceneProgress={sceneLoadProgress:0.00}; TerrainProgress={terrainProgress:0.00}; {BuildDebugSummary()}");
     }
 
-    private void DrawStreamerDiagnostics()
+    private string BuildDebugSummary()
     {
-      GUILayout.Label("<b>Streamer</b>");
-      if (streamer == null)
-      {
-        GUILayout.Label("WorldStreamer: missing");
-        return;
-      }
+      string worldSummary = world == null
+          ? "World=none"
+          : $"WorldReady={world.IsWorldReady}, InitialTerrainReady={world.IsInitialTerrainReady}, Generating={world.IsGeneratingWorld}, GenerationProgress={world.GenerationProgress:0.00}, GenerationStatus={world.GenerationStatus}, Spawn={world.SuggestedSpawnLocation}";
 
-      GUILayout.Label($"Enabled: {streamer.enabled} | InitialStage: {streamer.IsInitialStreamingStageActive} | BroadcastReady: {streamer.HasBroadcastInitialTerrainReady}");
-      GUILayout.Label($"ViewerChunk: {(streamer.HasLastViewerChunkCoord ? streamer.LastViewerChunkCoord.ToString() : "none")} | SpawnTargetChunk: {streamer.SpawnTargetChunkCoord}");
-      GUILayout.Label($"Desired: {streamer.DesiredChunkCount} | Keep: {streamer.KeepChunkCount} | KnownEmpty: {streamer.KnownEmptyChunkCount}");
-      GUILayout.Label($"PendingLoad: {streamer.PendingLoadCount} | PendingRender: {streamer.PendingRenderCount} | PendingUnload: {streamer.PendingUnloadCount}");
-      GUILayout.Label($"ActiveLoadTasks: {streamer.ActiveChunkLoadTaskCount} | ActiveBlockBuilds: {streamer.ActiveBlockBuildTaskCount} | ActiveDensityBuilds: {streamer.ActiveDensityBuildTaskCount}");
-      GUILayout.Label($"LoadedTotal: {streamer.TotalChunkLoadsCompleted} | LoadFailures: {streamer.TotalChunkLoadFailures} | BlockApplies: {streamer.TotalBlockMeshApplies} | DensityApplies: {streamer.TotalDensityMeshApplies}");
-    }
+      string streamerSummary = streamer == null
+          ? "Streamer=none"
+          : $"Streamer enabled={streamer.enabled}, initialStage={streamer.IsInitialStreamingStageActive}, broadcastReady={streamer.HasBroadcastInitialTerrainReady}, viewerChunk={(streamer.HasLastViewerChunkCoord ? streamer.LastViewerChunkCoord.ToString() : "none")}, spawnTarget={streamer.SpawnTargetChunkCoord}, desired={streamer.DesiredChunkCount}, keep={streamer.KeepChunkCount}, knownEmpty={streamer.KnownEmptyChunkCount}, pendingLoad={streamer.PendingLoadCount}, pendingRender={streamer.PendingRenderCount}, pendingUnload={streamer.PendingUnloadCount}, activeLoads={streamer.ActiveChunkLoadTaskCount}, activeBlockBuilds={streamer.ActiveBlockBuildTaskCount}, activeDensityBuilds={streamer.ActiveDensityBuildTaskCount}, loadedTotal={streamer.TotalChunkLoadsCompleted}, loadFailures={streamer.TotalChunkLoadFailures}, blockApplies={streamer.TotalBlockMeshApplies}, densityApplies={streamer.TotalDensityMeshApplies}";
 
-    private void DrawNetworkDiagnostics()
-    {
-      GUILayout.Label("<b>Network</b>");
-      if (network == null)
-      {
-        GUILayout.Label("CubusNetworkManager: missing");
-        return;
-      }
+      string networkSummary = network == null
+          ? "Network=none"
+          : $"Network connected={network.IsConnected}, hasConn={network.Conn != null}, subscriptionApplied={network.IsSubscriptionApplied}, server={network.ServerUri}, module={network.ModuleName}, worldId={network.WorldId}";
 
-      GUILayout.Label($"Connected: {network.IsConnected} | HasConn: {network.Conn != null} | SubscriptionApplied: {network.IsSubscriptionApplied}");
-      GUILayout.Label($"Server: {network.ServerUri} | Module: {network.ModuleName} | WorldId: {network.WorldId}");
+      return $"{worldSummary}; {streamerSummary}; {networkSummary}";
     }
 
     private void DrawProgressBar(float value, float height)
@@ -468,12 +446,7 @@ namespace Assets.Demo.Scripts.Multiplayer
 
     private float GetCombinedProgress()
     {
-      if (failed)
-      {
-        return 1.0f;
-      }
-
-      if (preparationDone)
+      if (failed || preparationDone)
       {
         return 1.0f;
       }
@@ -517,7 +490,7 @@ namespace Assets.Demo.Scripts.Multiplayer
       failed = true;
       status = "Loading failed";
       detail = message;
-      Debug.LogError($"[CubusLoading] {message}");
+      Debug.LogError($"[CubusLoading] {message} {BuildDebugSummary()}");
     }
 
     private static bool TryFindSceneInBuildSettings(string requestedSceneName, out string scenePath)
