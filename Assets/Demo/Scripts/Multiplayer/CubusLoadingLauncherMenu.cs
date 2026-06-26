@@ -13,8 +13,8 @@ namespace Assets.Demo.Scripts.Multiplayer
 {
   /// <summary>
   /// Runtime launcher UI for the dedicated loading-scene flow.
-  /// Uses Unity UI Text/InputField instead of TextMeshPro so the first screen never
-  /// depends on TMP font asset initialisation.
+  /// This intentionally uses Unity UI Text/InputField instead of TextMeshPro so the
+  /// first screen does not depend on TMP font asset state.
   /// </summary>
   public sealed class CubusLoadingLauncherMenu : MonoBehaviour
   {
@@ -35,8 +35,9 @@ namespace Assets.Demo.Scripts.Multiplayer
     [SerializeField] private string defaultServerUri = "http://cubus.michaelcuneo.com.au";
     [SerializeField] private string defaultModuleName = "cubus";
     [SerializeField] private string defaultWorldId = "demo_world";
-    [SerializeField] private Vector2 panelSize = new(760.0f, 820.0f);
     [SerializeField] private int sortingOrder = 1000;
+
+    private static readonly Vector2 RuntimePanelSize = new(760.0f, 840.0f);
 
     private readonly List<LocalWorldEntry> localWorlds = new();
 
@@ -65,6 +66,7 @@ namespace Assets.Demo.Scripts.Multiplayer
 
     private CanvasGroup canvasGroup;
     private RectTransform panel;
+    private RectTransform contentRoot;
     private Text statusText;
     private Text loadingText;
     private Image loadingFill;
@@ -101,7 +103,7 @@ namespace Assets.Demo.Scripts.Multiplayer
         cachedUiFont = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
         if (cachedUiFont == null)
         {
-          cachedUiFont = Resources.GetBuiltinResource<Font>("Arial.ttf");
+          cachedUiFont = Font.CreateDynamicFontFromOSFont(new[] { "Arial", "Helvetica", "Verdana" }, 14);
         }
 
         return cachedUiFont;
@@ -132,9 +134,498 @@ namespace Assets.Demo.Scripts.Multiplayer
       UpdateUiState(forceText: false);
     }
 
+    private void BuildUi()
+    {
+      CubusInputSystemUiGuard.EnsureEventSystem();
+
+      GameObject canvasObject = new("Cubus Launcher Canvas");
+      canvasObject.transform.SetParent(transform, false);
+
+      Canvas canvas = canvasObject.AddComponent<Canvas>();
+      canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+      canvas.overrideSorting = true;
+      canvas.sortingOrder = sortingOrder;
+
+      CanvasScaler scaler = canvasObject.AddComponent<CanvasScaler>();
+      scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+      scaler.referenceResolution = new Vector2(1920.0f, 1080.0f);
+      scaler.matchWidthOrHeight = 0.5f;
+
+      canvasObject.AddComponent<GraphicRaycaster>();
+      RectTransform root = canvasObject.GetComponent<RectTransform>();
+      Stretch(root);
+
+      canvasGroup = canvasObject.AddComponent<CanvasGroup>();
+      canvasGroup.alpha = 1.0f;
+      canvasGroup.interactable = true;
+      canvasGroup.blocksRaycasts = true;
+
+      Image baseLayer = CreateImage(root, "Background Base", new Color(0.006f, 0.010f, 0.018f, 1.0f));
+      Stretch(baseLayer.rectTransform);
+      baseLayer.raycastTarget = false;
+
+      Image upperGlow = CreateImage(root, "Background Glow", new Color(0.025f, 0.120f, 0.185f, 0.85f));
+      RectTransform glowRect = upperGlow.rectTransform;
+      glowRect.anchorMin = new Vector2(0.0f, 0.56f);
+      glowRect.anchorMax = new Vector2(1.0f, 1.0f);
+      glowRect.offsetMin = Vector2.zero;
+      glowRect.offsetMax = Vector2.zero;
+      upperGlow.raycastTarget = false;
+
+      Image horizon = CreateImage(root, "Horizon Band", new Color(0.10f, 0.32f, 0.43f, 0.26f));
+      RectTransform horizonRect = horizon.rectTransform;
+      horizonRect.anchorMin = new Vector2(0.0f, 0.46f);
+      horizonRect.anchorMax = new Vector2(1.0f, 0.52f);
+      horizonRect.offsetMin = Vector2.zero;
+      horizonRect.offsetMax = Vector2.zero;
+      horizon.raycastTarget = false;
+
+      Image shadow = CreateImage(root, "Launcher Panel Shadow", new Color(0.0f, 0.0f, 0.0f, 0.35f));
+      RectTransform shadowRect = shadow.rectTransform;
+      shadowRect.anchorMin = new Vector2(0.5f, 0.5f);
+      shadowRect.anchorMax = new Vector2(0.5f, 0.5f);
+      shadowRect.pivot = new Vector2(0.5f, 0.5f);
+      shadowRect.sizeDelta = RuntimePanelSize + new Vector2(18.0f, 18.0f);
+      shadowRect.anchoredPosition = new Vector2(10.0f, -10.0f);
+      shadow.raycastTarget = false;
+
+      GameObject panelObject = new("Launcher Panel");
+      panelObject.transform.SetParent(root, false);
+      panel = panelObject.AddComponent<RectTransform>();
+      panel.anchorMin = new Vector2(0.5f, 0.5f);
+      panel.anchorMax = new Vector2(0.5f, 0.5f);
+      panel.pivot = new Vector2(0.5f, 0.5f);
+      panel.sizeDelta = RuntimePanelSize;
+      panel.anchoredPosition = Vector2.zero;
+
+      Image panelImage = panelObject.AddComponent<Image>();
+      panelImage.color = new Color(0.018f, 0.026f, 0.038f, 0.98f);
+      panelImage.raycastTarget = true;
+      panelObject.AddComponent<RectMask2D>();
+
+      Image accent = CreateImage(panel, "Top Accent", new Color(0.12f, 0.58f, 0.82f, 1.0f));
+      RectTransform accentRect = accent.rectTransform;
+      accentRect.anchorMin = new Vector2(0.0f, 1.0f);
+      accentRect.anchorMax = new Vector2(1.0f, 1.0f);
+      accentRect.pivot = new Vector2(0.5f, 1.0f);
+      accentRect.anchoredPosition = Vector2.zero;
+      accentRect.sizeDelta = new Vector2(0.0f, 4.0f);
+      accent.raycastTarget = false;
+
+      GameObject contentObject = new("Launcher Content");
+      contentObject.transform.SetParent(panel, false);
+      contentRoot = contentObject.AddComponent<RectTransform>();
+      contentRoot.anchorMin = Vector2.zero;
+      contentRoot.anchorMax = Vector2.one;
+      contentRoot.offsetMin = new Vector2(34.0f, 30.0f);
+      contentRoot.offsetMax = new Vector2(-34.0f, -30.0f);
+
+      VerticalLayoutGroup layout = contentObject.AddComponent<VerticalLayoutGroup>();
+      layout.childAlignment = TextAnchor.UpperCenter;
+      layout.childControlWidth = true;
+      layout.childControlHeight = true;
+      layout.childForceExpandWidth = true;
+      layout.childForceExpandHeight = false;
+      layout.spacing = 8.0f;
+      layout.padding = new RectOffset(0, 0, 6, 0);
+    }
+
+    private void RebuildControls()
+    {
+      if (contentRoot == null)
+      {
+        return;
+      }
+
+      for (int i = contentRoot.childCount - 1; i >= 0; i--)
+      {
+        Destroy(contentRoot.GetChild(i).gameObject);
+      }
+
+      localModeButton = null;
+      connectedModeButton = null;
+      blockTerrainButton = null;
+      smoothTerrainButton = null;
+      startButton = null;
+      deleteToggleButton = null;
+      resetConnectedToggleButton = null;
+      worldIdInput = null;
+      seedInput = null;
+      voxelSizeInput = null;
+      minChunkYInput = null;
+      maxChunkYInput = null;
+      minChunkXInput = null;
+      minChunkZInput = null;
+      maxChunkXInput = null;
+      maxChunkZInput = null;
+      serverUriInput = null;
+      moduleNameInput = null;
+
+      lastDeveloperMode = CubusDeveloperMode.IsEnabled;
+
+      AddText(contentRoot, "CUBUS", 34, FontStyle.Bold, TextAnchor.MiddleCenter, new Color(0.88f, 0.96f, 1.0f, 1.0f), 42.0f);
+      AddText(contentRoot, "Create a local world, or connect to a hosted Cubus world.", 14, FontStyle.Bold, TextAnchor.MiddleCenter, new Color(0.62f, 0.74f, 0.84f, 1.0f), 24.0f);
+
+      RectTransform modeRow = AddRow(contentRoot, 36.0f, 10.0f);
+      localModeButton = AddButton(modeRow, "Local Game", () => SetMode(SetupMode.Local));
+      connectedModeButton = AddButton(modeRow, "Connected Game", () => SetMode(SetupMode.Connected));
+
+      AddSection("World");
+      worldIdInput = AddInputRow("World ID", worldId, value => worldId = value);
+
+      RectTransform terrainRow = AddRow(contentRoot, 32.0f, 10.0f);
+      AddFixedText(terrainRow, "Terrain", 140.0f, 14, FontStyle.Bold, TextAnchor.MiddleLeft);
+      blockTerrainButton = AddButton(terrainRow, "Block", () => SetTerrain(TerrainSystem.Block));
+      smoothTerrainButton = AddButton(terrainRow, "Smooth", () => SetTerrain(TerrainSystem.SmoothDensity));
+
+      RectTransform seedRow = AddRow(contentRoot, 32.0f, 8.0f);
+      AddFixedText(seedRow, "Seed", 140.0f, 14, FontStyle.Bold, TextAnchor.MiddleLeft);
+      seedInput = AddInput(seedRow, seed, value => seed = value);
+      AddButton(seedRow, "Random", RandomizeSeed, 108.0f);
+
+      voxelSizeInput = AddInputRow("Voxel Size", voxelSize, value => voxelSize = value);
+      minChunkYInput = AddInputRow("Min Chunk Y", minChunkY, value => minChunkY = value);
+      maxChunkYInput = AddInputRow("Max Chunk Y", maxChunkY, value => maxChunkY = value);
+      minChunkXInput = AddInputRow("Min Chunk X", minChunkX, value => minChunkX = value);
+      minChunkZInput = AddInputRow("Min Chunk Z", minChunkZ, value => minChunkZ = value);
+      maxChunkXInput = AddInputRow("Max Chunk X", maxChunkX, value => maxChunkX = value);
+      maxChunkZInput = AddInputRow("Max Chunk Z", maxChunkZ, value => maxChunkZ = value);
+
+      if (mode == SetupMode.Connected)
+      {
+        AddSection("Server");
+        serverUriInput = AddInputRow("Server URI", serverUri, value => serverUri = value);
+        moduleNameInput = AddInputRow("Module", moduleName, value => moduleName = value);
+      }
+
+      if (CubusDeveloperMode.IsEnabled)
+      {
+        AddSection("Developer World Tools");
+
+        if (mode == SetupMode.Local)
+        {
+          RectTransform toolsRow = AddRow(contentRoot, 32.0f, 8.0f);
+          AddButton(toolsRow, "Refresh Local Worlds", () => { RefreshLocalWorlds(); RebuildControls(); UpdateUiState(true); });
+          AddButton(toolsRow, "New Random World ID", PrepareNewRandomWorldId);
+
+          AddText(contentRoot, $"Storage: {GetLocalWorldRootDirectory()}", 12, FontStyle.Normal, TextAnchor.MiddleLeft, new Color(0.56f, 0.68f, 0.76f, 1.0f), 22.0f);
+
+          int visibleCount = Mathf.Min(localWorlds.Count, 4);
+          if (visibleCount == 0)
+          {
+            AddText(contentRoot, "No saved local worlds found.", 13, FontStyle.Normal, TextAnchor.MiddleLeft, new Color(0.78f, 0.86f, 0.93f, 1.0f), 24.0f);
+          }
+          else
+          {
+            for (int i = 0; i < visibleCount; i++)
+            {
+              int index = i;
+              LocalWorldEntry entry = localWorlds[i];
+              WorldManifest manifest = entry.Manifest;
+              string label = manifest == null
+                  ? entry.WorldId
+                  : $"{entry.WorldId} | {manifest.TerrainSystem} | Seed {manifest.WorldSeed} | Chunks {manifest.ChunkCount}";
+              AddButton(contentRoot, label, () => SelectLocalWorld(index), -1.0f, 28.0f);
+            }
+          }
+
+          RectTransform selectedRow = AddRow(contentRoot, 30.0f, 8.0f);
+          AddButton(selectedRow, "Use Selected", () => SelectLocalWorld(selectedLocalWorldIndex));
+          AddButton(selectedRow, "Delete Selected", DeleteSelectedLocalWorld);
+          AddButton(selectedRow, "Regenerate Selected", () => { deleteLocalWorldBeforeLaunch = true; StartSelectedGame(true, false); });
+          deleteToggleButton = AddButton(contentRoot, string.Empty, () => { deleteLocalWorldBeforeLaunch = !deleteLocalWorldBeforeLaunch; UpdateUiState(false); }, -1.0f, 30.0f);
+        }
+        else
+        {
+          AddText(contentRoot, "Connected worlds are server-authoritative, so local world listing is hidden.", 13, FontStyle.Normal, TextAnchor.MiddleLeft, new Color(0.78f, 0.86f, 0.93f, 1.0f), 24.0f);
+          resetConnectedToggleButton = AddButton(contentRoot, string.Empty, () => { resetConnectedWorldOnLaunch = !resetConnectedWorldOnLaunch; UpdateUiState(false); }, -1.0f, 30.0f);
+        }
+      }
+      else
+      {
+        AddText(contentRoot, "Dev tools hidden. Open runtime console with ` and run: dev on", 12, FontStyle.Bold, TextAnchor.MiddleLeft, new Color(0.58f, 0.70f, 0.80f, 1.0f), 26.0f);
+      }
+
+      AddSpacer(contentRoot, 6.0f);
+      startButton = AddButton(contentRoot, mode == SetupMode.Local ? "Start Local Game" : "Start Connected Game", () => StartSelectedGame(deleteLocalWorldBeforeLaunch, resetConnectedWorldOnLaunch), -1.0f, 42.0f, true);
+      statusText = AddText(contentRoot, string.Empty, 14, FontStyle.Bold, TextAnchor.MiddleLeft, new Color(0.88f, 0.96f, 1.0f, 1.0f), 28.0f);
+      loadingText = AddText(contentRoot, string.Empty, 12, FontStyle.Normal, TextAnchor.MiddleLeft, new Color(0.65f, 0.76f, 0.86f, 1.0f), 24.0f);
+      loadingFill = AddProgressBar(contentRoot, 12.0f);
+
+      UpdateUiState(forceText: true);
+    }
+
+    private void AddSection(string label)
+    {
+      AddSpacer(contentRoot, 6.0f);
+      AddText(contentRoot, label, 18, FontStyle.Bold, TextAnchor.MiddleLeft, new Color(0.88f, 0.96f, 1.0f, 1.0f), 28.0f);
+      Image rule = CreateImage(contentRoot, label + " Rule", new Color(0.12f, 0.55f, 0.80f, 0.32f));
+      LayoutElement ruleLayout = rule.gameObject.AddComponent<LayoutElement>();
+      ruleLayout.preferredHeight = 1.0f;
+      ruleLayout.minHeight = 1.0f;
+      rule.raycastTarget = false;
+    }
+
+    private InputField AddInputRow(string label, string value, Action<string> onChanged)
+    {
+      RectTransform row = AddRow(contentRoot, 32.0f, 8.0f);
+      AddFixedText(row, label, 140.0f, 14, FontStyle.Bold, TextAnchor.MiddleLeft);
+      return AddInput(row, value, onChanged);
+    }
+
+    private static RectTransform AddRow(RectTransform parent, float height, float spacing)
+    {
+      GameObject go = new("Row");
+      go.transform.SetParent(parent, false);
+      RectTransform rect = go.AddComponent<RectTransform>();
+      LayoutElement element = go.AddComponent<LayoutElement>();
+      element.preferredHeight = height;
+      element.minHeight = height;
+      HorizontalLayoutGroup layout = go.AddComponent<HorizontalLayoutGroup>();
+      layout.childAlignment = TextAnchor.MiddleCenter;
+      layout.childControlWidth = true;
+      layout.childControlHeight = true;
+      layout.childForceExpandWidth = true;
+      layout.childForceExpandHeight = true;
+      layout.spacing = spacing;
+      return rect;
+    }
+
+    private static void AddSpacer(RectTransform parent, float height)
+    {
+      GameObject go = new("Spacer");
+      go.transform.SetParent(parent, false);
+      LayoutElement element = go.AddComponent<LayoutElement>();
+      element.preferredHeight = height;
+      element.minHeight = height;
+      element.flexibleWidth = 1.0f;
+    }
+
+    private static Text AddText(RectTransform parent, string value, int size, FontStyle style, TextAnchor alignment, Color color, float height)
+    {
+      GameObject go = new("Text");
+      go.transform.SetParent(parent, false);
+      Text text = go.AddComponent<Text>();
+      text.text = value ?? string.Empty;
+      text.font = UiFont;
+      text.fontSize = size;
+      text.fontStyle = style;
+      text.alignment = alignment;
+      text.color = color;
+      text.raycastTarget = false;
+      text.horizontalOverflow = HorizontalWrapMode.Wrap;
+      text.verticalOverflow = VerticalWrapMode.Overflow;
+      LayoutElement element = go.AddComponent<LayoutElement>();
+      element.preferredHeight = height;
+      element.minHeight = height;
+      element.flexibleWidth = 1.0f;
+      return text;
+    }
+
+    private static Text AddFixedText(RectTransform parent, string value, float width, int size, FontStyle style, TextAnchor alignment)
+    {
+      Text text = AddText(parent, value, size, style, alignment, new Color(0.78f, 0.86f, 0.93f, 1.0f), 32.0f);
+      LayoutElement element = text.GetComponent<LayoutElement>();
+      element.preferredWidth = width;
+      element.minWidth = width;
+      element.flexibleWidth = 0.0f;
+      return text;
+    }
+
+    private static InputField AddInput(RectTransform parent, string value, Action<string> onChanged)
+    {
+      GameObject go = new("Input");
+      go.transform.SetParent(parent, false);
+      Image image = go.AddComponent<Image>();
+      image.color = new Color(0.006f, 0.010f, 0.018f, 0.96f);
+      image.raycastTarget = true;
+
+      LayoutElement element = go.AddComponent<LayoutElement>();
+      element.preferredHeight = 30.0f;
+      element.minHeight = 30.0f;
+      element.flexibleWidth = 1.0f;
+
+      InputField input = go.AddComponent<InputField>();
+      input.lineType = InputField.LineType.SingleLine;
+      input.caretColor = Color.white;
+      input.selectionColor = new Color(0.20f, 0.55f, 0.80f, 0.45f);
+
+      Text text = AddText(go.GetComponent<RectTransform>(), value ?? string.Empty, 14, FontStyle.Bold, TextAnchor.MiddleLeft, Color.white, 30.0f);
+      Stretch(text.rectTransform);
+      text.rectTransform.offsetMin = new Vector2(8.0f, 3.0f);
+      text.rectTransform.offsetMax = new Vector2(-8.0f, -3.0f);
+
+      Text placeholder = AddText(go.GetComponent<RectTransform>(), "...", 14, FontStyle.Normal, TextAnchor.MiddleLeft, new Color(0.55f, 0.66f, 0.75f, 0.65f), 30.0f);
+      Stretch(placeholder.rectTransform);
+      placeholder.rectTransform.offsetMin = new Vector2(8.0f, 3.0f);
+      placeholder.rectTransform.offsetMax = new Vector2(-8.0f, -3.0f);
+
+      input.textComponent = text;
+      input.placeholder = placeholder;
+      input.SetTextWithoutNotify(value ?? string.Empty);
+      input.onValueChanged.AddListener(next => onChanged?.Invoke(next));
+      return input;
+    }
+
+    private static Button AddButton(RectTransform parent, string label, Action onClick, float width = -1.0f, float height = 34.0f, bool primary = false)
+    {
+      GameObject go = new("Button");
+      go.transform.SetParent(parent, false);
+      Image image = go.AddComponent<Image>();
+      image.color = primary ? new Color(0.10f, 0.36f, 0.58f, 1.0f) : new Color(0.045f, 0.095f, 0.145f, 1.0f);
+      image.raycastTarget = true;
+
+      LayoutElement element = go.AddComponent<LayoutElement>();
+      element.preferredHeight = height;
+      element.minHeight = height;
+      if (width > 0.0f)
+      {
+        element.preferredWidth = width;
+        element.minWidth = width;
+        element.flexibleWidth = 0.0f;
+      }
+      else
+      {
+        element.flexibleWidth = 1.0f;
+      }
+
+      Button button = go.AddComponent<Button>();
+      button.targetGraphic = image;
+      ColorBlock colors = button.colors;
+      colors.normalColor = image.color;
+      colors.highlightedColor = primary ? new Color(0.16f, 0.52f, 0.78f, 1.0f) : new Color(0.08f, 0.18f, 0.26f, 1.0f);
+      colors.pressedColor = new Color(0.025f, 0.055f, 0.085f, 1.0f);
+      colors.selectedColor = colors.highlightedColor;
+      colors.disabledColor = new Color(0.035f, 0.040f, 0.050f, 0.65f);
+      button.colors = colors;
+
+      if (onClick != null)
+      {
+        button.onClick.AddListener(() => onClick());
+      }
+
+      Text text = AddText(go.GetComponent<RectTransform>(), label, primary ? 15 : 14, FontStyle.Bold, TextAnchor.MiddleCenter, new Color(0.88f, 0.96f, 1.0f, 1.0f), height);
+      Stretch(text.rectTransform);
+      return button;
+    }
+
+    private static Image AddProgressBar(RectTransform parent, float height)
+    {
+      GameObject backObject = new("Progress Back");
+      backObject.transform.SetParent(parent, false);
+      Image back = backObject.AddComponent<Image>();
+      back.color = new Color(0.0f, 0.0f, 0.0f, 1.0f);
+      back.raycastTarget = false;
+      LayoutElement element = backObject.AddComponent<LayoutElement>();
+      element.preferredHeight = height;
+      element.minHeight = height;
+      element.flexibleWidth = 1.0f;
+
+      GameObject fillObject = new("Progress Fill");
+      fillObject.transform.SetParent(backObject.transform, false);
+      Image fill = fillObject.AddComponent<Image>();
+      fill.color = new Color(0.20f, 0.75f, 1.0f, 1.0f);
+      fill.type = Image.Type.Filled;
+      fill.fillMethod = Image.FillMethod.Horizontal;
+      fill.fillOrigin = 0;
+      fill.raycastTarget = false;
+      Stretch(fill.rectTransform);
+      return fill;
+    }
+
+    private void UpdateUiState(bool forceText)
+    {
+      if (canvasGroup != null)
+      {
+        canvasGroup.alpha = CubusUiInput.ConsoleOpen ? 0.0f : 1.0f;
+        canvasGroup.interactable = !CubusUiInput.ConsoleOpen;
+        canvasGroup.blocksRaycasts = !CubusUiInput.ConsoleOpen;
+      }
+
+      UpdateInput(worldIdInput, worldId, forceText);
+      UpdateInput(seedInput, seed, forceText);
+      UpdateInput(voxelSizeInput, voxelSize, forceText);
+      UpdateInput(minChunkYInput, minChunkY, forceText);
+      UpdateInput(maxChunkYInput, maxChunkY, forceText);
+      UpdateInput(minChunkXInput, minChunkX, forceText);
+      UpdateInput(minChunkZInput, minChunkZ, forceText);
+      UpdateInput(maxChunkXInput, maxChunkX, forceText);
+      UpdateInput(maxChunkZInput, maxChunkZ, forceText);
+      UpdateInput(serverUriInput, serverUri, forceText);
+      UpdateInput(moduleNameInput, moduleName, forceText);
+
+      SetButtonLabel(localModeButton, mode == SetupMode.Local ? "LOCAL GAME" : "Local Game");
+      SetButtonLabel(connectedModeButton, mode == SetupMode.Connected ? "CONNECTED GAME" : "Connected Game");
+      SetButtonLabel(blockTerrainButton, terrainSystem == TerrainSystem.Block ? "BLOCK" : "Block");
+      SetButtonLabel(smoothTerrainButton, terrainSystem == TerrainSystem.SmoothDensity ? "SMOOTH" : "Smooth");
+      SetButtonLabel(startButton, mode == SetupMode.Local ? "Start Local Game" : "Start Connected Game");
+      SetButtonLabel(deleteToggleButton, deleteLocalWorldBeforeLaunch ? "[x] Delete/regenerate current local World ID before launch" : "[ ] Delete/regenerate current local World ID before launch");
+      SetButtonLabel(resetConnectedToggleButton, resetConnectedWorldOnLaunch ? "[x] Reset/regenerate connected world on launch" : "[ ] Reset/regenerate connected world on launch");
+
+      if (startButton != null)
+      {
+        startButton.interactable = !isLoading && !CubusUiInput.ConsoleOpen;
+      }
+
+      if (statusText != null)
+      {
+        statusText.text = $"Status: {status}";
+      }
+
+      if (loadingText != null)
+      {
+        if (isLoading)
+        {
+          float elapsed = Time.realtimeSinceStartup - loadingStartedAt;
+          loadingText.text = $"Loading CubusLoading | Scene: {loadingScenePath} | Elapsed: {elapsed:0.0}s | Progress: {loadingProgress * 100.0f:0}%";
+        }
+        else
+        {
+          loadingText.text = string.Empty;
+        }
+      }
+
+      if (loadingFill != null)
+      {
+        loadingFill.fillAmount = isLoading ? loadingProgress : 0.0f;
+      }
+    }
+
+    private static void UpdateInput(InputField field, string value, bool force)
+    {
+      if (field == null || (!force && field.isFocused))
+      {
+        return;
+      }
+
+      string safeValue = value ?? string.Empty;
+      if (!string.Equals(field.text, safeValue, StringComparison.Ordinal))
+      {
+        field.SetTextWithoutNotify(safeValue);
+      }
+    }
+
+    private static void SetButtonLabel(Button button, string label)
+    {
+      if (button == null)
+      {
+        return;
+      }
+
+      Text text = button.GetComponentInChildren<Text>();
+      if (text != null)
+      {
+        text.text = label ?? string.Empty;
+      }
+    }
+
     private void StartSelectedGame(bool deleteLocalWorldBeforeLaunch, bool resetConnectedWorld)
     {
-      if (isLoading || !TryBuildLaunchContext(deleteLocalWorldBeforeLaunch, resetConnectedWorld)) return;
+      if (isLoading || !TryBuildLaunchContext(deleteLocalWorldBeforeLaunch, resetConnectedWorld))
+      {
+        UpdateUiState(forceText: true);
+        return;
+      }
 
       if (mode == SetupMode.Local && deleteLocalWorldBeforeLaunch)
       {
@@ -356,442 +847,6 @@ namespace Assets.Demo.Scripts.Multiplayer
     {
       seed = Random.Range(int.MinValue, int.MaxValue).ToString();
       UpdateUiState(forceText: true);
-    }
-
-    private void BuildUi()
-    {
-      CubusInputSystemUiGuard.EnsureEventSystem();
-
-      GameObject canvasObject = new("Cubus Launcher Canvas");
-      canvasObject.transform.SetParent(transform, false);
-
-      Canvas canvas = canvasObject.AddComponent<Canvas>();
-      canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-      canvas.overrideSorting = true;
-      canvas.sortingOrder = sortingOrder;
-
-      CanvasScaler scaler = canvasObject.AddComponent<CanvasScaler>();
-      scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-      scaler.referenceResolution = new Vector2(1920.0f, 1080.0f);
-      scaler.matchWidthOrHeight = 0.5f;
-
-      canvasObject.AddComponent<GraphicRaycaster>();
-      RectTransform root = canvasObject.GetComponent<RectTransform>();
-      Stretch(root);
-
-      canvasGroup = canvasObject.AddComponent<CanvasGroup>();
-      canvasGroup.alpha = 1.0f;
-      canvasGroup.interactable = true;
-      canvasGroup.blocksRaycasts = true;
-
-      Image baseLayer = CreateImage(root, "Background Base", new Color(0.006f, 0.010f, 0.018f, 1.0f));
-      baseLayer.raycastTarget = false;
-      Stretch(baseLayer.rectTransform);
-
-      Image glow = CreateImage(root, "Background Glow", new Color(0.03f, 0.12f, 0.18f, 0.82f));
-      glow.raycastTarget = false;
-      RectTransform glowRect = glow.rectTransform;
-      glowRect.anchorMin = new Vector2(0.0f, 0.55f);
-      glowRect.anchorMax = new Vector2(1.0f, 1.0f);
-      glowRect.offsetMin = Vector2.zero;
-      glowRect.offsetMax = Vector2.zero;
-
-      Image horizon = CreateImage(root, "Horizon Band", new Color(0.10f, 0.30f, 0.42f, 0.28f));
-      horizon.raycastTarget = false;
-      RectTransform horizonRect = horizon.rectTransform;
-      horizonRect.anchorMin = new Vector2(0.0f, 0.46f);
-      horizonRect.anchorMax = new Vector2(1.0f, 0.52f);
-      horizonRect.offsetMin = Vector2.zero;
-      horizonRect.offsetMax = Vector2.zero;
-
-      GameObject panelObject = new("Launcher Panel");
-      panelObject.transform.SetParent(root, false);
-      panel = panelObject.AddComponent<RectTransform>();
-      panel.anchorMin = new Vector2(0.5f, 0.5f);
-      panel.anchorMax = new Vector2(0.5f, 0.5f);
-      panel.pivot = new Vector2(0.5f, 0.5f);
-      panel.sizeDelta = panelSize;
-      panel.anchoredPosition = Vector2.zero;
-
-      Image shadow = CreateImage(root, "Launcher Panel Shadow", new Color(0.0f, 0.0f, 0.0f, 0.30f));
-      RectTransform shadowRect = shadow.rectTransform;
-      shadowRect.anchorMin = panel.anchorMin;
-      shadowRect.anchorMax = panel.anchorMax;
-      shadowRect.pivot = panel.pivot;
-      shadowRect.sizeDelta = panelSize + new Vector2(18.0f, 18.0f);
-      shadowRect.anchoredPosition = new Vector2(10.0f, -10.0f);
-      shadow.transform.SetSiblingIndex(panelObject.transform.GetSiblingIndex());
-      shadow.raycastTarget = false;
-
-      Image panelImage = panelObject.AddComponent<Image>();
-      panelImage.color = new Color(0.018f, 0.026f, 0.038f, 0.98f);
-      panelImage.raycastTarget = true;
-
-      Image accent = CreateImage(panel, "Top Accent", new Color(0.12f, 0.55f, 0.80f, 0.95f));
-      RectTransform accentRect = accent.rectTransform;
-      accentRect.anchorMin = new Vector2(0.0f, 1.0f);
-      accentRect.anchorMax = new Vector2(1.0f, 1.0f);
-      accentRect.pivot = new Vector2(0.5f, 1.0f);
-      accentRect.anchoredPosition = Vector2.zero;
-      accentRect.sizeDelta = new Vector2(0.0f, 4.0f);
-      accent.raycastTarget = false;
-    }
-
-    private void RebuildControls()
-    {
-      if (panel == null)
-      {
-        return;
-      }
-
-      for (int i = panel.childCount - 1; i >= 0; i--)
-      {
-        GameObject child = panel.GetChild(i).gameObject;
-        if (child.name == "Top Accent")
-        {
-          continue;
-        }
-
-        Destroy(child);
-      }
-
-      localModeButton = null;
-      connectedModeButton = null;
-      blockTerrainButton = null;
-      smoothTerrainButton = null;
-      startButton = null;
-      deleteToggleButton = null;
-      resetConnectedToggleButton = null;
-      serverUriInput = null;
-      moduleNameInput = null;
-
-      lastDeveloperMode = CubusDeveloperMode.IsEnabled;
-      float y = -32.0f;
-
-      CreateText(panel, "Title", "CUBUS", 34, FontStyle.Bold, TextAnchor.MiddleCenter, 0.0f, y, 700.0f, 42.0f, new Color(0.88f, 0.96f, 1.0f, 1.0f));
-      y -= 38.0f;
-      CreateText(panel, "Subtitle", "Create a local world, or connect to a hosted Cubus world.", 15, FontStyle.Normal, TextAnchor.MiddleCenter, 0.0f, y, 700.0f, 28.0f, new Color(0.65f, 0.76f, 0.86f, 1.0f));
-      y -= 46.0f;
-
-      localModeButton = CreateButton(panel, "Local Game", -178.0f, y, 170.0f, 36.0f, () => SetMode(SetupMode.Local));
-      connectedModeButton = CreateButton(panel, "Connected Game", 178.0f, y, 170.0f, 36.0f, () => SetMode(SetupMode.Connected));
-      y -= 50.0f;
-
-      CreateSectionLabel("World", y);
-      y -= 36.0f;
-      worldIdInput = CreateInputRow("World ID", worldId, y, value => worldId = value);
-      y -= 38.0f;
-
-      CreateText(panel, "Terrain Label", "Terrain", 14, FontStyle.Normal, TextAnchor.MiddleLeft, -300.0f, y, 120.0f, 30.0f, new Color(0.78f, 0.86f, 0.93f, 1.0f));
-      blockTerrainButton = CreateButton(panel, "Block", -70.0f, y, 120.0f, 32.0f, () => SetTerrain(TerrainSystem.Block));
-      smoothTerrainButton = CreateButton(panel, "Smooth", 70.0f, y, 120.0f, 32.0f, () => SetTerrain(TerrainSystem.SmoothDensity));
-      y -= 42.0f;
-
-      seedInput = CreateInputRow("Seed", seed, y, value => seed = value, 390.0f);
-      CreateButton(panel, "Random", 258.0f, y, 104.0f, 32.0f, RandomizeSeed);
-      y -= 38.0f;
-
-      voxelSizeInput = CreateInputRow("Voxel Size", voxelSize, y, value => voxelSize = value);
-      y -= 38.0f;
-      minChunkYInput = CreateInputRow("Min Chunk Y", minChunkY, y, value => minChunkY = value);
-      y -= 38.0f;
-      maxChunkYInput = CreateInputRow("Max Chunk Y", maxChunkY, y, value => maxChunkY = value);
-      y -= 38.0f;
-      minChunkXInput = CreateInputRow("Min Chunk X", minChunkX, y, value => minChunkX = value);
-      y -= 38.0f;
-      minChunkZInput = CreateInputRow("Min Chunk Z", minChunkZ, y, value => minChunkZ = value);
-      y -= 38.0f;
-      maxChunkXInput = CreateInputRow("Max Chunk X", maxChunkX, y, value => maxChunkX = value);
-      y -= 38.0f;
-      maxChunkZInput = CreateInputRow("Max Chunk Z", maxChunkZ, y, value => maxChunkZ = value);
-      y -= 48.0f;
-
-      if (mode == SetupMode.Connected)
-      {
-        CreateSectionLabel("Server", y);
-        y -= 36.0f;
-        serverUriInput = CreateInputRow("Server URI", serverUri, y, value => serverUri = value);
-        y -= 38.0f;
-        moduleNameInput = CreateInputRow("Module", moduleName, y, value => moduleName = value);
-        y -= 44.0f;
-      }
-
-      if (CubusDeveloperMode.IsEnabled)
-      {
-        CreateSectionLabel("Developer World Tools", y);
-        y -= 36.0f;
-
-        if (mode == SetupMode.Local)
-        {
-          CreateButton(panel, "Refresh Local Worlds", -190.0f, y, 180.0f, 30.0f, () => { RefreshLocalWorlds(); RebuildControls(); UpdateUiState(true); });
-          CreateButton(panel, "New Random World ID", 40.0f, y, 210.0f, 30.0f, PrepareNewRandomWorldId);
-          y -= 38.0f;
-
-          CreateText(panel, "Storage", $"Storage: {GetLocalWorldRootDirectory()}", 12, FontStyle.Normal, TextAnchor.MiddleLeft, -300.0f, y, 600.0f, 22.0f, new Color(0.56f, 0.68f, 0.76f, 1.0f));
-          y -= 28.0f;
-
-          int visibleCount = Mathf.Min(localWorlds.Count, 4);
-          if (visibleCount == 0)
-          {
-            CreateText(panel, "No Worlds", "No saved local worlds found.", 13, FontStyle.Normal, TextAnchor.MiddleLeft, -300.0f, y, 600.0f, 24.0f, new Color(0.78f, 0.86f, 0.93f, 1.0f));
-            y -= 30.0f;
-          }
-          else
-          {
-            for (int i = 0; i < visibleCount; i++)
-            {
-              int index = i;
-              LocalWorldEntry entry = localWorlds[i];
-              WorldManifest manifest = entry.Manifest;
-              string label = manifest == null
-                  ? entry.WorldId
-                  : $"{entry.WorldId} | {manifest.TerrainSystem} | Seed {manifest.WorldSeed} | Chunks {manifest.ChunkCount}";
-              CreateButton(panel, label, 0.0f, y, 600.0f, 28.0f, () => SelectLocalWorld(index));
-              y -= 32.0f;
-            }
-          }
-
-          CreateButton(panel, "Use Selected", -210.0f, y, 130.0f, 30.0f, () => SelectLocalWorld(selectedLocalWorldIndex));
-          CreateButton(panel, "Delete Selected", -60.0f, y, 140.0f, 30.0f, DeleteSelectedLocalWorld);
-          CreateButton(panel, "Regenerate Selected", 120.0f, y, 170.0f, 30.0f, () => { deleteLocalWorldBeforeLaunch = true; StartSelectedGame(true, false); });
-          y -= 38.0f;
-
-          deleteToggleButton = CreateButton(panel, string.Empty, 0.0f, y, 600.0f, 30.0f, () => { deleteLocalWorldBeforeLaunch = !deleteLocalWorldBeforeLaunch; UpdateUiState(false); });
-        }
-        else
-        {
-          CreateText(panel, "Connected Dev Info", "Connected worlds are server-authoritative, so local world listing is hidden.", 13, FontStyle.Normal, TextAnchor.MiddleLeft, -300.0f, y, 600.0f, 24.0f, new Color(0.78f, 0.86f, 0.93f, 1.0f));
-          y -= 32.0f;
-          resetConnectedToggleButton = CreateButton(panel, string.Empty, 0.0f, y, 600.0f, 30.0f, () => { resetConnectedWorldOnLaunch = !resetConnectedWorldOnLaunch; UpdateUiState(false); });
-        }
-      }
-      else
-      {
-        CreateText(panel, "Dev Hidden", "Dev tools hidden. Open runtime console with ` and run: dev on", 13, FontStyle.Normal, TextAnchor.MiddleLeft, -300.0f, y, 600.0f, 24.0f, new Color(0.56f, 0.68f, 0.76f, 1.0f));
-      }
-
-      startButton = CreateButton(panel, mode == SetupMode.Local ? "Start Local Game" : "Start Connected Game", 0.0f, -675.0f, 320.0f, 42.0f, () => StartSelectedGame(deleteLocalWorldBeforeLaunch, resetConnectedWorldOnLaunch), true);
-      statusText = CreateText(panel, "Status", string.Empty, 14, FontStyle.Bold, TextAnchor.MiddleLeft, -300.0f, -724.0f, 600.0f, 28.0f, new Color(0.88f, 0.96f, 1.0f, 1.0f));
-      loadingText = CreateText(panel, "Loading", string.Empty, 12, FontStyle.Normal, TextAnchor.MiddleLeft, -300.0f, -752.0f, 600.0f, 24.0f, new Color(0.65f, 0.76f, 0.86f, 1.0f));
-
-      Image loadingBack = CreateImage(panel, "Loading Progress Back", new Color(0.0f, 0.0f, 0.0f, 1.0f));
-      RectTransform loadingBackRect = loadingBack.rectTransform;
-      loadingBackRect.anchorMin = new Vector2(0.5f, 1.0f);
-      loadingBackRect.anchorMax = new Vector2(0.5f, 1.0f);
-      loadingBackRect.pivot = new Vector2(0.5f, 0.5f);
-      loadingBackRect.anchoredPosition = new Vector2(0.0f, -786.0f);
-      loadingBackRect.sizeDelta = new Vector2(600.0f, 12.0f);
-      loadingBack.raycastTarget = false;
-
-      GameObject fillObject = new("Loading Progress Fill");
-      fillObject.transform.SetParent(loadingBackRect, false);
-      loadingFill = fillObject.AddComponent<Image>();
-      loadingFill.color = new Color(0.20f, 0.75f, 1.0f, 1.0f);
-      loadingFill.type = Image.Type.Filled;
-      loadingFill.fillMethod = Image.FillMethod.Horizontal;
-      loadingFill.fillOrigin = 0;
-      loadingFill.raycastTarget = false;
-      Stretch(loadingFill.rectTransform);
-
-      UpdateUiState(forceText: true);
-    }
-
-    private void CreateSectionLabel(string label, float y)
-    {
-      Image line = CreateImage(panel, label + " Rule", new Color(0.12f, 0.55f, 0.80f, 0.30f));
-      RectTransform lineRect = line.rectTransform;
-      lineRect.anchorMin = new Vector2(0.5f, 1.0f);
-      lineRect.anchorMax = new Vector2(0.5f, 1.0f);
-      lineRect.pivot = new Vector2(0.0f, 0.5f);
-      lineRect.anchoredPosition = new Vector2(-300.0f, y - 15.0f);
-      lineRect.sizeDelta = new Vector2(600.0f, 1.0f);
-      line.raycastTarget = false;
-
-      CreateText(panel, label + " Label", label, 18, FontStyle.Bold, TextAnchor.MiddleLeft, -300.0f, y, 600.0f, 26.0f, new Color(0.88f, 0.96f, 1.0f, 1.0f));
-    }
-
-    private void UpdateUiState(bool forceText)
-    {
-      if (canvasGroup != null)
-      {
-        canvasGroup.alpha = CubusUiInput.ConsoleOpen ? 0.0f : 1.0f;
-        canvasGroup.interactable = !CubusUiInput.ConsoleOpen;
-        canvasGroup.blocksRaycasts = !CubusUiInput.ConsoleOpen;
-      }
-
-      UpdateInput(worldIdInput, worldId, forceText);
-      UpdateInput(seedInput, seed, forceText);
-      UpdateInput(voxelSizeInput, voxelSize, forceText);
-      UpdateInput(minChunkYInput, minChunkY, forceText);
-      UpdateInput(maxChunkYInput, maxChunkY, forceText);
-      UpdateInput(minChunkXInput, minChunkX, forceText);
-      UpdateInput(minChunkZInput, minChunkZ, forceText);
-      UpdateInput(maxChunkXInput, maxChunkX, forceText);
-      UpdateInput(maxChunkZInput, maxChunkZ, forceText);
-      UpdateInput(serverUriInput, serverUri, forceText);
-      UpdateInput(moduleNameInput, moduleName, forceText);
-
-      SetButtonLabel(localModeButton, mode == SetupMode.Local ? "LOCAL GAME" : "Local Game");
-      SetButtonLabel(connectedModeButton, mode == SetupMode.Connected ? "CONNECTED GAME" : "Connected Game");
-      SetButtonLabel(blockTerrainButton, terrainSystem == TerrainSystem.Block ? "BLOCK" : "Block");
-      SetButtonLabel(smoothTerrainButton, terrainSystem == TerrainSystem.SmoothDensity ? "SMOOTH" : "Smooth");
-      SetButtonLabel(startButton, mode == SetupMode.Local ? "Start Local Game" : "Start Connected Game");
-      SetButtonLabel(deleteToggleButton, deleteLocalWorldBeforeLaunch ? "[x] Delete/regenerate current local World ID before launch" : "[ ] Delete/regenerate current local World ID before launch");
-      SetButtonLabel(resetConnectedToggleButton, resetConnectedWorldOnLaunch ? "[x] Reset/regenerate connected world on launch" : "[ ] Reset/regenerate connected world on launch");
-
-      if (startButton != null) startButton.interactable = !isLoading && !CubusUiInput.ConsoleOpen;
-      if (statusText != null) statusText.text = $"Status: {status}";
-
-      if (loadingText != null)
-      {
-        if (isLoading)
-        {
-          float elapsed = Time.realtimeSinceStartup - loadingStartedAt;
-          loadingText.text = $"Loading CubusLoading | Scene: {loadingScenePath} | Elapsed: {elapsed:0.0}s | Progress: {loadingProgress * 100.0f:0}%";
-        }
-        else
-        {
-          loadingText.text = string.Empty;
-        }
-      }
-
-      if (loadingFill != null)
-      {
-        loadingFill.fillAmount = isLoading ? loadingProgress : 0.0f;
-      }
-    }
-
-    private static void UpdateInput(InputField field, string value, bool force)
-    {
-      if (field == null || (!force && field.isFocused))
-      {
-        return;
-      }
-
-      string safeValue = value ?? string.Empty;
-      if (!string.Equals(field.text, safeValue, StringComparison.Ordinal))
-      {
-        field.SetTextWithoutNotify(safeValue);
-      }
-    }
-
-    private static void SetButtonLabel(Button button, string label)
-    {
-      if (button == null)
-      {
-        return;
-      }
-
-      Text text = button.GetComponentInChildren<Text>();
-      if (text != null)
-      {
-        text.text = label ?? string.Empty;
-      }
-    }
-
-    private InputField CreateInputRow(string label, string value, float y, Action<string> onChanged, float inputWidth = 470.0f)
-    {
-      CreateText(panel, label + " Label", label, 14, FontStyle.Normal, TextAnchor.MiddleLeft, -300.0f, y, 120.0f, 30.0f, new Color(0.78f, 0.86f, 0.93f, 1.0f));
-      return CreateInput(panel, value, -170.0f, y, inputWidth, 30.0f, onChanged);
-    }
-
-    private static InputField CreateInput(RectTransform parent, string value, float x, float y, float width, float height, Action<string> onChanged)
-    {
-      GameObject go = new("Input");
-      go.transform.SetParent(parent, false);
-      RectTransform rect = go.AddComponent<RectTransform>();
-      rect.anchorMin = new Vector2(0.5f, 1.0f);
-      rect.anchorMax = new Vector2(0.5f, 1.0f);
-      rect.pivot = new Vector2(0.0f, 0.5f);
-      rect.anchoredPosition = new Vector2(x, y);
-      rect.sizeDelta = new Vector2(width, height);
-
-      Image image = go.AddComponent<Image>();
-      image.color = new Color(0.006f, 0.010f, 0.018f, 0.96f);
-      image.raycastTarget = true;
-
-      InputField input = go.AddComponent<InputField>();
-      input.lineType = InputField.LineType.SingleLine;
-      input.caretColor = new Color(0.88f, 0.96f, 1.0f, 1.0f);
-      input.selectionColor = new Color(0.20f, 0.55f, 0.80f, 0.45f);
-
-      Text text = CreateText(rect, "Text", value ?? string.Empty, 14, FontStyle.Normal, TextAnchor.MiddleLeft, 0.0f, 0.0f, width - 16.0f, height - 8.0f, Color.white);
-      Stretch(text.rectTransform);
-      text.rectTransform.offsetMin = new Vector2(8.0f, 4.0f);
-      text.rectTransform.offsetMax = new Vector2(-8.0f, -4.0f);
-
-      Text placeholder = CreateText(rect, "Placeholder", "...", 14, FontStyle.Normal, TextAnchor.MiddleLeft, 0.0f, 0.0f, width - 16.0f, height - 8.0f, new Color(0.55f, 0.66f, 0.75f, 0.65f));
-      Stretch(placeholder.rectTransform);
-      placeholder.rectTransform.offsetMin = new Vector2(8.0f, 4.0f);
-      placeholder.rectTransform.offsetMax = new Vector2(-8.0f, -4.0f);
-
-      input.textComponent = text;
-      input.placeholder = placeholder;
-      input.SetTextWithoutNotify(value ?? string.Empty);
-      input.onValueChanged.AddListener(next => onChanged?.Invoke(next));
-      return input;
-    }
-
-    private static Button CreateButton(RectTransform parent, string label, float x, float y, float width, float height, Action onClick, bool primary = false)
-    {
-      GameObject go = new("Button");
-      go.transform.SetParent(parent, false);
-      RectTransform rect = go.AddComponent<RectTransform>();
-      rect.anchorMin = new Vector2(0.5f, 1.0f);
-      rect.anchorMax = new Vector2(0.5f, 1.0f);
-      rect.pivot = new Vector2(0.5f, 0.5f);
-      rect.anchoredPosition = new Vector2(x, y);
-      rect.sizeDelta = new Vector2(width, height);
-
-      Image image = go.AddComponent<Image>();
-      image.color = primary
-          ? new Color(0.12f, 0.42f, 0.62f, 1.0f)
-          : new Color(0.055f, 0.110f, 0.165f, 1.0f);
-      image.raycastTarget = true;
-
-      Button button = go.AddComponent<Button>();
-      button.targetGraphic = image;
-      ColorBlock colors = button.colors;
-      colors.normalColor = image.color;
-      colors.highlightedColor = primary
-          ? new Color(0.18f, 0.55f, 0.78f, 1.0f)
-          : new Color(0.09f, 0.19f, 0.28f, 1.0f);
-      colors.pressedColor = new Color(0.035f, 0.075f, 0.110f, 1.0f);
-      colors.selectedColor = colors.highlightedColor;
-      colors.disabledColor = new Color(0.035f, 0.040f, 0.050f, 0.65f);
-      button.colors = colors;
-
-      if (onClick != null)
-      {
-        button.onClick.AddListener(() => onClick());
-      }
-
-      CreateText(rect, "Label", label, 14, FontStyle.Bold, TextAnchor.MiddleCenter, 0.0f, 0.0f, width, height, new Color(0.88f, 0.96f, 1.0f, 1.0f));
-      return button;
-    }
-
-    private static Text CreateText(RectTransform parent, string name, string value, int size, FontStyle style, TextAnchor alignment, float x, float y, float width, float height, Color color)
-    {
-      GameObject go = new(name);
-      go.transform.SetParent(parent, false);
-      RectTransform rect = go.AddComponent<RectTransform>();
-      rect.anchorMin = new Vector2(0.5f, 1.0f);
-      rect.anchorMax = new Vector2(0.5f, 1.0f);
-      rect.pivot = new Vector2(0.5f, 0.5f);
-      rect.anchoredPosition = new Vector2(x, y);
-      rect.sizeDelta = new Vector2(width, height);
-
-      Text text = go.AddComponent<Text>();
-      text.text = value ?? string.Empty;
-      text.font = UiFont;
-      text.fontSize = size;
-      text.fontStyle = style;
-      text.alignment = alignment;
-      text.color = color;
-      text.raycastTarget = false;
-      text.horizontalOverflow = HorizontalWrapMode.Overflow;
-      text.verticalOverflow = VerticalWrapMode.Overflow;
-      return text;
     }
 
     private static Image CreateImage(RectTransform parent, string name, Color color)
