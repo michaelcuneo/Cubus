@@ -29,6 +29,8 @@ namespace Assets.Demo.Scripts.Multiplayer
     public static int MaxChunkY { get; private set; }
     public static Vector2Int WorldMinChunkXZ { get; private set; }
     public static Vector2Int WorldMaxChunkXZ { get; private set; }
+    public static bool DeleteLocalWorldBeforeLaunch { get; private set; }
+    public static bool ResetConnectedWorldOnLaunch { get; private set; }
 
     public static void Set(
         CubusGameLaunchMode mode,
@@ -41,7 +43,9 @@ namespace Assets.Demo.Scripts.Multiplayer
         int minChunkY,
         int maxChunkY,
         Vector2Int worldMinChunkXZ,
-        Vector2Int worldMaxChunkXZ)
+        Vector2Int worldMaxChunkXZ,
+        bool deleteLocalWorldBeforeLaunch = false,
+        bool resetConnectedWorldOnLaunch = false)
     {
       HasLaunch = true;
       Mode = mode;
@@ -55,6 +59,8 @@ namespace Assets.Demo.Scripts.Multiplayer
       MaxChunkY = maxChunkY;
       WorldMinChunkXZ = worldMinChunkXZ;
       WorldMaxChunkXZ = worldMaxChunkXZ;
+      DeleteLocalWorldBeforeLaunch = deleteLocalWorldBeforeLaunch;
+      ResetConnectedWorldOnLaunch = resetConnectedWorldOnLaunch;
     }
 
     public static void Clear()
@@ -71,6 +77,8 @@ namespace Assets.Demo.Scripts.Multiplayer
       MaxChunkY = 2;
       WorldMinChunkXZ = new Vector2Int(-1024, -1024);
       WorldMaxChunkXZ = new Vector2Int(1024, 1024);
+      DeleteLocalWorldBeforeLaunch = false;
+      ResetConnectedWorldOnLaunch = false;
     }
   }
 }
