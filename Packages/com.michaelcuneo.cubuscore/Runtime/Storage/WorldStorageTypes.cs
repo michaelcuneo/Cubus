@@ -33,6 +33,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
     public string DisplayName = "Default World";
 
     public TerrainSystem TerrainSystem;
+    public int WorldSeed;
     public int ChunkSize;
     public float VoxelSize;
 
