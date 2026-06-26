@@ -1,6 +1,8 @@
 using System.Collections;
 using System.IO;
+using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Core;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming;
+using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -19,6 +21,8 @@ namespace Assets.Demo.Scripts.Multiplayer
     [SerializeField] private Vector2 panelSize = new(760.0f, 520.0f);
     [SerializeField] private float readyHoldSeconds = 0.35f;
     [SerializeField] private float preparationTimeoutSeconds = 180.0f;
+    [SerializeField] private float settledTerrainFallbackSeconds = 1.0f;
+    [SerializeField] private float fallbackSpawnClearance = 2.0f;
     [SerializeField] private bool unloadLoadingSceneWhenReady = true;
 
     private string status = "Starting Cubus loading scene.";
@@ -27,6 +31,7 @@ namespace Assets.Demo.Scripts.Multiplayer
     private float startedAt;
     private float sceneLoadProgress;
     private float terrainProgress;
+    private float settledTerrainFallbackStartedAt = -1.0f;
     private bool sceneLoadDone;
     private bool preparationDone;
     private bool failed;
@@ -231,6 +236,7 @@ namespace Assets.Demo.Scripts.Multiplayer
       {
         FindRuntimeReferences();
         UpdateTerrainProgressAndDetail();
+        TryReleaseSettledStreamedTerrain();
 
         if (preparationTimeoutSeconds > 0.0f && Time.realtimeSinceStartup - start > preparationTimeoutSeconds)
         {
@@ -274,7 +280,8 @@ namespace Assets.Demo.Scripts.Multiplayer
 
       if (desired > 0.0f)
       {
-        terrainProgress = Mathf.Clamp01(applied / desired);
+        float nonEmptyTarget = Mathf.Max(1.0f, desired - streamer.KnownEmptyChunkCount);
+        terrainProgress = Mathf.Clamp01(applied / nonEmptyTarget);
       }
       else if (world.IsGeneratingWorld)
       {
@@ -286,6 +293,80 @@ namespace Assets.Demo.Scripts.Multiplayer
       }
 
       detail = $"Desired={desired:0}, Applied={applied:0}, Pending={pending:0}, Active={active:0}, WorldStatus={world.GenerationStatus}";
+    }
+
+    private void TryReleaseSettledStreamedTerrain()
+    {
+      if (world == null || world.IsInitialTerrainReady || streamer == null)
+      {
+        settledTerrainFallbackStartedAt = -1.0f;
+        return;
+      }
+
+      float desired = streamer.DesiredChunkCount;
+      float loaded = streamer.TotalChunkLoadsCompleted;
+      float applied = Mathf.Max(streamer.TotalBlockMeshApplies, streamer.TotalDensityMeshApplies);
+      float active = streamer.ActiveChunkLoadTaskCount + streamer.ActiveBlockBuildTaskCount + streamer.ActiveDensityBuildTaskCount;
+      float requiredApplied = Mathf.Max(1.0f, desired - streamer.KnownEmptyChunkCount);
+
+      bool streamedEnoughTerrain =
+          desired > 0.0f &&
+          loaded >= desired &&
+          applied >= requiredApplied &&
+          streamer.PendingLoadCount == 0 &&
+          active <= 0.0f;
+
+      if (!streamedEnoughTerrain)
+      {
+        settledTerrainFallbackStartedAt = -1.0f;
+        return;
+      }
+
+      if (settledTerrainFallbackStartedAt < 0.0f)
+      {
+        settledTerrainFallbackStartedAt = Time.realtimeSinceStartup;
+        detail = "Terrain is settled; waiting briefly before releasing player.";
+        return;
+      }
+
+      if (Time.realtimeSinceStartup - settledTerrainFallbackStartedAt < Mathf.Max(0.0f, settledTerrainFallbackSeconds))
+      {
+        return;
+      }
+
+      Vector3 spawn = CalculateFallbackSpawnLocation();
+      Debug.Log($"[CubusLoading] Releasing initial terrain after settled streamer fallback. Spawn={spawn}, Desired={desired}, Loaded={loaded}, Applied={applied}, KnownEmpty={streamer.KnownEmptyChunkCount}.");
+      world.BroadcastInitialTerrainReady(spawn);
+    }
+
+    private Vector3 CalculateFallbackSpawnLocation()
+    {
+      if (world == null || world.Settings == null || streamer == null)
+      {
+        return Vector3.zero;
+      }
+
+      float voxelSize = Mathf.Max(0.0001f, world.Settings.VoxelSize);
+      float densityScale = Mathf.Max(0.001f, world.Settings.DensitySampleScale);
+      Vector3Int spawnChunkCoord = streamer.SpawnTargetChunkCoord;
+
+      float localVoxelX = spawnChunkCoord.x * VoxelConstants.ChunkSize + VoxelConstants.ChunkSize * 0.5f;
+      float localVoxelZ = spawnChunkCoord.z * VoxelConstants.ChunkSize + VoxelConstants.ChunkSize * 0.5f;
+
+      Vector3Int sampleVoxel = new(
+        Mathf.FloorToInt(localVoxelX),
+        0,
+        Mathf.FloorToInt(localVoxelZ)
+      );
+
+      TerrainSample sample = BiomeTerrainSampler.Sample(world.Settings, sampleVoxel, densityScale);
+      float localVoxelY = sample.SurfaceHeight + Mathf.Max(0.0f, fallbackSpawnClearance);
+
+      return world.transform.TransformPoint(new Vector3(
+        localVoxelX * voxelSize,
+        localVoxelY * voxelSize,
+        localVoxelZ * voxelSize
+      ));
     }
 
     private void DrawWorldDiagnostics()
