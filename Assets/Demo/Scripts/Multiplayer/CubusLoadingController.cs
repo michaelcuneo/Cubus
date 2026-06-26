@@ -4,8 +4,11 @@ using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Core;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World;
+using TMPro;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.SceneManagement;
+using UnityEngine.UI;
 
 namespace Assets.Demo.Scripts.Multiplayer
 {
@@ -18,7 +21,8 @@ namespace Assets.Demo.Scripts.Multiplayer
   {
     [SerializeField] private string gameplaySceneName = "CubusGame";
     [SerializeField] private string launcherSceneName = "CubusLauncher";
-    [SerializeField] private Vector2 panelSize = new(520.0f, 230.0f);
+    [SerializeField] private Vector2 panelSize = new(560.0f, 260.0f);
+    [SerializeField] private int sortingOrder = 1200;
     [SerializeField] private float readyHoldSeconds = 0.35f;
     [SerializeField] private float preparationTimeoutSeconds = 180.0f;
     [SerializeField] private float settledTerrainFallbackSeconds = 2.0f;
@@ -44,6 +48,15 @@ namespace Assets.Demo.Scripts.Multiplayer
     private WorldStreamer streamer;
     private CubusNetworkManager network;
 
+    private CanvasGroup canvasGroup;
+    private TMP_Text statusText;
+    private TMP_Text detailText;
+    private TMP_Text elapsedText;
+    private TMP_Text progressText;
+    private TMP_Text hintText;
+    private Image progressFill;
+    private Button forceReleaseButton;
+
     private void Awake()
     {
       startedAt = Time.realtimeSinceStartup;
@@ -51,13 +64,25 @@ namespace Assets.Demo.Scripts.Multiplayer
       Cursor.lockState = CursorLockMode.None;
       Cursor.visible = true;
       DontDestroyOnLoad(gameObject);
+      BuildLoadingUi();
+      UpdateLoadingUi();
     }
 
     private void Update()
     {
-      if (!preparationDone && !failed && Input.GetKeyDown(KeyCode.Return))
+      if (!preparationDone && !failed && !CubusUiInput.IsCapturing && Input.GetKeyDown(KeyCode.Return))
       {
         forceReleaseRequested = true;
+      }
+
+      UpdateLoadingUi();
+    }
+
+    private void OnDestroy()
+    {
+      if (forceReleaseButton != null)
+      {
+        forceReleaseButton.onClick.RemoveListener(RequestForceRelease);
       }
     }
 
@@ -102,6 +127,7 @@ namespace Assets.Demo.Scripts.Multiplayer
       status = "Ready";
       detail = "Initial terrain is ready. Entering CubusGame.";
       terrainProgress = 1.0f;
+      UpdateLoadingUi();
       LogDiagnosticsSnapshot("Ready to enter game", true);
 
       if (readyHoldSeconds > 0.0f)
@@ -124,50 +150,13 @@ namespace Assets.Demo.Scripts.Multiplayer
       }
     }
 
-    private void OnGUI()
-    {
-      Rect panelRect = new Rect(
-          Mathf.Max(8.0f, (Screen.width - panelSize.x) * 0.5f),
-          Mathf.Max(8.0f, (Screen.height - panelSize.y) * 0.5f),
-          Mathf.Min(panelSize.x, Screen.width - 16.0f),
-          Mathf.Min(panelSize.y, Screen.height - 16.0f));
-
-      GUILayout.BeginArea(panelRect, GUI.skin.window);
-      GUILayout.Label("<b>Cubus Loading</b>");
-      GUILayout.Space(8.0f);
-
-      float elapsed = Time.realtimeSinceStartup - startedAt;
-      float combinedProgress = GetCombinedProgress();
-
-      GUILayout.Label(status);
-      GUILayout.Label(detail);
-      GUILayout.Label($"Elapsed: {elapsed:0.0}s");
-      GUILayout.Label($"Progress: {combinedProgress * 100.0f:0}%");
-      DrawProgressBar(combinedProgress, 18.0f);
-
-      GUILayout.Space(10.0f);
-      if (!preparationDone && !failed && GUILayout.Button("Enter Game Now", GUILayout.Height(30.0f)))
-      {
-        forceReleaseRequested = true;
-      }
-
-      GUILayout.Label("Detailed diagnostics are in the console. Press Enter to force release if terrain is visibly ready.");
-
-      if (failed)
-      {
-        GUILayout.Space(8.0f);
-        GUILayout.Label("Loading failed. Check the console.");
-      }
-
-      GUILayout.EndArea();
-    }
-
     private IEnumerator LoadGameplaySceneAdditively(string gameplayScenePath)
     {
       status = "Loading gameplay scene";
       detail = gameplayScenePath;
       sceneLoadProgress = 0.0f;
       terrainProgress = 0.0f;
+      UpdateLoadingUi();
 
       Debug.Log($"[CubusLoading] Loading gameplay scene additively: {gameplayScenePath}");
       AsyncOperation operation = SceneManager.LoadSceneAsync(gameplayScenePath, LoadSceneMode.Additive);
@@ -182,6 +171,7 @@ namespace Assets.Demo.Scripts.Multiplayer
       {
         sceneLoadProgress = Mathf.Clamp01(operation.progress / 0.9f);
         detail = $"Scene load {sceneLoadProgress * 100.0f:0}%";
+        UpdateLoadingUi();
         yield return null;
       }
 
@@ -201,6 +191,7 @@ namespace Assets.Demo.Scripts.Multiplayer
 
       status = "Gameplay scene loaded";
       detail = "Preparing terrain...";
+      UpdateLoadingUi();
       LogDiagnosticsSnapshot("Gameplay scene loaded", true);
     }
 
@@ -208,6 +199,7 @@ namespace Assets.Demo.Scripts.Multiplayer
     {
       status = "Finding gameplay systems";
       float start = Time.realtimeSinceStartup;
+      UpdateLoadingUi();
 
       while (world == null)
       {
@@ -218,6 +210,7 @@ namespace Assets.Demo.Scripts.Multiplayer
         }
 
         detail = "Waiting for CubusWorld...";
+        UpdateLoadingUi();
         if (Time.realtimeSinceStartup - start > 10.0f)
         {
           Fail("Timed out waiting for CubusWorld. Confirm CubusGame contains CubusWorld and is in Build Settings.");
@@ -249,6 +242,7 @@ namespace Assets.Demo.Scripts.Multiplayer
         FindRuntimeReferences();
         UpdateTerrainProgressAndDetail();
         TryReleaseSettledStreamedTerrain(start);
+        UpdateLoadingUi();
         LogDiagnosticsSnapshot("Waiting for initial terrain", false);
 
         if (preparationTimeoutSeconds > 0.0f && Time.realtimeSinceStartup - start > preparationTimeoutSeconds)
@@ -261,6 +255,7 @@ namespace Assets.Demo.Scripts.Multiplayer
       }
 
       terrainProgress = 1.0f;
+      UpdateLoadingUi();
     }
 
     private void UpdateTerrainProgressAndDetail()
@@ -438,13 +433,56 @@ namespace Assets.Demo.Scripts.Multiplayer
       return $"{worldSummary}; {streamerSummary}; {networkSummary}";
     }
 
-    private void DrawProgressBar(float value, float height)
+    private void UpdateLoadingUi()
     {
-      Rect progressRect = GUILayoutUtility.GetRect(1.0f, height, GUILayout.ExpandWidth(true));
-      GUI.Box(progressRect, GUIContent.none);
-      Rect fill = progressRect;
-      fill.width *= Mathf.Clamp01(value);
-      GUI.Box(fill, GUIContent.none);
+      if (canvasGroup == null)
+      {
+        return;
+      }
+
+      canvasGroup.alpha = CubusUiInput.ConsoleOpen ? 0.0f : 1.0f;
+      canvasGroup.interactable = !CubusUiInput.ConsoleOpen;
+      canvasGroup.blocksRaycasts = !CubusUiInput.ConsoleOpen;
+
+      float elapsed = Time.realtimeSinceStartup - startedAt;
+      float combinedProgress = GetCombinedProgress();
+
+      if (statusText != null)
+      {
+        statusText.text = status;
+      }
+
+      if (detailText != null)
+      {
+        detailText.text = detail;
+      }
+
+      if (elapsedText != null)
+      {
+        elapsedText.text = $"Elapsed: {elapsed:0.0}s";
+      }
+
+      if (progressText != null)
+      {
+        progressText.text = $"Progress: {combinedProgress * 100.0f:0}%";
+      }
+
+      if (progressFill != null)
+      {
+        progressFill.fillAmount = combinedProgress;
+      }
+
+      if (hintText != null)
+      {
+        hintText.text = failed
+            ? "Loading failed. Check the runtime console."
+            : "Detailed diagnostics are in the runtime console. Press Enter to force release if terrain is visibly ready.";
+      }
+
+      if (forceReleaseButton != null)
+      {
+        forceReleaseButton.interactable = !preparationDone && !failed && !CubusUiInput.ConsoleOpen;
+      }
     }
 
     private float GetCombinedProgress()
@@ -493,7 +531,211 @@ namespace Assets.Demo.Scripts.Multiplayer
       failed = true;
       status = "Loading failed";
       detail = message;
+      UpdateLoadingUi();
       Debug.LogError($"[CubusLoading] {message} {BuildDebugSummary()}");
+    }
+
+    private void RequestForceRelease()
+    {
+      if (preparationDone || failed || CubusUiInput.ConsoleOpen)
+      {
+        return;
+      }
+
+      forceReleaseRequested = true;
+      UpdateLoadingUi();
+    }
+
+    private void BuildLoadingUi()
+    {
+      EnsureEventSystem();
+
+      GameObject canvasObject = new("Cubus Loading Canvas");
+      canvasObject.transform.SetParent(transform, false);
+
+      Canvas canvas = canvasObject.AddComponent<Canvas>();
+      canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+      canvas.overrideSorting = true;
+      canvas.sortingOrder = sortingOrder;
+
+      CanvasScaler scaler = canvasObject.AddComponent<CanvasScaler>();
+      scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+      scaler.referenceResolution = new Vector2(1920.0f, 1080.0f);
+      scaler.matchWidthOrHeight = 0.5f;
+
+      canvasObject.AddComponent<GraphicRaycaster>();
+      RectTransform root = canvasObject.GetComponent<RectTransform>();
+      Stretch(root);
+
+      canvasGroup = canvasObject.AddComponent<CanvasGroup>();
+      canvasGroup.alpha = 1.0f;
+      canvasGroup.interactable = true;
+      canvasGroup.blocksRaycasts = true;
+
+      Image dim = CreateImage(root, "Dim", new Color(0.0f, 0.0f, 0.0f, 0.58f));
+      dim.raycastTarget = true;
+      Stretch(dim.rectTransform);
+
+      GameObject panelObject = new("Loading Panel");
+      panelObject.transform.SetParent(root, false);
+      RectTransform panel = panelObject.AddComponent<RectTransform>();
+      panel.anchorMin = new Vector2(0.5f, 0.5f);
+      panel.anchorMax = new Vector2(0.5f, 0.5f);
+      panel.pivot = new Vector2(0.5f, 0.5f);
+      panel.sizeDelta = panelSize;
+      panel.anchoredPosition = Vector2.zero;
+
+      Image panelImage = panelObject.AddComponent<Image>();
+      panelImage.color = new Color(0.015f, 0.02f, 0.03f, 1.0f);
+      panelImage.raycastTarget = true;
+
+      TMP_Text title = CreateText(panel, "Title", "CUBUS LOADING", 28.0f, FontStyles.Bold, TextAlignmentOptions.Center);
+      RectTransform titleRect = title.rectTransform;
+      titleRect.anchorMin = new Vector2(0.0f, 1.0f);
+      titleRect.anchorMax = new Vector2(1.0f, 1.0f);
+      titleRect.pivot = new Vector2(0.5f, 1.0f);
+      titleRect.anchoredPosition = new Vector2(0.0f, -22.0f);
+      titleRect.sizeDelta = new Vector2(-40.0f, 42.0f);
+
+      statusText = CreateText(panel, "Status", string.Empty, 18.0f, FontStyles.Bold, TextAlignmentOptions.Center);
+      RectTransform statusRect = statusText.rectTransform;
+      statusRect.anchorMin = new Vector2(0.0f, 1.0f);
+      statusRect.anchorMax = new Vector2(1.0f, 1.0f);
+      statusRect.pivot = new Vector2(0.5f, 1.0f);
+      statusRect.anchoredPosition = new Vector2(0.0f, -72.0f);
+      statusRect.sizeDelta = new Vector2(-40.0f, 28.0f);
+
+      detailText = CreateText(panel, "Detail", string.Empty, 15.0f, FontStyles.Normal, TextAlignmentOptions.Center);
+      RectTransform detailRect = detailText.rectTransform;
+      detailRect.anchorMin = new Vector2(0.0f, 1.0f);
+      detailRect.anchorMax = new Vector2(1.0f, 1.0f);
+      detailRect.pivot = new Vector2(0.5f, 1.0f);
+      detailRect.anchoredPosition = new Vector2(0.0f, -104.0f);
+      detailRect.sizeDelta = new Vector2(-40.0f, 34.0f);
+
+      elapsedText = CreateText(panel, "Elapsed", string.Empty, 14.0f, FontStyles.Normal, TextAlignmentOptions.Left);
+      RectTransform elapsedRect = elapsedText.rectTransform;
+      elapsedRect.anchorMin = new Vector2(0.0f, 0.5f);
+      elapsedRect.anchorMax = new Vector2(0.5f, 0.5f);
+      elapsedRect.pivot = new Vector2(0.0f, 0.5f);
+      elapsedRect.anchoredPosition = new Vector2(24.0f, -2.0f);
+      elapsedRect.sizeDelta = new Vector2(-32.0f, 24.0f);
+
+      progressText = CreateText(panel, "Progress Text", string.Empty, 14.0f, FontStyles.Normal, TextAlignmentOptions.Right);
+      RectTransform progressTextRect = progressText.rectTransform;
+      progressTextRect.anchorMin = new Vector2(0.5f, 0.5f);
+      progressTextRect.anchorMax = new Vector2(1.0f, 0.5f);
+      progressTextRect.pivot = new Vector2(1.0f, 0.5f);
+      progressTextRect.anchoredPosition = new Vector2(-24.0f, -2.0f);
+      progressTextRect.sizeDelta = new Vector2(-32.0f, 24.0f);
+
+      Image progressBack = CreateImage(panel, "Progress Back", new Color(0.0f, 0.0f, 0.0f, 1.0f));
+      RectTransform progressBackRect = progressBack.rectTransform;
+      progressBackRect.anchorMin = new Vector2(0.0f, 0.5f);
+      progressBackRect.anchorMax = new Vector2(1.0f, 0.5f);
+      progressBackRect.pivot = new Vector2(0.5f, 0.5f);
+      progressBackRect.anchoredPosition = new Vector2(0.0f, -32.0f);
+      progressBackRect.sizeDelta = new Vector2(-48.0f, 18.0f);
+
+      GameObject fillObject = new("Progress Fill");
+      fillObject.transform.SetParent(progressBackRect, false);
+      progressFill = fillObject.AddComponent<Image>();
+      progressFill.color = new Color(0.20f, 0.75f, 1.0f, 1.0f);
+      progressFill.type = Image.Type.Filled;
+      progressFill.fillMethod = Image.FillMethod.Horizontal;
+      progressFill.fillOrigin = 0;
+      progressFill.fillAmount = 0.0f;
+      Stretch(progressFill.rectTransform);
+
+      forceReleaseButton = CreateButton(panel, "Force Release Button", "Enter Game Now", new Vector2(0.0f, -80.0f));
+      forceReleaseButton.onClick.AddListener(RequestForceRelease);
+
+      hintText = CreateText(panel, "Hint", string.Empty, 12.5f, FontStyles.Normal, TextAlignmentOptions.Center);
+      RectTransform hintRect = hintText.rectTransform;
+      hintRect.anchorMin = new Vector2(0.0f, 0.0f);
+      hintRect.anchorMax = new Vector2(1.0f, 0.0f);
+      hintRect.pivot = new Vector2(0.5f, 0.0f);
+      hintRect.anchoredPosition = new Vector2(0.0f, 16.0f);
+      hintRect.sizeDelta = new Vector2(-40.0f, 30.0f);
+    }
+
+    private static Button CreateButton(RectTransform parent, string name, string label, Vector2 anchoredPosition)
+    {
+      GameObject go = new(name);
+      go.transform.SetParent(parent, false);
+
+      RectTransform rect = go.AddComponent<RectTransform>();
+      rect.anchorMin = new Vector2(0.5f, 0.5f);
+      rect.anchorMax = new Vector2(0.5f, 0.5f);
+      rect.pivot = new Vector2(0.5f, 0.5f);
+      rect.anchoredPosition = anchoredPosition;
+      rect.sizeDelta = new Vector2(190.0f, 36.0f);
+
+      Image image = go.AddComponent<Image>();
+      image.color = new Color(0.08f, 0.15f, 0.22f, 1.0f);
+      image.raycastTarget = true;
+
+      Button button = go.AddComponent<Button>();
+      ColorBlock colors = button.colors;
+      colors.normalColor = new Color(0.08f, 0.15f, 0.22f, 1.0f);
+      colors.highlightedColor = new Color(0.12f, 0.24f, 0.34f, 1.0f);
+      colors.pressedColor = new Color(0.04f, 0.10f, 0.16f, 1.0f);
+      colors.selectedColor = colors.highlightedColor;
+      colors.disabledColor = new Color(0.04f, 0.05f, 0.06f, 0.55f);
+      button.colors = colors;
+
+      TMP_Text text = CreateText(rect, "Label", label, 16.0f, FontStyles.Bold, TextAlignmentOptions.Center);
+      Stretch(text.rectTransform);
+
+      return button;
+    }
+
+    private static Image CreateImage(RectTransform parent, string name, Color color)
+    {
+      GameObject go = new(name);
+      go.transform.SetParent(parent, false);
+      Image image = go.AddComponent<Image>();
+      image.color = color;
+      return image;
+    }
+
+    private static TMP_Text CreateText(RectTransform parent, string name, string value, float size, FontStyles style, TextAlignmentOptions alignment)
+    {
+      GameObject go = new(name);
+      go.transform.SetParent(parent, false);
+      TextMeshProUGUI text = go.AddComponent<TextMeshProUGUI>();
+      text.text = value;
+      text.fontSize = size;
+      text.fontStyle = style;
+      text.alignment = alignment;
+      text.color = new Color(0.88f, 0.95f, 1.0f, 1.0f);
+      text.raycastTarget = false;
+      return text;
+    }
+
+    private static void Stretch(RectTransform rect)
+    {
+      rect.anchorMin = Vector2.zero;
+      rect.anchorMax = Vector2.one;
+      rect.pivot = new Vector2(0.5f, 0.5f);
+      rect.anchoredPosition = Vector2.zero;
+      rect.sizeDelta = Vector2.zero;
+      rect.offsetMin = Vector2.zero;
+      rect.offsetMax = Vector2.zero;
+      rect.localScale = Vector3.one;
+    }
+
+    private static void EnsureEventSystem()
+    {
+      if (EventSystem.current != null || FindAnyObjectByType<EventSystem>() != null)
+      {
+        return;
+      }
+
+      GameObject go = new("EventSystem");
+      go.AddComponent<EventSystem>();
+      go.AddComponent<StandaloneInputModule>();
+      DontDestroyOnLoad(go);
     }
 
     private static bool TryFindSceneInBuildSettings(string requestedSceneName, out string scenePath)
