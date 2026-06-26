@@ -54,12 +54,18 @@ namespace Assets.Demo.Scripts.Player
     {
       BindSourceConsole();
       BuildCanvas();
-      SetVisible(false, false);
+      SetVisible(false, true);
+    }
+
+    private void Start()
+    {
+      SetVisible(false, true);
     }
 
     private void Update()
     {
       BindSourceConsole();
+      SuppressSourceConsole();
       KeepCanvasTopmost();
       UpdateToggleInput();
 
@@ -68,7 +74,6 @@ namespace Assets.Demo.Scripts.Player
         return;
       }
 
-      SuppressSourceConsole();
       UpdateSubmitInput();
       RenderLogFromSource();
       FocusInput();
