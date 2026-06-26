@@ -31,6 +31,7 @@ namespace SpacetimeDB.Types
             AddTable(Player = new(conn));
             AddTable(VoxelEdit = new(conn));
             AddTable(WorldChunk = new(conn));
+            AddTable(WorldState = new(conn));
         }
     }
 
@@ -531,6 +532,7 @@ namespace SpacetimeDB.Types
             new QueryBuilder().From.Player().ToSql(),
             new QueryBuilder().From.VoxelEdit().ToSql(),
             new QueryBuilder().From.WorldChunk().ToSql(),
+            new QueryBuilder().From.WorldState().ToSql(),
         }
         ;
     }
@@ -541,6 +543,7 @@ namespace SpacetimeDB.Types
         public global::SpacetimeDB.Table<Player, PlayerCols, PlayerIxCols> Player() => new("player", new PlayerCols("player"), new PlayerIxCols("player"));
         public global::SpacetimeDB.Table<VoxelEdit, VoxelEditCols, VoxelEditIxCols> VoxelEdit() => new("voxel_edit", new VoxelEditCols("voxel_edit"), new VoxelEditIxCols("voxel_edit"));
         public global::SpacetimeDB.Table<WorldChunk, WorldChunkCols, WorldChunkIxCols> WorldChunk() => new("world_chunk", new WorldChunkCols("world_chunk"), new WorldChunkIxCols("world_chunk"));
+        public global::SpacetimeDB.Table<WorldState, WorldStateCols, WorldStateIxCols> WorldState() => new("world_state", new WorldStateCols("world_state"), new WorldStateIxCols("world_state"));
     }
 
     public sealed class TypedSubscriptionBuilder
@@ -623,9 +626,12 @@ namespace SpacetimeDB.Types
             return reducer switch
             {
                 Reducer.ClearWorld args => Reducers.InvokeClearWorld(eventContext, args),
+                Reducer.DeleteWorldInstance args => Reducers.InvokeDeleteWorldInstance(eventContext, args),
                 Reducer.EditBlock args => Reducers.InvokeEditBlock(eventContext, args),
+                Reducer.ResetWorldState args => Reducers.InvokeResetWorldState(eventContext, args),
                 Reducer.SendChat args => Reducers.InvokeSendChat(eventContext, args),
                 Reducer.SetPlayerName args => Reducers.InvokeSetPlayerName(eventContext, args),
+                Reducer.SetWorldState args => Reducers.InvokeSetWorldState(eventContext, args),
                 Reducer.UpdatePlayerTransform args => Reducers.InvokeUpdatePlayerTransform(eventContext, args),
                 Reducer.UploadChunk args => Reducers.InvokeUploadChunk(eventContext, args),
                 _ => throw new ArgumentOutOfRangeException("Reducer", $"Unknown reducer {reducer}")
