@@ -18,10 +18,10 @@ namespace Assets.Demo.Scripts.Multiplayer
   {
     [SerializeField] private string gameplaySceneName = "CubusGame";
     [SerializeField] private string launcherSceneName = "CubusLauncher";
-    [SerializeField] private Vector2 panelSize = new(760.0f, 520.0f);
+    [SerializeField] private Vector2 panelSize = new(760.0f, 560.0f);
     [SerializeField] private float readyHoldSeconds = 0.35f;
     [SerializeField] private float preparationTimeoutSeconds = 180.0f;
-    [SerializeField] private float settledTerrainFallbackSeconds = 1.0f;
+    [SerializeField] private float settledTerrainFallbackSeconds = 2.0f;
     [SerializeField] private float fallbackSpawnClearance = 2.0f;
     [SerializeField] private bool unloadLoadingSceneWhenReady = true;
 
@@ -35,6 +35,7 @@ namespace Assets.Demo.Scripts.Multiplayer
     private bool sceneLoadDone;
     private bool preparationDone;
     private bool failed;
+    private bool forceReleaseRequested;
 
     private CubusWorld world;
     private WorldStreamer streamer;
@@ -46,6 +47,14 @@ namespace Assets.Demo.Scripts.Multiplayer
       Cursor.lockState = CursorLockMode.None;
       Cursor.visible = true;
       DontDestroyOnLoad(gameObject);
+    }
+
+    private void Update()
+    {
+      if (!preparationDone && !failed && Input.GetKeyDown(KeyCode.Return))
+      {
+        forceReleaseRequested = true;
+      }
     }
 
     private IEnumerator Start()
@@ -143,6 +152,13 @@ namespace Assets.Demo.Scripts.Multiplayer
       GUILayout.Space(10.0f);
       DrawNetworkDiagnostics();
 
+      GUILayout.Space(10.0f);
+      if (!preparationDone && !failed && GUILayout.Button("Enter Game Now", GUILayout.Height(30.0f)))
+      {
+        forceReleaseRequested = true;
+      }
+      GUILayout.Label("Press Enter or click Enter Game Now to force release if terrain is visibly ready.");
+
       if (failed)
       {
         GUILayout.Space(10.0f);
@@ -236,7 +252,7 @@ namespace Assets.Demo.Scripts.Multiplayer
       {
         FindRuntimeReferences();
         UpdateTerrainProgressAndDetail();
-        TryReleaseSettledStreamedTerrain();
+        TryReleaseSettledStreamedTerrain(start);
 
         if (preparationTimeoutSeconds > 0.0f && Time.realtimeSinceStartup - start > preparationTimeoutSeconds)
         {
@@ -295,9 +311,21 @@ namespace Assets.Demo.Scripts.Multiplayer
       detail = $"Desired={desired:0}, Applied={applied:0}, Pending={pending:0}, Active={active:0}, WorldStatus={world.GenerationStatus}";
     }
 
-    private void TryReleaseSettledStreamedTerrain()
+    private void TryReleaseSettledStreamedTerrain(float waitStartedAt)
     {
-      if (world == null || world.IsInitialTerrainReady || streamer == null)
+      if (world == null || world.IsInitialTerrainReady)
+      {
+        settledTerrainFallbackStartedAt = -1.0f;
+        return;
+      }
+
+      if (forceReleaseRequested)
+      {
+        ForceBroadcastInitialTerrainReady("manual force release");
+        return;
+      }
+
+      if (!world.IsWorldReady || streamer == null)
       {
         settledTerrainFallbackStartedAt = -1.0f;
         return;
@@ -308,15 +336,16 @@ namespace Assets.Demo.Scripts.Multiplayer
       float applied = Mathf.Max(streamer.TotalBlockMeshApplies, streamer.TotalDensityMeshApplies);
       float active = streamer.ActiveChunkLoadTaskCount + streamer.ActiveBlockBuildTaskCount + streamer.ActiveDensityBuildTaskCount;
       float requiredApplied = Mathf.Max(1.0f, desired - streamer.KnownEmptyChunkCount);
+      float elapsed = Time.realtimeSinceStartup - waitStartedAt;
 
-      bool streamedEnoughTerrain =
-          desired > 0.0f &&
-          loaded >= desired &&
-          applied >= requiredApplied &&
-          streamer.PendingLoadCount == 0 &&
-          active <= 0.0f;
+      bool hasUsefulTerrain = applied > 0.0f || loaded > 0.0f;
+      bool workersSettled = active <= 0.0f;
+      bool loadsSettled = streamer.PendingLoadCount == 0;
+      bool enoughChunksApplied = desired <= 0.0f || applied >= Mathf.Min(requiredApplied, desired);
+      bool longEnoughToTrustVisibleTerrain = elapsed >= 5.0f && hasUsefulTerrain && workersSettled && loadsSettled;
+      bool fullySettled = hasUsefulTerrain && workersSettled && loadsSettled && enoughChunksApplied;
 
-      if (!streamedEnoughTerrain)
+      if (!fullySettled && !longEnoughToTrustVisibleTerrain)
       {
         settledTerrainFallbackStartedAt = -1.0f;
         return;
@@ -325,7 +354,9 @@ namespace Assets.Demo.Scripts.Multiplayer
       if (settledTerrainFallbackStartedAt < 0.0f)
       {
         settledTerrainFallbackStartedAt = Time.realtimeSinceStartup;
-        detail = "Terrain is settled; waiting briefly before releasing player.";
+        detail = fullySettled
+            ? "Terrain has settled; releasing player shortly."
+            : "Terrain appears ready but streamer did not broadcast; releasing shortly.";
         return;
       }
 
@@ -334,21 +365,32 @@ namespace Assets.Demo.Scripts.Multiplayer
         return;
       }
 
+      ForceBroadcastInitialTerrainReady(fullySettled ? "settled streamer fallback" : "visible terrain fallback");
+    }
+
+    private void ForceBroadcastInitialTerrainReady(string reason)
+    {
+      if (world == null || world.IsInitialTerrainReady)
+      {
+        return;
+      }
+
       Vector3 spawn = CalculateFallbackSpawnLocation();
-      Debug.Log($"[CubusLoading] Releasing initial terrain after settled streamer fallback. Spawn={spawn}, Desired={desired}, Loaded={loaded}, Applied={applied}, KnownEmpty={streamer.KnownEmptyChunkCount}.");
+      Debug.Log($"[CubusLoading] Releasing initial terrain via {reason}. Spawn={spawn}, Streamer={(streamer != null ? streamer.name : "none")}.");
       world.BroadcastInitialTerrainReady(spawn);
+      forceReleaseRequested = false;
     }
 
     private Vector3 CalculateFallbackSpawnLocation()
     {
-      if (world == null || world.Settings == null || streamer == null)
+      if (world == null || world.Settings == null)
       {
         return Vector3.zero;
       }
 
       float voxelSize = Mathf.Max(0.0001f, world.Settings.VoxelSize);
       float densityScale = Mathf.Max(0.001f, world.Settings.DensitySampleScale);
-      Vector3Int spawnChunkCoord = streamer.SpawnTargetChunkCoord;
+      Vector3Int spawnChunkCoord = streamer != null ? streamer.SpawnTargetChunkCoord : Vector3Int.zero;
 
       float localVoxelX = spawnChunkCoord.x * VoxelConstants.ChunkSize + VoxelConstants.ChunkSize * 0.5f;
       float localVoxelZ = spawnChunkCoord.z * VoxelConstants.ChunkSize + VoxelConstants.ChunkSize * 0.5f;
