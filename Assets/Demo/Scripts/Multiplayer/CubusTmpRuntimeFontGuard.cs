@@ -10,7 +10,6 @@ namespace Assets.Demo.Scripts.Multiplayer
   public sealed class CubusTmpRuntimeFontGuard : MonoBehaviour
   {
     private static TMP_FontAsset runtimeFontAsset;
-    private static bool attemptedResolve;
     private static bool loggedMissingFont;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
@@ -43,13 +42,6 @@ namespace Assets.Demo.Scripts.Multiplayer
         return runtimeFontAsset;
       }
 
-      if (attemptedResolve)
-      {
-        return null;
-      }
-
-      attemptedResolve = true;
-
       runtimeFontAsset = TMP_Settings.defaultFontAsset;
       if (runtimeFontAsset != null)
       {
@@ -69,6 +61,12 @@ namespace Assets.Demo.Scripts.Multiplayer
       }
 
 #if UNITY_EDITOR
+      runtimeFontAsset = AssetDatabase.LoadAssetAtPath<TMP_FontAsset>("Assets/TextMesh Pro/Resources/Fonts & Materials/LiberationSans SDF.asset");
+      if (runtimeFontAsset != null)
+      {
+        return runtimeFontAsset;
+      }
+
       runtimeFontAsset = AssetDatabase.LoadAssetAtPath<TMP_FontAsset>("Packages/com.unity.textmeshpro/Package Resources/TMP Essential Resources/Fonts & Materials/LiberationSans SDF.asset");
       if (runtimeFontAsset != null)
       {
@@ -79,7 +77,7 @@ namespace Assets.Demo.Scripts.Multiplayer
       if (!loggedMissingFont)
       {
         loggedMissingFont = true;
-        Debug.LogWarning("[CubusUI] No TMP font asset was found. Import TMP Essential Resources or assign a default TMP font asset in Project Settings > TextMeshPro.");
+        Debug.LogWarning("[CubusUI] No TMP font asset was found yet. Generated TMP text will keep retrying until TMP_Settings.defaultFontAsset is available.");
       }
 
       return null;
@@ -87,12 +85,6 @@ namespace Assets.Demo.Scripts.Multiplayer
 
     public static void ApplyFonts()
     {
-      TMP_FontAsset fontAsset = GetRuntimeFontAsset();
-      if (fontAsset == null)
-      {
-        return;
-      }
-
       TMP_Text[] texts = FindObjectsByType<TMP_Text>(FindObjectsInactive.Include, FindObjectsSortMode.None);
       for (int i = 0; i < texts.Length; i++)
       {
@@ -110,6 +102,7 @@ namespace Assets.Demo.Scripts.Multiplayer
       TMP_FontAsset fontAsset = GetRuntimeFontAsset();
       if (fontAsset == null)
       {
+        text.enabled = true;
         return;
       }
 
