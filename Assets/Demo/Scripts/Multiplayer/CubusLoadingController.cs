@@ -267,14 +267,14 @@ namespace Assets.Demo.Scripts.Multiplayer
         return;
       }
 
-      int desired = Mathf.Max(0, streamer.DesiredChunkCount);
-      int applied = Mathf.Max(streamer.TotalBlockMeshApplies, streamer.TotalDensityMeshApplies);
-      int pending = streamer.PendingLoadCount + streamer.PendingRenderCount;
-      int active = streamer.ActiveChunkLoadTaskCount + streamer.ActiveBlockBuildTaskCount + streamer.ActiveDensityBuildTaskCount;
+      float desired = Mathf.Max(0.0f, streamer.DesiredChunkCount);
+      float applied = Mathf.Max(streamer.TotalBlockMeshApplies, streamer.TotalDensityMeshApplies);
+      float pending = streamer.PendingLoadCount + streamer.PendingRenderCount;
+      float active = streamer.ActiveChunkLoadTaskCount + streamer.ActiveBlockBuildTaskCount + streamer.ActiveDensityBuildTaskCount;
 
-      if (desired > 0)
+      if (desired > 0.0f)
       {
-        terrainProgress = Mathf.Clamp01((float)applied / desired);
+        terrainProgress = Mathf.Clamp01(applied / desired);
       }
       else if (world.IsGeneratingWorld)
       {
@@ -285,7 +285,7 @@ namespace Assets.Demo.Scripts.Multiplayer
         terrainProgress = 0.05f;
       }
 
-      detail = $"Desired={desired}, Applied={applied}, Pending={pending}, Active={active}, WorldStatus={world.GenerationStatus}";
+      detail = $"Desired={desired:0}, Applied={applied:0}, Pending={pending:0}, Active={active:0}, WorldStatus={world.GenerationStatus}";
     }
 
     private void DrawWorldDiagnostics()
