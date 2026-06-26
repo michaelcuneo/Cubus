@@ -38,6 +38,7 @@ namespace Assets.Demo.Scripts.Multiplayer
     private bool preparationDone;
     private bool failed;
     private bool forceReleaseRequested;
+    private Scene loadingScene;
 
     private CubusWorld world;
     private WorldStreamer streamer;
@@ -46,6 +47,7 @@ namespace Assets.Demo.Scripts.Multiplayer
     private void Awake()
     {
       startedAt = Time.realtimeSinceStartup;
+      loadingScene = gameObject.scene;
       Cursor.lockState = CursorLockMode.None;
       Cursor.visible = true;
       DontDestroyOnLoad(gameObject);
@@ -109,14 +111,15 @@ namespace Assets.Demo.Scripts.Multiplayer
 
       Cursor.lockState = CursorLockMode.Locked;
       Cursor.visible = false;
+      CubusSceneBackdrop.RemoveAllBackdrops();
 
       if (unloadLoadingSceneWhenReady)
       {
-        Scene loadingScene = gameObject.scene;
+        Scene sceneToUnload = loadingScene;
         Destroy(gameObject);
-        if (loadingScene.IsValid() && loadingScene.isLoaded)
+        if (sceneToUnload.IsValid() && sceneToUnload.isLoaded)
         {
-          SceneManager.UnloadSceneAsync(loadingScene);
+          SceneManager.UnloadSceneAsync(sceneToUnload);
         }
       }
     }
