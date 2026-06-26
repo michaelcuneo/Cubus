@@ -1,3 +1,4 @@
+using System.Collections;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Persistence;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming;
@@ -15,6 +16,7 @@ namespace Assets.Demo.Scripts.Multiplayer
     [SerializeField] private CubusNetworkManager network;
     [SerializeField] private bool requireLauncherSelection = true;
     [SerializeField] private string launcherSceneName = "CubusLauncher";
+    [SerializeField] private float connectedWorldReadyTimeoutSeconds = 30.0f;
 
     private void Awake()
     {
@@ -22,7 +24,7 @@ namespace Assets.Demo.Scripts.Multiplayer
       FindReferences();
     }
 
-    private void Start()
+    private IEnumerator Start()
     {
       if (!CubusGameLaunchContext.HasLaunch)
       {
@@ -40,18 +42,21 @@ namespace Assets.Demo.Scripts.Multiplayer
           }
         }
 
-        return;
+        yield break;
       }
 
-      ApplyLaunchSettingsToWorld();
+      if (!ApplyLaunchSettingsToWorld())
+      {
+        yield break;
+      }
 
       if (CubusGameLaunchContext.Mode == CubusGameLaunchMode.Local)
       {
-        StartLocalWorld();
+        yield return PrepareLocalWorldThenSpawn();
       }
       else if (CubusGameLaunchContext.Mode == CubusGameLaunchMode.Connected)
       {
-        StartConnectedWorld();
+        yield return PrepareConnectedWorldThenSpawn();
       }
       else
       {
@@ -59,12 +64,12 @@ namespace Assets.Demo.Scripts.Multiplayer
       }
     }
 
-    private void ApplyLaunchSettingsToWorld()
+    private bool ApplyLaunchSettingsToWorld()
     {
       if (world == null || world.Settings == null)
       {
         Debug.LogError("[CubusLaunch] No CubusWorld found in gameplay scene.");
-        return;
+        return false;
       }
 
       WorldSettings settings = world.Settings;
@@ -84,39 +89,57 @@ namespace Assets.Demo.Scripts.Multiplayer
       {
         network.WorldId = CubusGameLaunchContext.WorldId;
       }
+
+      return true;
     }
 
-    private void StartLocalWorld()
+    private IEnumerator PrepareLocalWorldThenSpawn()
     {
       network?.Disconnect();
       storage?.DeleteWorldDatabase();
 
       if (world == null)
       {
-        return;
+        yield break;
       }
 
       world.ClearWorldAndOverrides();
+
       WorldStreamer streamer = world.GetComponent<WorldStreamer>();
-      if (streamer == null)
+      if (streamer != null)
       {
-        world.GenerateWorld();
+        Debug.Log($"[CubusLaunch] Preparing local streamed world '{CubusGameLaunchContext.WorldId}' before spawning.");
+        streamer.ClearStreamingState();
+        streamer.RegenerateStreamedWorld();
+        yield return WaitForInitialTerrainReady("local streamed world", 0.0f);
+      }
+      else
+      {
+        Debug.Log($"[CubusLaunch] Generating local world '{CubusGameLaunchContext.WorldId}' before spawning.");
+        yield return world.GenerateWorldAsync();
+        world.BroadcastInitialTerrainReady(Vector3.zero);
       }
 
-      Debug.Log($"[CubusLaunch] Started local world '{CubusGameLaunchContext.WorldId}'.");
+      Debug.Log($"[CubusLaunch] Local world '{CubusGameLaunchContext.WorldId}' is ready. Player spawn released.");
     }
 
-    private void StartConnectedWorld()
+    private IEnumerator PrepareConnectedWorldThenSpawn()
     {
       if (network == null)
       {
         Debug.LogError("[CubusLaunch] No CubusNetworkManager found in gameplay scene.");
-        return;
+        yield break;
       }
 
       if (network.IsConnected || network.Conn != null)
       {
         network.Disconnect();
+      }
+
+      WorldStreamer streamer = world != null ? world.GetComponent<WorldStreamer>() : null;
+      if (streamer != null)
+      {
+        streamer.ClearStreamingState();
       }
 
       network.ConfigureServer(
@@ -126,7 +149,28 @@ namespace Assets.Demo.Scripts.Multiplayer
 
       network.Connect();
 
-      Debug.Log($"[CubusLaunch] Connecting to {CubusGameLaunchContext.ServerUri} / {CubusGameLaunchContext.ModuleName} / {CubusGameLaunchContext.WorldId}.");
+      Debug.Log($"[CubusLaunch] Connecting to {CubusGameLaunchContext.ServerUri} / {CubusGameLaunchContext.ModuleName} / {CubusGameLaunchContext.WorldId}. Waiting for authoritative terrain before spawning.");
+      yield return WaitForInitialTerrainReady("connected world", connectedWorldReadyTimeoutSeconds);
+    }
+
+    private IEnumerator WaitForInitialTerrainReady(string label, float timeoutSeconds)
+    {
+      if (world == null)
+      {
+        yield break;
+      }
+
+      float startTime = Time.realtimeSinceStartup;
+      while (!world.IsInitialTerrainReady)
+      {
+        if (timeoutSeconds > 0.0f && Time.realtimeSinceStartup - startTime > timeoutSeconds)
+        {
+          Debug.LogWarning($"[CubusLaunch] Timed out waiting for {label} terrain. Player remains gated until CubusWorld broadcasts initial terrain ready.");
+          yield break;
+        }
+
+        yield return null;
+      }
     }
 
     private void FindReferences()
