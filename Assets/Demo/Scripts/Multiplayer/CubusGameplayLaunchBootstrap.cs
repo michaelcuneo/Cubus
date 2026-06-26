@@ -26,6 +26,7 @@ namespace Assets.Demo.Scripts.Multiplayer
     private float loadingStartedAt;
     private bool isPreparingWorld;
     private bool hasFinishedPreparation;
+    private bool disabledStreamerAutoStartForLaunch;
     private WorldStreamer cachedStreamer;
 
     private void Awake()
@@ -34,6 +35,7 @@ namespace Assets.Demo.Scripts.Multiplayer
       CubusWorld.SuppressGenerateOnStart = true;
       loadingStartedAt = Time.realtimeSinceStartup;
       FindReferences();
+      DisableStreamerAutoStartForLaunch();
     }
 
     private IEnumerator Start()
@@ -69,6 +71,9 @@ namespace Assets.Demo.Scripts.Multiplayer
         yield break;
       }
 
+      // Give CubusGame one visible frame before starting terrain preparation. This
+      // lets the diagnostics overlay appear immediately after scene activation
+      // instead of showing only the launcher scene-load progress.
       yield return null;
 
       if (CubusGameLaunchContext.Mode == CubusGameLaunchMode.Local)
@@ -156,7 +161,7 @@ namespace Assets.Demo.Scripts.Multiplayer
         return;
       }
 
-      GUILayout.Label($"Enabled: {streamer.enabled} | InitialStage: {streamer.IsInitialStreamingStageActive} | BroadcastReady: {streamer.HasBroadcastInitialTerrainReady}");
+      GUILayout.Label($"Enabled: {streamer.enabled} | HeldByBootstrap: {disabledStreamerAutoStartForLaunch} | InitialStage: {streamer.IsInitialStreamingStageActive} | BroadcastReady: {streamer.HasBroadcastInitialTerrainReady}");
       GUILayout.Label($"ViewerChunk: {(streamer.HasLastViewerChunkCoord ? streamer.LastViewerChunkCoord.ToString() : "none")} | SpawnTargetChunk: {streamer.SpawnTargetChunkCoord}");
       GUILayout.Label($"Desired: {streamer.DesiredChunkCount} | Keep: {streamer.KeepChunkCount} | KnownEmpty: {streamer.KnownEmptyChunkCount}");
       GUILayout.Label($"PendingLoad: {streamer.PendingLoadCount} | PendingRender: {streamer.PendingRenderCount} | PendingUnload: {streamer.PendingUnloadCount}");
@@ -208,9 +213,8 @@ namespace Assets.Demo.Scripts.Multiplayer
 
     private IEnumerator PrepareLocalWorldThenSpawn()
     {
-      SetStage("Preparing local world", "Disconnecting network and clearing local world state.");
+      SetStage("Preparing local world", "Disconnecting network and clearing local runtime state.");
       network?.Disconnect();
-      storage?.DeleteWorldDatabase();
 
       if (world == null)
       {
@@ -222,8 +226,9 @@ namespace Assets.Demo.Scripts.Multiplayer
       WorldStreamer streamer = GetStreamer();
       if (streamer != null)
       {
-        SetStage("Prewarming streamed terrain", "Clearing streaming queues and starting initial spawn-area terrain generation.");
+        SetStage("Prewarming streamed terrain", "Starting the WorldStreamer under launcher control.");
         Debug.Log($"[CubusLaunch] Preparing local streamed world '{CubusGameLaunchContext.WorldId}' before spawning.");
+        yield return EnableStreamerForBootstrap(streamer);
         streamer.ClearStreamingState();
         streamer.RegenerateStreamedWorld();
         yield return WaitForInitialTerrainReady("local streamed world", 0.0f);
@@ -249,7 +254,7 @@ namespace Assets.Demo.Scripts.Multiplayer
         yield break;
       }
 
-      SetStage("Preparing connected world", "Disconnecting any stale connection and clearing streamer state.");
+      SetStage("Preparing connected world", "Disconnecting any stale connection and starting the streamer under launcher control.");
 
       if (network.IsConnected || network.Conn != null)
       {
@@ -259,6 +264,7 @@ namespace Assets.Demo.Scripts.Multiplayer
       WorldStreamer streamer = GetStreamer();
       if (streamer != null)
       {
+        yield return EnableStreamerForBootstrap(streamer);
         streamer.ClearStreamingState();
       }
 
@@ -302,6 +308,34 @@ namespace Assets.Demo.Scripts.Multiplayer
           yield break;
         }
 
+        yield return null;
+      }
+    }
+
+    private void DisableStreamerAutoStartForLaunch()
+    {
+      WorldStreamer streamer = GetStreamer();
+      if (streamer == null || !streamer.enabled)
+      {
+        return;
+      }
+
+      streamer.enabled = false;
+      disabledStreamerAutoStartForLaunch = true;
+      Debug.Log("[CubusLaunch] WorldStreamer disabled before Start so launcher bootstrap can control terrain preparation.");
+    }
+
+    private IEnumerator EnableStreamerForBootstrap(WorldStreamer streamer)
+    {
+      if (streamer == null)
+      {
+        yield break;
+      }
+
+      if (!streamer.enabled)
+      {
+        disabledStreamerAutoStartForLaunch = false;
+        streamer.enabled = true;
         yield return null;
       }
     }
