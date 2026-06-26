@@ -25,7 +25,8 @@ namespace Assets.Demo.Scripts.Multiplayer
     [Tooltip("Subscribe to the authoritative world_chunk table. Off by default: a blanket subscription downloads every stored chunk at once, which does not scale (use a near-player subscription before enabling).")]
     [SerializeField] private bool subscribeToWorldChunks = false;
 
-    [SerializeField] private bool connectOnStart = true;
+    [Tooltip("Leave this off for launcher-driven gameplay. The CubusLauncher/CubusGameplayLaunchBootstrap decides whether Local mode disconnects or Connected mode calls Connect().")]
+    [SerializeField] private bool connectOnStart = false;
     [SerializeField] private bool verboseLogging = true;
 
     [Tooltip("Automatically attach the in-game chat overlay (CubusChatUI) to this object on startup.")]
@@ -120,181 +121,66 @@ namespace Assets.Demo.Scripts.Multiplayer
     {
       if (Conn != null)
       {
-        Debug.LogWarning("[CubusNetwork] Connect skipped because Conn is already non-null.");
+        Debug.LogWarning("[CubusNetwork] Already connected/connecting.");
         return;
       }
 
-      string token = AuthToken.Token;
+      hasRetriedWithFreshToken = false;
+      ConnectInternal();
+    }
 
-      Debug.Log(
-          $"[CubusNetwork] Connecting. Uri='{serverUri}' Module='{moduleName}' HasToken={!string.IsNullOrWhiteSpace(token)} TokenLength={(token == null ? 0 : token.Length)}"
-      );
+    private void ConnectInternal()
+    {
+      string authToken = AuthTokenStore.LoadToken();
 
-      try
+      if (verboseLogging)
       {
-        Conn = DbConnection.Builder()
-            .WithUri(serverUri)
-            .WithDatabaseName(moduleName)
-            .WithToken(token)
-            .OnConnect(HandleConnect)
-            .OnConnectError(HandleConnectError)
-            .OnDisconnect(HandleDisconnect)
-            .Build();
+        Debug.Log($"[CubusNetwork] Connecting to {serverUri} / {moduleName} as world '{WorldId}'...");
       }
-      catch (Exception ex)
+
+      DbConnection.Builder builder = DbConnection.Builder()
+          .WithUri(serverUri)
+          .WithModuleName(moduleName)
+          .OnConnect(HandleConnected)
+          .OnConnectError(HandleConnectError)
+          .OnDisconnect(HandleDisconnected);
+
+      if (!string.IsNullOrWhiteSpace(authToken))
       {
-        Debug.LogError($"[CubusNetwork] Failed to start connection: {ex}");
-        Conn = null;
+        builder = builder.WithToken(authToken);
       }
+
+      Conn = builder.Build();
     }
 
     public void Disconnect()
     {
-      try
+      if (Conn == null && !IsConnected)
       {
-        Conn?.Disconnect();
+        return;
       }
-      catch
-      {
-        // Ignore disconnect failures during manual disconnect.
-      }
-      finally
-      {
-        Conn = null;
-        IsConnected = false;
-        IsSubscriptionApplied = false;
-        LocalIdentity = default;
-        Disconnected?.Invoke();
-      }
-    }
-
-    private void HandleConnect(DbConnection conn, Identity identity, string authToken)
-    {
-      if (!string.IsNullOrWhiteSpace(authToken))
-      {
-        AuthToken.SaveToken(authToken);
-      }
-
-      hasRetriedWithFreshToken = false;
-      LocalIdentity = identity;
-      IsConnected = true;
-
-      if (verboseLogging)
-      {
-        Debug.Log($"[CubusNetwork] Connected as {identity}.");
-      }
-
-      Connected?.Invoke(conn, identity);
-
-      var builder = conn.SubscriptionBuilder()
-          .OnApplied(HandleSubscriptionApplied)
-          .OnError(HandleSubscriptionError);
-
-      // Never use SubscribeToAllTables(): it pulls the entire world_chunk table,
-      // whose binary payloads can exceed the SDK's decode buffer and crash the
-      // client ("Stream was too long"). Always subscribe to scoped queries and
-      // only include world_chunk when explicitly opted in.
-      var queries = new List<string>
-      {
-        "SELECT * FROM player",
-        "SELECT * FROM chat_message",
-        $"SELECT * FROM world_state WHERE WorldId = '{WorldId}'",
-        $"SELECT * FROM voxel_edit WHERE WorldId = '{WorldId}'",
-      };
-
-      if (subscribeToWorldChunks)
-      {
-        queries.Add($"SELECT * FROM world_chunk WHERE WorldId = '{WorldId}'");
-      }
-
-      builder.Subscribe(queries.ToArray());
-    }
-
-    private void HandleSubscriptionApplied(SubscriptionEventContext ctx)
-    {
-      IsSubscriptionApplied = true;
-      if (verboseLogging)
-      {
-        Debug.Log("[CubusNetwork] Subscription applied.");
-      }
-      SubscriptionApplied?.Invoke(Conn);
-    }
-
-    private void HandleSubscriptionError(ErrorContext ctx, Exception ex)
-    {
-      Debug.LogError($"[CubusNetwork] Subscription error: {ex.Message}");
-    }
-
-    private void HandleConnectError(Exception ex)
-    {
-      Debug.LogError($"[CubusNetwork] Connection error: {ex}");
-      IsConnected = false;
-      IsSubscriptionApplied = false;
 
       try
       {
         Conn?.Disconnect();
       }
-      catch
+      catch (Exception ex)
       {
-        // Ignore cleanup failures after a failed connect.
-      }
-
-      Conn = null;
-    }
-
-    private void HandleDisconnect(DbConnection conn, Exception ex)
-    {
-      IsConnected = false;
-      IsSubscriptionApplied = false;
-      if (ex != null)
-      {
-        Debug.LogWarning($"[CubusNetwork] Disconnected: {ex.Message}");
-      }
-      Disconnected?.Invoke();
-    }
-
-    public void RunOnMainThread(Action action)
-    {
-      if (action != null)
-      {
-        mainThreadActions.Enqueue(action);
-      }
-    }
-
-    public void ClearSavedIdentityAndReconnect()
-    {
-      try
-      {
-        Conn?.Disconnect();
-      }
-      catch
-      {
-        // Ignore disconnect failures during manual auth reset.
+        Debug.LogWarning($"[CubusNetwork] Disconnect threw: {ex.Message}");
       }
 
       Conn = null;
       IsConnected = false;
       IsSubscriptionApplied = false;
       LocalIdentity = default;
-      hasRetriedWithFreshToken = false;
-
-      AuthToken.SaveToken(string.Empty);
-      Connect();
+      mainThreadActions.Enqueue(() => Disconnected?.Invoke());
     }
 
     private void Update()
     {
       while (mainThreadActions.TryDequeue(out Action action))
       {
-        try
-        {
-          action();
-        }
-        catch (Exception ex)
-        {
-          Debug.LogError($"[CubusNetwork] Main-thread action failed: {ex}");
-        }
+        action?.Invoke();
       }
 
       Conn?.FrameTick();
@@ -307,18 +193,104 @@ namespace Assets.Demo.Scripts.Multiplayer
         Instance = null;
       }
 
-      try
+      Disconnect();
+    }
+
+    private void HandleConnected(DbConnection conn, Identity identity, string token)
+    {
+      if (!string.IsNullOrWhiteSpace(token))
       {
-        Conn?.Disconnect();
+        AuthTokenStore.SaveToken(token);
       }
-      catch
+
+      mainThreadActions.Enqueue(() =>
       {
-        // Ignore disconnect failures during teardown.
-      }
-      finally
+        IsConnected = true;
+        LocalIdentity = identity;
+
+        if (verboseLogging)
+        {
+          Debug.Log($"[CubusNetwork] Connected as {identity}.");
+        }
+
+        Connected?.Invoke(conn, identity);
+        Subscribe(conn);
+      });
+    }
+
+    private void HandleConnectError(Exception error)
+    {
+      mainThreadActions.Enqueue(() =>
       {
+        Debug.LogError($"[CubusNetwork] Connection failed: {error.Message}");
+
         Conn = null;
+        IsConnected = false;
+        IsSubscriptionApplied = false;
+        LocalIdentity = default;
+
+        if (retryFreshIdentityOnConnectError && !hasRetriedWithFreshToken)
+        {
+          hasRetriedWithFreshToken = true;
+          AuthTokenStore.ClearToken();
+          Debug.LogWarning("[CubusNetwork] Cleared saved auth token and retrying once with a fresh identity.");
+          ConnectInternal();
+        }
+      });
+    }
+
+    private void HandleDisconnected(DbConnection conn, Exception error)
+    {
+      mainThreadActions.Enqueue(() =>
+      {
+        if (verboseLogging)
+        {
+          Debug.Log(error == null
+              ? "[CubusNetwork] Disconnected."
+              : $"[CubusNetwork] Disconnected with error: {error.Message}");
+        }
+
+        Conn = null;
+        IsConnected = false;
+        IsSubscriptionApplied = false;
+        LocalIdentity = default;
+        Disconnected?.Invoke();
+      });
+    }
+
+    private void Subscribe(DbConnection conn)
+    {
+      List<string> queries = new()
+      {
+        "SELECT * FROM player",
+        $"SELECT * FROM chat_message WHERE world_id = '{EscapeSqlLiteral(WorldId)}'",
+        $"SELECT * FROM voxel_edit WHERE world_id = '{EscapeSqlLiteral(WorldId)}'",
+        $"SELECT * FROM world_state WHERE world_id = '{EscapeSqlLiteral(WorldId)}'"
+      };
+
+      if (subscribeToWorldChunks)
+      {
+        queries.Add($"SELECT * FROM world_chunk WHERE world_id = '{EscapeSqlLiteral(WorldId)}'");
       }
+
+      conn.SubscriptionBuilder()
+          .OnApplied(_ => mainThreadActions.Enqueue(() =>
+          {
+            IsSubscriptionApplied = true;
+
+            if (verboseLogging)
+            {
+              Debug.Log("[CubusNetwork] Initial subscription applied.");
+            }
+
+            SubscriptionApplied?.Invoke(conn);
+          }))
+          .Subscribe(queries.ToArray());
+    }
+
+    private static string EscapeSqlLiteral(string value)
+    {
+      return (value ?? string.Empty).Replace("'", "''");
     }
   }
 }
