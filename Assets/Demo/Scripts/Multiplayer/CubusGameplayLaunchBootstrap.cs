@@ -31,6 +31,7 @@ namespace Assets.Demo.Scripts.Multiplayer
     private void Awake()
     {
       WorldPersistence.SuppressAutoLoadOnStart = true;
+      CubusWorld.SuppressGenerateOnStart = true;
       loadingStartedAt = Time.realtimeSinceStartup;
       FindReferences();
     }
@@ -67,6 +68,8 @@ namespace Assets.Demo.Scripts.Multiplayer
         isPreparingWorld = false;
         yield break;
       }
+
+      yield return null;
 
       if (CubusGameLaunchContext.Mode == CubusGameLaunchMode.Local)
       {
