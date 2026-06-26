@@ -8,8 +8,7 @@ namespace Assets.Demo.Scripts.Multiplayer
 {
   /// <summary>
   /// Minimal IMGUI chat overlay backed by the replicated <c>chat_message</c> table.
-  /// Press Enter to start typing, Enter again to send (which hands control back to
-  /// the player), or Escape to cancel.
+  /// Press Enter to start typing, Enter again to send, or Escape to cancel.
   /// </summary>
   public sealed class CubusChatUI : MonoBehaviour
   {
@@ -109,13 +108,20 @@ namespace Assets.Demo.Scripts.Multiplayer
 
     private void OnGUI()
     {
+      if (CubusUiInput.ConsoleOpen)
+      {
+        if (composing)
+        {
+          EndComposing(clearDraft: true);
+        }
+        return;
+      }
+
       if (net == null || !net.IsConnected)
       {
         return;
       }
 
-      // Intercept the control keys BEFORE the TextField draws; a focused
-      // single-line field swallows the Return KeyDown otherwise.
       HandleInputEvents();
 
       float x = 10.0f;
@@ -133,9 +139,6 @@ namespace Assets.Demo.Scripts.Multiplayer
 
       if (composing)
       {
-        // Draft is built from Keyboard.current.onTextInput (see HandleTextInput)
-        // rather than an IMGUI TextField, which does not reliably receive text
-        // under the new Input System. Show it as a label with a caret.
         GUILayout.Label($"> {draft}<color=#ffffffaa>_</color>");
         GUILayout.Label("<i>Enter to send  -  Esc to cancel</i>");
       }
@@ -223,13 +226,9 @@ namespace Assets.Demo.Scripts.Multiplayer
       CubusUiInput.ChatComposing = false;
     }
 
-    // Receives printable characters straight from the keyboard device. This is
-    // the reliable text path under the new Input System; the IMGUI TextField did
-    // not consistently get keyboard focus/text. Control characters (enter,
-    // backspace, escape, tab) are handled via the IMGUI event path instead.
     private void HandleTextInput(char character)
     {
-      if (!composing)
+      if (!composing || CubusUiInput.ConsoleOpen)
       {
         return;
       }
