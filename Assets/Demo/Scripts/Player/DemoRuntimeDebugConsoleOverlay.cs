@@ -18,6 +18,9 @@ namespace Assets.Demo.Scripts.Player
   {
     private const int TopmostSortingOrder = 32767;
     private const float SlideSeconds = 0.16f;
+    private const int MaxRenderedLogLines = 120;
+    private const int MaxRenderedLogCharacters = 24000;
+    private const int MaxRenderedLineCharacters = 600;
 
     private DemoRuntimeDebugConsole backend;
     private FieldInfo backendVisibleField;
@@ -41,7 +44,6 @@ namespace Assets.Demo.Scripts.Player
     private bool wasBackquoteDown;
     private bool wasEscapeDown;
     private bool wasEnterDown;
-    private float slideVelocity;
     private string lastRenderedLog = string.Empty;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -468,11 +470,33 @@ namespace Assets.Demo.Scripts.Player
       {
         if (line != null)
         {
-          copy.Add(line.ToString());
+          copy.Add(TrimRenderedLine(line.ToString()));
         }
       }
 
-      string next = string.Join("\n", copy);
+      int startIndex = Mathf.Max(0, copy.Count - MaxRenderedLogLines);
+      List<string> rendered = new();
+      int totalCharacters = 0;
+
+      for (int i = copy.Count - 1; i >= startIndex; i--)
+      {
+        string line = copy[i];
+        int nextLength = totalCharacters + line.Length + 1;
+        if (rendered.Count > 0 && nextLength > MaxRenderedLogCharacters)
+        {
+          break;
+        }
+
+        rendered.Insert(0, line);
+        totalCharacters = nextLength;
+      }
+
+      if (startIndex > 0 || rendered.Count < copy.Count)
+      {
+        rendered.Insert(0, $"... showing last {rendered.Count} console lines; older output retained in backend log ...");
+      }
+
+      string next = string.Join("\n", rendered);
       if (!force && string.Equals(next, lastRenderedLog, StringComparison.Ordinal))
       {
         return;
@@ -480,11 +504,20 @@ namespace Assets.Demo.Scripts.Player
 
       lastRenderedLog = next;
       logText.text = next;
-      Canvas.ForceUpdateCanvases();
       if (scrollRect != null)
       {
         scrollRect.verticalNormalizedPosition = 0.0f;
       }
+    }
+
+    private static string TrimRenderedLine(string value)
+    {
+      if (string.IsNullOrEmpty(value) || value.Length <= MaxRenderedLineCharacters)
+      {
+        return value ?? string.Empty;
+      }
+
+      return value.Substring(0, MaxRenderedLineCharacters) + " ... [trimmed]";
     }
 
     private void KeepCanvasTopmost()
