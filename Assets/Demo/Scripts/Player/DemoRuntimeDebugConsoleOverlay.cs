@@ -19,6 +19,7 @@ namespace Assets.Demo.Scripts.Player
     private FieldInfo sourceVisibleField;
     private FieldInfo sourceLogLinesField;
     private MethodInfo sourceExecuteCommandMethod;
+    private MethodInfo sourceRestoreInputMethod;
     private Canvas canvas;
     private GameObject canvasObject;
     private RectTransform panelRect;
@@ -67,7 +68,7 @@ namespace Assets.Demo.Scripts.Player
         return;
       }
 
-      SyncSourceVisibility(false);
+      SuppressSourceConsole();
       UpdateSubmitInput();
       RenderLogFromSource();
       FocusInput();
@@ -98,6 +99,7 @@ namespace Assets.Demo.Scripts.Player
       sourceVisibleField = type.GetField("consoleVisible", BindingFlags.Instance | BindingFlags.NonPublic);
       sourceLogLinesField = type.GetField("logLines", BindingFlags.Instance | BindingFlags.NonPublic);
       sourceExecuteCommandMethod = type.GetMethod("ExecuteCommand", BindingFlags.Instance | BindingFlags.NonPublic);
+      sourceRestoreInputMethod = type.GetMethod("RestoreInputAfterConsole", BindingFlags.Instance | BindingFlags.NonPublic);
     }
 
     private void UpdateToggleInput()
@@ -165,6 +167,11 @@ namespace Assets.Demo.Scripts.Player
         canvasObject.SetActive(visible);
       }
 
+      if (syncSource)
+      {
+        SuppressSourceConsole();
+      }
+
       if (visible)
       {
         PrepareInputForConsole();
@@ -176,18 +183,23 @@ namespace Assets.Demo.Scripts.Player
       {
         RestoreInputAfterConsole();
       }
-
-      if (syncSource)
-      {
-        SyncSourceVisibility(false);
-      }
     }
 
-    private void SyncSourceVisibility(bool value)
+    private void SuppressSourceConsole()
     {
-      if (sourceConsole != null && sourceVisibleField != null)
+      if (sourceConsole == null)
       {
-        sourceVisibleField.SetValue(sourceConsole, value);
+        return;
+      }
+
+      if (sourceRestoreInputMethod != null)
+      {
+        sourceRestoreInputMethod.Invoke(sourceConsole, null);
+      }
+
+      if (sourceVisibleField != null)
+      {
+        sourceVisibleField.SetValue(sourceConsole, false);
       }
     }
 
