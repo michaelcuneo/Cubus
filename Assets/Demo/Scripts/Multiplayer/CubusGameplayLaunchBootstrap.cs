@@ -17,8 +17,7 @@ namespace Assets.Demo.Scripts.Multiplayer
     [SerializeField] private bool requireLauncherSelection = true;
     [SerializeField] private string launcherSceneName = "CubusLauncher";
     [SerializeField] private float connectedWorldReadyTimeoutSeconds = 30.0f;
-    [SerializeField] private bool showLoadingDiagnostics = true;
-    [SerializeField] private Vector2 diagnosticsPanelSize = new(680.0f, 430.0f);
+    [SerializeField] private bool logLoadingDiagnostics = true;
 
     private string loadingStage = "Waiting for launch context";
     private string loadingDetail = string.Empty;
@@ -71,9 +70,6 @@ namespace Assets.Demo.Scripts.Multiplayer
         yield break;
       }
 
-      // Give CubusGame one visible frame before starting terrain preparation. This
-      // lets the diagnostics overlay appear immediately after scene activation
-      // instead of showing only the launcher scene-load progress.
       yield return null;
 
       if (CubusGameLaunchContext.Mode == CubusGameLaunchMode.Local)
@@ -92,93 +88,7 @@ namespace Assets.Demo.Scripts.Multiplayer
 
       isPreparingWorld = false;
       hasFinishedPreparation = world != null && world.IsInitialTerrainReady;
-    }
-
-    private void OnGUI()
-    {
-      if (!showLoadingDiagnostics || hasFinishedPreparation)
-      {
-        return;
-      }
-
-      DrawDiagnosticsOverlay();
-    }
-
-    private void DrawDiagnosticsOverlay()
-    {
-      float elapsed = Time.realtimeSinceStartup - loadingStartedAt;
-      Rect panelRect = new Rect(
-          Mathf.Max(8.0f, (Screen.width - diagnosticsPanelSize.x) * 0.5f),
-          Mathf.Max(8.0f, (Screen.height - diagnosticsPanelSize.y) * 0.5f),
-          Mathf.Min(diagnosticsPanelSize.x, Screen.width - 16.0f),
-          Mathf.Min(diagnosticsPanelSize.y, Screen.height - 16.0f));
-
-      GUILayout.BeginArea(panelRect, GUI.skin.window);
-      GUILayout.Label("<b>Cubus Loading</b>");
-      GUILayout.Space(6.0f);
-      GUILayout.Label($"Stage: {loadingStage}");
-      GUILayout.Label($"Detail: {loadingDetail}");
-      GUILayout.Label($"Elapsed: {elapsed:0.0}s");
-      GUILayout.Label($"Preparing: {isPreparingWorld}");
-
-      GUILayout.Space(8.0f);
-      DrawWorldDiagnostics();
-      GUILayout.Space(8.0f);
-      DrawStreamerDiagnostics();
-      GUILayout.Space(8.0f);
-      DrawNetworkDiagnostics();
-
-      if (!string.IsNullOrWhiteSpace(lastWarning))
-      {
-        GUILayout.Space(8.0f);
-        GUILayout.Label($"Warning: {lastWarning}");
-      }
-
-      GUILayout.EndArea();
-    }
-
-    private void DrawWorldDiagnostics()
-    {
-      GUILayout.Label("<b>World</b>");
-      if (world == null)
-      {
-        GUILayout.Label("CubusWorld: missing");
-        return;
-      }
-
-      GUILayout.Label($"WorldReady: {world.IsWorldReady} | InitialTerrainReady: {world.IsInitialTerrainReady}");
-      GUILayout.Label($"Generating: {world.IsGeneratingWorld} | Progress: {world.GenerationProgress * 100.0f:0}% | Status: {world.GenerationStatus}");
-      GUILayout.Label($"Spawn: {world.SuggestedSpawnLocation}");
-    }
-
-    private void DrawStreamerDiagnostics()
-    {
-      GUILayout.Label("<b>Streamer</b>");
-      WorldStreamer streamer = GetStreamer();
-      if (streamer == null)
-      {
-        GUILayout.Label("WorldStreamer: missing. Non-streamed GenerateWorldAsync path should run.");
-        return;
-      }
-
-      GUILayout.Label($"Enabled: {streamer.enabled} | HeldByBootstrap: {disabledStreamerAutoStartForLaunch} | InitialStage: {streamer.IsInitialStreamingStageActive} | BroadcastReady: {streamer.HasBroadcastInitialTerrainReady}");
-      GUILayout.Label($"ViewerChunk: {(streamer.HasLastViewerChunkCoord ? streamer.LastViewerChunkCoord.ToString() : "none")} | SpawnTargetChunk: {streamer.SpawnTargetChunkCoord}");
-      GUILayout.Label($"Desired: {streamer.DesiredChunkCount} | Keep: {streamer.KeepChunkCount} | KnownEmpty: {streamer.KnownEmptyChunkCount}");
-      GUILayout.Label($"PendingLoad: {streamer.PendingLoadCount} | PendingRender: {streamer.PendingRenderCount} | PendingUnload: {streamer.PendingUnloadCount}");
-      GUILayout.Label($"ActiveLoadTasks: {streamer.ActiveChunkLoadTaskCount} | ActiveBlockBuilds: {streamer.ActiveBlockBuildTaskCount} | ActiveDensityBuilds: {streamer.ActiveDensityBuildTaskCount}");
-      GUILayout.Label($"LoadedTotal: {streamer.TotalChunkLoadsCompleted} | LoadFailures: {streamer.TotalChunkLoadFailures} | BlockApplies: {streamer.TotalBlockMeshApplies} | DensityApplies: {streamer.TotalDensityMeshApplies}");
-    }
-
-    private void DrawNetworkDiagnostics()
-    {
-      GUILayout.Label("<b>Network</b>");
-      if (network == null)
-      {
-        GUILayout.Label("CubusNetworkManager: missing");
-        return;
-      }
-
-      GUILayout.Label($"WorldId: {network.WorldId} | Connected: {network.IsConnected} | HasConn: {network.Conn != null} | SubscriptionApplied: {network.IsSubscriptionApplied}");
+      LogDiagnosticsSnapshot("Preparation finished");
     }
 
     private bool ApplyLaunchSettingsToWorld()
@@ -287,7 +197,7 @@ namespace Assets.Demo.Scripts.Multiplayer
         yield break;
       }
 
-      SetStage($"Waiting for {label} terrain", "Waiting for CubusWorld.BroadcastInitialTerrainReady. Watch streamer queue counts below.");
+      SetStage($"Waiting for {label} terrain", "Waiting for CubusWorld.BroadcastInitialTerrainReady. Streaming details are logged to the console.");
       float startTime = Time.realtimeSinceStartup;
       int lastLoggedSecond = -1;
 
@@ -298,7 +208,7 @@ namespace Assets.Demo.Scripts.Multiplayer
         if (elapsedSecond != lastLoggedSecond && elapsedSecond % 5 == 0)
         {
           lastLoggedSecond = elapsedSecond;
-          Debug.Log($"[CubusLaunch] Still waiting for {label} initial terrain. {BuildDebugSummary()}");
+          LogDiagnosticsSnapshot($"Still waiting for {label} initial terrain after {elapsed:0.0}s");
         }
 
         if (timeoutSeconds > 0.0f && elapsed > timeoutSeconds)
@@ -349,7 +259,22 @@ namespace Assets.Demo.Scripts.Multiplayer
     {
       loadingStage = stage;
       loadingDetail = detail;
-      Debug.Log($"[CubusLaunch] {stage}. {detail}");
+
+      if (logLoadingDiagnostics)
+      {
+        Debug.Log($"[CubusLaunch] {stage}. {detail}");
+      }
+    }
+
+    private void LogDiagnosticsSnapshot(string reason)
+    {
+      if (!logLoadingDiagnostics)
+      {
+        return;
+      }
+
+      float elapsed = Time.realtimeSinceStartup - loadingStartedAt;
+      Debug.Log($"[CubusLaunch] {reason}. Stage={loadingStage}; Detail={loadingDetail}; Elapsed={elapsed:0.0}s; Preparing={isPreparingWorld}; {BuildDebugSummary()}");
     }
 
     private string BuildDebugSummary()
@@ -357,13 +282,17 @@ namespace Assets.Demo.Scripts.Multiplayer
       WorldStreamer streamer = GetStreamer();
       string streamerSummary = streamer == null
           ? "Streamer=none"
-          : $"Streamer enabled={streamer.enabled}, desired={streamer.DesiredChunkCount}, pendingLoad={streamer.PendingLoadCount}, pendingRender={streamer.PendingRenderCount}, activeLoads={streamer.ActiveChunkLoadTaskCount}, activeBlockBuilds={streamer.ActiveBlockBuildTaskCount}, activeDensityBuilds={streamer.ActiveDensityBuildTaskCount}, blockApplies={streamer.TotalBlockMeshApplies}, densityApplies={streamer.TotalDensityMeshApplies}";
+          : $"Streamer enabled={streamer.enabled}, heldByBootstrap={disabledStreamerAutoStartForLaunch}, initialStage={streamer.IsInitialStreamingStageActive}, broadcastReady={streamer.HasBroadcastInitialTerrainReady}, viewerChunk={(streamer.HasLastViewerChunkCoord ? streamer.LastViewerChunkCoord.ToString() : "none")}, spawnTarget={streamer.SpawnTargetChunkCoord}, desired={streamer.DesiredChunkCount}, keep={streamer.KeepChunkCount}, knownEmpty={streamer.KnownEmptyChunkCount}, pendingLoad={streamer.PendingLoadCount}, pendingRender={streamer.PendingRenderCount}, pendingUnload={streamer.PendingUnloadCount}, activeLoads={streamer.ActiveChunkLoadTaskCount}, activeBlockBuilds={streamer.ActiveBlockBuildTaskCount}, activeDensityBuilds={streamer.ActiveDensityBuildTaskCount}, loadedTotal={streamer.TotalChunkLoadsCompleted}, loadFailures={streamer.TotalChunkLoadFailures}, blockApplies={streamer.TotalBlockMeshApplies}, densityApplies={streamer.TotalDensityMeshApplies}";
 
       string worldSummary = world == null
           ? "World=none"
-          : $"WorldReady={world.IsWorldReady}, InitialReady={world.IsInitialTerrainReady}, Generating={world.IsGeneratingWorld}, Progress={world.GenerationProgress:0.00}, Status={world.GenerationStatus}";
+          : $"WorldReady={world.IsWorldReady}, InitialReady={world.IsInitialTerrainReady}, Generating={world.IsGeneratingWorld}, Progress={world.GenerationProgress:0.00}, Status={world.GenerationStatus}, Spawn={world.SuggestedSpawnLocation}";
 
-      return $"{worldSummary}; {streamerSummary}";
+      string networkSummary = network == null
+          ? "Network=none"
+          : $"Network worldId={network.WorldId}, connected={network.IsConnected}, hasConn={network.Conn != null}, subscriptionApplied={network.IsSubscriptionApplied}";
+
+      return $"{worldSummary}; {streamerSummary}; {networkSummary}";
     }
 
     private WorldStreamer GetStreamer()
