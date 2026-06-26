@@ -11,7 +11,7 @@ using UnityEngine.InputSystem;
 
 namespace Assets.Demo.Scripts.Player
 {
-  [DefaultExecutionOrder(1000)]
+  [DefaultExecutionOrder(32000)]
   public sealed class DemoRuntimeDebugConsole : MonoBehaviour
   {
     private sealed class DebugCommand
@@ -52,6 +52,17 @@ namespace Assets.Demo.Scripts.Player
     private CursorLockMode previousCursorLockState;
     private bool previousCursorVisible;
     private bool hasSavedCursorState;
+
+    private Texture2D consoleDimTexture;
+    private Texture2D consoleBackgroundTexture;
+    private Texture2D consoleHeaderTexture;
+    private Texture2D consoleBorderTexture;
+    private Texture2D consoleShadowTexture;
+    private Texture2D consoleInputTexture;
+    private GUIStyle consoleTitleStyle;
+    private GUIStyle consoleHelpStyle;
+    private GUIStyle consoleLogStyle;
+    private GUIStyle consoleInputStyle;
 
     private const int ProfilerFrameBufferSize = 512;
     private const float HitchThresholdMs = 33.3f;
@@ -104,6 +115,16 @@ namespace Assets.Demo.Scripts.Player
     {
       Application.logMessageReceived -= HandleLogMessage;
       RestoreInputAfterConsole();
+    }
+
+    private void OnDestroy()
+    {
+      DestroyConsoleTexture(ref consoleDimTexture);
+      DestroyConsoleTexture(ref consoleBackgroundTexture);
+      DestroyConsoleTexture(ref consoleHeaderTexture);
+      DestroyConsoleTexture(ref consoleBorderTexture);
+      DestroyConsoleTexture(ref consoleShadowTexture);
+      DestroyConsoleTexture(ref consoleInputTexture);
     }
 
     private void Update()
@@ -219,36 +240,156 @@ namespace Assets.Demo.Scripts.Player
 
     private void OnGUI()
     {
-      if (consoleVisible)
+      if (!consoleVisible)
+      {
+        return;
+      }
+
+      int previousDepth = GUI.depth;
+      GUI.depth = int.MinValue;
+
+      try
       {
         DrawConsole();
+      }
+      finally
+      {
+        GUI.depth = previousDepth;
       }
     }
 
     private void DrawConsole()
     {
-      float width = Mathf.Min(Screen.width - 24.0f, 980.0f);
-      float height = Mathf.Min(Screen.height - 24.0f, 520.0f);
-      Rect rect = new(12.0f, Screen.height - height - 12.0f, width, height);
+      EnsureConsoleStyles();
 
-      GUI.Box(rect, string.Empty);
-      GUILayout.BeginArea(new Rect(rect.x + 8.0f, rect.y + 8.0f, rect.width - 16.0f, rect.height - 16.0f));
-      GUILayout.Label("Runtime Console (` to close, F3 debug snapshot, command: dev on)");
+      float width = Mathf.Min(Screen.width - 48.0f, 1120.0f);
+      float height = Mathf.Min(Screen.height - 48.0f, 600.0f);
+      Rect rect = new(
+          (Screen.width - width) * 0.5f,
+          Screen.height - height - 24.0f,
+          width,
+          height);
 
-      logScroll = GUILayout.BeginScrollView(logScroll, GUILayout.Height(rect.height - 82.0f));
+      DrawFilledRect(new Rect(0.0f, 0.0f, Screen.width, Screen.height), consoleDimTexture);
+      DrawFilledRect(new Rect(rect.x + 10.0f, rect.y + 12.0f, rect.width, rect.height), consoleShadowTexture);
+      DrawFilledRect(rect, consoleBackgroundTexture);
+      DrawBorder(rect, 3.0f, consoleBorderTexture);
+
+      Rect headerRect = new(rect.x, rect.y, rect.width, 42.0f);
+      DrawFilledRect(headerRect, consoleHeaderTexture);
+      DrawBorder(headerRect, 2.0f, consoleBorderTexture);
+
+      GUI.Label(new Rect(headerRect.x + 16.0f, headerRect.y + 9.0f, headerRect.width - 32.0f, 24.0f), "CUBUS RUNTIME CONSOLE", consoleTitleStyle);
+
+      GUILayout.BeginArea(new Rect(rect.x + 14.0f, rect.y + 52.0f, rect.width - 28.0f, rect.height - 66.0f));
+      GUILayout.Label("` or Esc to close  |  Enter to run  |  Up/Down history  |  Tab autocomplete  |  F3 debug snapshot", consoleHelpStyle);
+
+      logScroll = GUILayout.BeginScrollView(logScroll, GUILayout.Height(rect.height - 132.0f));
       foreach (string line in logLines)
       {
-        GUILayout.Label(line);
+        GUILayout.Label(line, consoleLogStyle);
       }
       GUILayout.EndScrollView();
 
       HandleConsoleInputEvents();
 
       GUI.SetNextControlName("DebugConsoleInput");
-      commandInput = GUILayout.TextField(commandInput);
+      commandInput = GUILayout.TextField(commandInput, consoleInputStyle, GUILayout.Height(32.0f));
 
       GUI.FocusControl("DebugConsoleInput");
       GUILayout.EndArea();
+    }
+
+    private void EnsureConsoleStyles()
+    {
+      if (consoleTitleStyle != null)
+      {
+        return;
+      }
+
+      consoleDimTexture = CreateConsoleTexture(new Color(0.0f, 0.0f, 0.0f, 0.42f));
+      consoleBackgroundTexture = CreateConsoleTexture(new Color(0.015f, 0.02f, 0.03f, 0.96f));
+      consoleHeaderTexture = CreateConsoleTexture(new Color(0.04f, 0.10f, 0.16f, 0.98f));
+      consoleBorderTexture = CreateConsoleTexture(new Color(0.25f, 0.72f, 1.0f, 1.0f));
+      consoleShadowTexture = CreateConsoleTexture(new Color(0.0f, 0.0f, 0.0f, 0.65f));
+      consoleInputTexture = CreateConsoleTexture(new Color(0.0f, 0.0f, 0.0f, 0.72f));
+
+      consoleTitleStyle = new GUIStyle(GUI.skin.label)
+      {
+        fontSize = 16,
+        fontStyle = FontStyle.Bold,
+        alignment = TextAnchor.MiddleLeft,
+        normal = { textColor = new Color(0.75f, 0.93f, 1.0f, 1.0f) }
+      };
+
+      consoleHelpStyle = new GUIStyle(GUI.skin.label)
+      {
+        fontSize = 12,
+        fontStyle = FontStyle.Bold,
+        padding = new RectOffset(8, 8, 4, 8),
+        normal = { textColor = new Color(0.68f, 0.82f, 0.92f, 1.0f) }
+      };
+
+      consoleLogStyle = new GUIStyle(GUI.skin.label)
+      {
+        fontSize = 12,
+        richText = true,
+        wordWrap = true,
+        padding = new RectOffset(6, 6, 1, 1),
+        normal = { textColor = new Color(0.90f, 0.95f, 1.0f, 1.0f) }
+      };
+
+      consoleInputStyle = new GUIStyle(GUI.skin.textField)
+      {
+        fontSize = 14,
+        fontStyle = FontStyle.Bold,
+        padding = new RectOffset(10, 10, 7, 7),
+        normal = { background = consoleInputTexture, textColor = Color.white },
+        focused = { background = consoleInputTexture, textColor = Color.white },
+        hover = { background = consoleInputTexture, textColor = Color.white },
+        active = { background = consoleInputTexture, textColor = Color.white }
+      };
+    }
+
+    private static Texture2D CreateConsoleTexture(Color color)
+    {
+      Texture2D texture = new(1, 1, TextureFormat.RGBA32, false)
+      {
+        hideFlags = HideFlags.HideAndDontSave,
+        filterMode = FilterMode.Point,
+        wrapMode = TextureWrapMode.Clamp
+      };
+
+      texture.SetPixel(0, 0, color);
+      texture.Apply();
+      return texture;
+    }
+
+    private static void DestroyConsoleTexture(ref Texture2D texture)
+    {
+      if (texture == null)
+      {
+        return;
+      }
+
+      Destroy(texture);
+      texture = null;
+    }
+
+    private static void DrawFilledRect(Rect rect, Texture2D texture)
+    {
+      if (texture != null)
+      {
+        GUI.DrawTexture(rect, texture, ScaleMode.StretchToFill);
+      }
+    }
+
+    private static void DrawBorder(Rect rect, float thickness, Texture2D texture)
+    {
+      DrawFilledRect(new Rect(rect.x, rect.y, rect.width, thickness), texture);
+      DrawFilledRect(new Rect(rect.x, rect.yMax - thickness, rect.width, thickness), texture);
+      DrawFilledRect(new Rect(rect.x, rect.y, thickness, rect.height), texture);
+      DrawFilledRect(new Rect(rect.xMax - thickness, rect.y, thickness, rect.height), texture);
     }
 
     private void HandleConsoleInputEvents()
