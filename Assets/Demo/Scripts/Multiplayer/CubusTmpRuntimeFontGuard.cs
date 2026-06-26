@@ -7,6 +7,8 @@ namespace Assets.Demo.Scripts.Multiplayer
   public sealed class CubusTmpRuntimeFontGuard : MonoBehaviour
   {
     private static TMP_FontAsset runtimeFontAsset;
+    private static bool attemptedResolve;
+    private static bool loggedMissingFont;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
     private static void Bootstrap()
@@ -38,18 +40,38 @@ namespace Assets.Demo.Scripts.Multiplayer
         return runtimeFontAsset;
       }
 
-      Font font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-      if (font == null)
+      if (attemptedResolve)
       {
-        font = Resources.GetBuiltinResource<Font>("Arial.ttf");
+        return null;
       }
 
-      if (font != null)
+      attemptedResolve = true;
+
+      runtimeFontAsset = TMP_Settings.defaultFontAsset;
+      if (runtimeFontAsset != null)
       {
-        runtimeFontAsset = TMP_FontAsset.CreateFontAsset(font);
+        return runtimeFontAsset;
       }
 
-      return runtimeFontAsset;
+      runtimeFontAsset = Resources.Load<TMP_FontAsset>("Fonts & Materials/LiberationSans SDF");
+      if (runtimeFontAsset != null)
+      {
+        return runtimeFontAsset;
+      }
+
+      runtimeFontAsset = Resources.Load<TMP_FontAsset>("LiberationSans SDF");
+      if (runtimeFontAsset != null)
+      {
+        return runtimeFontAsset;
+      }
+
+      if (!loggedMissingFont)
+      {
+        loggedMissingFont = true;
+        Debug.LogWarning("[CubusUI] No TMP font asset was found. Import TMP Essential Resources or assign a default TMP font asset in Project Settings > TextMeshPro.");
+      }
+
+      return null;
     }
 
     public static void ApplyFonts()
@@ -63,17 +85,26 @@ namespace Assets.Demo.Scripts.Multiplayer
       TMP_Text[] texts = FindObjectsByType<TMP_Text>(FindObjectsInactive.Include, FindObjectsSortMode.None);
       for (int i = 0; i < texts.Length; i++)
       {
-        TMP_Text text = texts[i];
-        if (text == null)
-        {
-          continue;
-        }
-
-        if (text.font == null || text.font.name.Contains("LiberationSans", System.StringComparison.OrdinalIgnoreCase))
-        {
-          text.font = fontAsset;
-        }
+        ConfigureText(texts[i]);
       }
+    }
+
+    public static void ConfigureText(TMP_Text text)
+    {
+      if (text == null)
+      {
+        return;
+      }
+
+      TMP_FontAsset fontAsset = GetRuntimeFontAsset();
+      if (fontAsset == null)
+      {
+        text.enabled = false;
+        return;
+      }
+
+      text.font = fontAsset;
+      text.enabled = true;
     }
   }
 }
