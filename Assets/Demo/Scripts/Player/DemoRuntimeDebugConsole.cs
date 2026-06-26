@@ -26,14 +26,12 @@ namespace Assets.Demo.Scripts.Player
       }
     }
 
-    [SerializeField] private Key toggleOverlayKey = Key.F3;
+    [SerializeField] private Key printDebugSnapshotKey = Key.F3;
     [SerializeField] private Key toggleHeatmapKey = Key.F4;
     [SerializeField] private Key toggleConsoleKey = Key.Backquote;
-    [SerializeField] private bool overlayVisible = true;
-    [SerializeField] private bool heatmapVisible;
-    [SerializeField] private int heatmapResolution = 48;
-    [SerializeField] private float heatmapWorldSpan = 96.0f;
-    [SerializeField] private float heatmapRefreshInterval = 0.25f;
+    [SerializeField] private bool consoleVisible;
+    [SerializeField] private bool profilerRealtimeLogEnabled = true;
+    [SerializeField] private int maxLogLines = 300;
 
     private CubusWorld world;
     private WorldStreamer streamer;
@@ -42,22 +40,17 @@ namespace Assets.Demo.Scripts.Player
     private Camera activeCamera;
 
     private readonly Queue<string> logLines = new();
-    private const int MaxLogLines = 200;
     private readonly List<string> commandHistory = new();
-    private int historyIndex = -1;
-    private string historyWorkingInput = string.Empty;
-
+    private readonly List<string> autocompleteScratch = new();
     private readonly Dictionary<string, DebugCommand> commands = new(StringComparer.OrdinalIgnoreCase);
 
-    private bool consoleVisible;
     private string commandInput = string.Empty;
+    private string historyWorkingInput = string.Empty;
+    private int historyIndex = -1;
     private Vector2 logScroll;
-
     private bool disabledController;
     private DemoFirstPersonController cachedFirstPersonController;
-    private Texture2D heatmapTexture;
-    private float heatmapTimeAccumulator;
-    private readonly List<string> autocompleteScratch = new();
+
     private const int ProfilerFrameBufferSize = 512;
     private const float HitchThresholdMs = 33.3f;
     private readonly float[] profilerFrameTimesMs = new float[ProfilerFrameBufferSize];
@@ -66,6 +59,7 @@ namespace Assets.Demo.Scripts.Player
     private int profilerFrameCount;
     private int profilerWindowFrameCount;
     private int profilerWindowHitchCount;
+    private int profilerRealtimeLogSequence;
     private float profilerWindowElapsed;
     private float profilerWindowFrameTimeTotalMs;
     private float profilerWindowWorstFrameMs;
@@ -78,8 +72,6 @@ namespace Assets.Demo.Scripts.Player
     private float profilerDensityAppliesPerSecond;
     private float profilerUnloadsPerSecond;
     private float profilerLoadFailuresPerSecond;
-    private bool profilerRealtimeLogEnabled = true;
-    private int profilerRealtimeLogSequence;
     private bool profilerCounterBaselineSet;
     private long profilerLastTotalLoads;
     private long profilerLastTotalBlockApplies;
@@ -111,23 +103,6 @@ namespace Assets.Demo.Scripts.Player
       Application.logMessageReceived -= HandleLogMessage;
     }
 
-    private void OnDestroy()
-    {
-      if (heatmapTexture != null)
-      {
-        if (Application.isPlaying)
-        {
-          Destroy(heatmapTexture);
-        }
-        else
-        {
-          DestroyImmediate(heatmapTexture);
-        }
-
-        heatmapTexture = null;
-      }
-    }
-
     private void Update()
     {
       EnsureReferences();
@@ -139,29 +114,19 @@ namespace Assets.Demo.Scripts.Player
         return;
       }
 
-      if (keyboard[toggleOverlayKey].wasPressedThisFrame)
+      if (keyboard[printDebugSnapshotKey].wasPressedThisFrame)
       {
-        overlayVisible = !overlayVisible;
+        PrintDebugSnapshot("F3 debug snapshot");
       }
 
       if (keyboard[toggleHeatmapKey].wasPressedThisFrame)
       {
-        heatmapVisible = !heatmapVisible;
+        PrintDebugSnapshot("F4 heatmap/debug snapshot");
       }
 
       if (keyboard[toggleConsoleKey].wasPressedThisFrame)
       {
         SetConsoleVisible(!consoleVisible);
-      }
-
-      if (heatmapVisible)
-      {
-        heatmapTimeAccumulator += Time.unscaledDeltaTime;
-        if (heatmapTimeAccumulator >= Mathf.Max(0.05f, heatmapRefreshInterval))
-        {
-          heatmapTimeAccumulator = 0.0f;
-          RebuildHeatmap();
-        }
       }
     }
 
@@ -228,92 +193,62 @@ namespace Assets.Demo.Scripts.Player
 
     private void OnGUI()
     {
-      if (overlayVisible)
-      {
-        DrawOverlay();
-      }
-
-      if (heatmapVisible)
-      {
-        DrawHeatmapOverlay();
-      }
-
       if (consoleVisible)
       {
         DrawConsole();
       }
     }
 
-    private void DrawOverlay()
+    private void DrawConsole()
     {
-      GUIStyle box = new(GUI.skin.box)
-      {
-        alignment = TextAnchor.UpperLeft,
-        fontSize = 14,
-        richText = true
-      };
+      float width = Mathf.Min(Screen.width - 24.0f, 980.0f);
+      float height = Mathf.Min(Screen.height - 24.0f, 520.0f);
+      Rect rect = new(12.0f, Screen.height - height - 12.0f, width, height);
 
-      Rect rect = new(12.0f, 12.0f, 720.0f, 255.0f);
-      string text = BuildOverlayText();
-      GUI.Box(rect, text, box);
-    }
+      GUI.Box(rect, string.Empty);
+      GUILayout.BeginArea(new Rect(rect.x + 8.0f, rect.y + 8.0f, rect.width - 16.0f, rect.height - 16.0f));
+      GUILayout.Label("Runtime Console (` to close, F3 to print Cubus debug snapshot)");
 
-    private string BuildOverlayText()
-    {
-      if (world == null)
+      logScroll = GUILayout.BeginScrollView(logScroll, GUILayout.Height(rect.height - 82.0f));
+      foreach (string line in logLines)
       {
-        return "<b>Cubus Debug</b>\nWorld: not found\nF3 overlay | F4 heatmap | ` console";
+        GUILayout.Label(line);
+      }
+      GUILayout.EndScrollView();
+
+      GUI.SetNextControlName("DebugConsoleInput");
+      commandInput = GUILayout.TextField(commandInput);
+
+      Event e = Event.current;
+      if (e.type == EventType.KeyDown)
+      {
+        if (e.keyCode == KeyCode.Return)
+        {
+          ExecuteCommand(commandInput);
+          commandInput = string.Empty;
+          historyIndex = -1;
+          historyWorkingInput = string.Empty;
+          e.Use();
+        }
+        else if (e.keyCode == KeyCode.UpArrow)
+        {
+          NavigateHistory(older: true);
+          e.Use();
+        }
+        else if (e.keyCode == KeyCode.DownArrow)
+        {
+          NavigateHistory(older: false);
+          e.Use();
+        }
+        else if (e.keyCode == KeyCode.Tab)
+        {
+          ApplyAutocomplete();
+          e.Use();
+        }
       }
 
-      Vector3Int sampleVoxel;
-      bool hasVoxel = TryGetCrosshairVoxel(out sampleVoxel);
-
-      TerrainSample proceduralSample = default;
-      ushort storedBlockMaterial = 0;
-
-      if (hasVoxel)
-      {
-        proceduralSample = world.SampleTerrainAtWorldVoxel(sampleVoxel);
-        storedBlockMaterial = world.GetBlockMaterialAtWorldVoxel(sampleVoxel);
-      }
-
-      string biomeName = ResolveBiomeName(proceduralSample.BiomeId);
-
-      return
-          "<b>Cubus Debug</b>\n" +
-          $"Mode: {world.Settings.TerrainSystem} | Ready: {world.IsWorldReady} | InitialReady: {world.IsInitialTerrainReady}\n" +
-          $"Camera: {(activeCamera != null ? activeCamera.name : "none")}\n" +
-          $"Voxel: {(hasVoxel ? sampleVoxel.ToString() : "n/a")}\n" +
-          $"Biome: {proceduralSample.BiomeId} ({biomeName})\n" +
-          $"Stored Block Material: {storedBlockMaterial}\n" +
-          $"Procedural Material: {proceduralSample.SolidMaterialId}\n" +
-          $"Density: {proceduralSample.Density.ToString("0.000", CultureInfo.InvariantCulture)} | SurfaceY: {proceduralSample.SurfaceHeight.ToString("0.00", CultureInfo.InvariantCulture)}\n" +
-          BuildProfilerOverlayText() + "\n" +
-          "F3 overlay | F4 heatmap | ` console";
-    }
-
-    private string BuildProfilerOverlayText()
-    {
-      int activeChunkViews = worldRenderer != null ? worldRenderer.ActiveChunkViews.Count : -1;
-      int desiredChunks = streamer != null ? streamer.DesiredChunkCount : -1;
-      int keepChunks = streamer != null ? streamer.KeepChunkCount : -1;
-      int pendingLoads = streamer != null ? streamer.PendingLoadCount : -1;
-      int pendingRenders = streamer != null ? streamer.PendingRenderCount : -1;
-      int pendingUnloads = streamer != null ? streamer.PendingUnloadCount : -1;
-      int activeLoadTasks = streamer != null ? streamer.ActiveChunkLoadTaskCount : -1;
-      int activeBlockTasks = streamer != null ? streamer.ActiveBlockBuildTaskCount : -1;
-      int activeDensityTasks = streamer != null ? streamer.ActiveDensityBuildTaskCount : -1;
-
-      return
-          "<b>Profiler</b>\n" +
-          $"Frame: {profilerFps.ToString("0.0", CultureInfo.InvariantCulture)} FPS | Avg {profilerAvgFrameMs.ToString("0.00", CultureInfo.InvariantCulture)} ms | " +
-          $"P95 {profilerP95FrameMs.ToString("0.00", CultureInfo.InvariantCulture)} ms | Worst {profilerWorstFrameMs.ToString("0.00", CultureInfo.InvariantCulture)} ms | " +
-          $"Hitches(>{HitchThresholdMs.ToString("0.0", CultureInfo.InvariantCulture)}ms): {profilerWindowHitchCount}\n" +
-          $"Stream/s: Load {profilerLoadsPerSecond.ToString("0.0", CultureInfo.InvariantCulture)} | BlockApply {profilerBlockAppliesPerSecond.ToString("0.0", CultureInfo.InvariantCulture)} | " +
-          $"DensityApply {profilerDensityAppliesPerSecond.ToString("0.0", CultureInfo.InvariantCulture)} | Unload {profilerUnloadsPerSecond.ToString("0.0", CultureInfo.InvariantCulture)} | " +
-          $"LoadFail {profilerLoadFailuresPerSecond.ToString("0.0", CultureInfo.InvariantCulture)}\n" +
-          $"Queues: Desired {desiredChunks} | Keep {keepChunks} | ActiveViews {activeChunkViews} | Pending L/R/U {pendingLoads}/{pendingRenders}/{pendingUnloads} | " +
-          $"ActiveTasks L/B/D {activeLoadTasks}/{activeBlockTasks}/{activeDensityTasks}";
+      GUI.FocusControl("DebugConsoleInput");
+      GUILayout.EndArea();
     }
 
     private void UpdateProfilerTelemetry()
@@ -329,11 +264,7 @@ namespace Assets.Demo.Scripts.Player
       profilerWindowFrameCount++;
       profilerWindowElapsed += Time.unscaledDeltaTime;
       profilerWindowFrameTimeTotalMs += frameMs;
-      if (frameMs > profilerWindowWorstFrameMs)
-      {
-        profilerWindowWorstFrameMs = frameMs;
-      }
-
+      profilerWindowWorstFrameMs = Mathf.Max(profilerWindowWorstFrameMs, frameMs);
       if (frameMs >= HitchThresholdMs)
       {
         profilerWindowHitchCount++;
@@ -346,9 +277,7 @@ namespace Assets.Demo.Scripts.Player
 
       float elapsed = Mathf.Max(0.0001f, profilerWindowElapsed);
       profilerFps = profilerWindowFrameCount / elapsed;
-      profilerAvgFrameMs = profilerWindowFrameCount > 0
-          ? profilerWindowFrameTimeTotalMs / profilerWindowFrameCount
-          : 0.0f;
+      profilerAvgFrameMs = profilerWindowFrameCount > 0 ? profilerWindowFrameTimeTotalMs / profilerWindowFrameCount : 0.0f;
       profilerWorstFrameMs = profilerWindowWorstFrameMs;
       profilerP95FrameMs = ComputeP95FrameTimeMs();
 
@@ -399,26 +328,8 @@ namespace Assets.Demo.Scripts.Player
         return;
       }
 
-      int activeChunkViews = worldRenderer != null ? worldRenderer.ActiveChunkViews.Count : -1;
-      int desiredChunks = streamer != null ? streamer.DesiredChunkCount : -1;
-      int keepChunks = streamer != null ? streamer.KeepChunkCount : -1;
-      int pendingLoads = streamer != null ? streamer.PendingLoadCount : -1;
-      int pendingRenders = streamer != null ? streamer.PendingRenderCount : -1;
-      int pendingUnloads = streamer != null ? streamer.PendingUnloadCount : -1;
-      int activeLoadTasks = streamer != null ? streamer.ActiveChunkLoadTaskCount : -1;
-      int activeBlockTasks = streamer != null ? streamer.ActiveBlockBuildTaskCount : -1;
-      int activeDensityTasks = streamer != null ? streamer.ActiveDensityBuildTaskCount : -1;
-
-      profilerRealtimeLogSequence++;
-      string line =
-          $"CUBUS_PROFILER seq={profilerRealtimeLogSequence} dt={elapsed:0.000} " +
-          $"fps={profilerFps:0.0} avgMs={profilerAvgFrameMs:0.00} p95Ms={profilerP95FrameMs:0.00} worstMs={profilerWorstFrameMs:0.00} hitches={profilerWindowHitchCount} " +
-          $"loadPerSec={profilerLoadsPerSecond:0.0} blockApplyPerSec={profilerBlockAppliesPerSecond:0.0} densityApplyPerSec={profilerDensityAppliesPerSecond:0.0} " +
-          $"unloadPerSec={profilerUnloadsPerSecond:0.0} loadFailPerSec={profilerLoadFailuresPerSecond:0.0} " +
-          $"desired={desiredChunks} keep={keepChunks} activeViews={activeChunkViews} pendingL={pendingLoads} pendingR={pendingRenders} pendingU={pendingUnloads} " +
-          $"activeTasksL={activeLoadTasks} activeTasksB={activeBlockTasks} activeTasksD={activeDensityTasks}";
-
-      Debug.LogFormat(LogType.Log, LogOption.NoStacktrace, null, "{0}", line);
+      Debug.LogFormat(LogType.Log, LogOption.NoStacktrace, null, "{0}",
+          $"CUBUS_PROFILER seq={++profilerRealtimeLogSequence} dt={elapsed:0.000} " + BuildProfilerSummary());
     }
 
     private float ComputeP95FrameTimeMs()
@@ -439,6 +350,65 @@ namespace Assets.Demo.Scripts.Player
       return profilerFrameScratchMs[percentileIndex];
     }
 
+    private string BuildProfilerSummary()
+    {
+      int activeChunkViews = worldRenderer != null ? worldRenderer.ActiveChunkViews.Count : -1;
+      int desiredChunks = streamer != null ? streamer.DesiredChunkCount : -1;
+      int keepChunks = streamer != null ? streamer.KeepChunkCount : -1;
+      int pendingLoads = streamer != null ? streamer.PendingLoadCount : -1;
+      int pendingRenders = streamer != null ? streamer.PendingRenderCount : -1;
+      int pendingUnloads = streamer != null ? streamer.PendingUnloadCount : -1;
+      int activeLoadTasks = streamer != null ? streamer.ActiveChunkLoadTaskCount : -1;
+      int activeBlockTasks = streamer != null ? streamer.ActiveBlockBuildTaskCount : -1;
+      int activeDensityTasks = streamer != null ? streamer.ActiveDensityBuildTaskCount : -1;
+
+      return
+          $"fps={profilerFps:0.0} avgMs={profilerAvgFrameMs:0.00} p95Ms={profilerP95FrameMs:0.00} worstMs={profilerWorstFrameMs:0.00} hitches={profilerWindowHitchCount} " +
+          $"loadPerSec={profilerLoadsPerSecond:0.0} blockApplyPerSec={profilerBlockAppliesPerSecond:0.0} densityApplyPerSec={profilerDensityAppliesPerSecond:0.0} " +
+          $"unloadPerSec={profilerUnloadsPerSecond:0.0} loadFailPerSec={profilerLoadFailuresPerSecond:0.0} " +
+          $"desired={desiredChunks} keep={keepChunks} activeViews={activeChunkViews} pendingL={pendingLoads} pendingR={pendingRenders} pendingU={pendingUnloads} " +
+          $"activeTasksL={activeLoadTasks} activeTasksB={activeBlockTasks} activeTasksD={activeDensityTasks}";
+    }
+
+    private void PrintDebugSnapshot(string reason)
+    {
+      string line = $"CUBUS_DEBUG {reason}: {BuildDebugSnapshot()}";
+      EnqueueLog(line);
+      Debug.LogFormat(LogType.Log, LogOption.NoStacktrace, null, "{0}", line);
+    }
+
+    private string BuildDebugSnapshot()
+    {
+      string worldSummary = world == null
+          ? "world=none"
+          : $"mode={world.Settings.TerrainSystem} worldReady={world.IsWorldReady} initialReady={world.IsInitialTerrainReady} generationProgress={world.GenerationProgress:0.00} status='{world.GenerationStatus}' spawn={world.SuggestedSpawnLocation}";
+
+      string crosshairSummary = BuildCrosshairSummary();
+      string profilerSummary = BuildProfilerSummary();
+
+      return $"{worldSummary}; {crosshairSummary}; {profilerSummary}";
+    }
+
+    private string BuildCrosshairSummary()
+    {
+      if (world == null)
+      {
+        return "crosshair=no-world";
+      }
+
+      if (!TryGetCrosshairVoxel(out Vector3Int voxel))
+      {
+        return "crosshair=no-hit";
+      }
+
+      TerrainSample sample = world.SampleTerrainAtWorldVoxel(voxel);
+      ushort storedMaterial = world.GetBlockMaterialAtWorldVoxel(voxel);
+      return
+          $"voxel={voxel} biome={sample.BiomeId}({ResolveBiomeName(sample.BiomeId)}) " +
+          $"storedBlockMaterial={storedMaterial} proceduralMaterial={sample.SolidMaterialId} " +
+          $"density={sample.Density.ToString("0.000", CultureInfo.InvariantCulture)} surfaceY={sample.SurfaceHeight.ToString("0.00", CultureInfo.InvariantCulture)}";
+    }
+
     private bool TryGetCrosshairVoxel(out Vector3Int worldVoxel)
     {
       worldVoxel = Vector3Int.zero;
@@ -449,19 +419,12 @@ namespace Assets.Demo.Scripts.Player
       }
 
       Ray ray = activeCamera.ViewportPointToRay(new Vector3(0.5f, 0.5f, 0.0f));
-
       if (Physics.Raycast(ray, out RaycastHit hit, 1024.0f, ~0, QueryTriggerInteraction.Ignore))
       {
         if (hit.collider != null && hit.collider.GetComponentInParent<ChunkView>() != null)
         {
           Vector3 p = hit.point + ray.direction.normalized * 0.01f;
-
-          worldVoxel = new Vector3Int(
-              Mathf.FloorToInt(p.x),
-              Mathf.FloorToInt(p.y),
-              Mathf.FloorToInt(p.z)
-          );
-
+          worldVoxel = new Vector3Int(Mathf.FloorToInt(p.x), Mathf.FloorToInt(p.y), Mathf.FloorToInt(p.z));
           return true;
         }
       }
@@ -487,160 +450,14 @@ namespace Assets.Demo.Scripts.Player
         byte id = (byte)Mathf.Clamp(rule.Biome.BiomeId, 0, 255);
         if (id == biomeId)
         {
-          return string.IsNullOrWhiteSpace(rule.Biome.BiomeName)
-              ? rule.Biome.name
-              : rule.Biome.BiomeName;
+          return string.IsNullOrWhiteSpace(rule.Biome.BiomeName) ? rule.Biome.name : rule.Biome.BiomeName;
         }
       }
 
       return "Unknown";
     }
 
-    private void DrawConsole()
-    {
-      float width = Mathf.Min(Screen.width - 24.0f, 920.0f);
-      float height = Mathf.Min(Screen.height - 24.0f, 460.0f);
-      Rect rect = new(12.0f, Screen.height - height - 12.0f, width, height);
-
-      GUI.Box(rect, "");
-
-      GUILayout.BeginArea(new Rect(rect.x + 8.0f, rect.y + 8.0f, rect.width - 16.0f, rect.height - 16.0f));
-      GUILayout.Label("Runtime Console (` to close)");
-
-      logScroll = GUILayout.BeginScrollView(logScroll, GUILayout.Height(rect.height - 80.0f));
-      foreach (string line in logLines)
-      {
-        GUILayout.Label(line);
-      }
-      GUILayout.EndScrollView();
-
-      GUI.SetNextControlName("DebugConsoleInput");
-      commandInput = GUILayout.TextField(commandInput);
-
-      Event e = Event.current;
-      if (e.type == EventType.KeyDown)
-      {
-        if (e.keyCode == KeyCode.Return)
-        {
-          ExecuteCommand(commandInput);
-          commandInput = string.Empty;
-          historyIndex = -1;
-          historyWorkingInput = string.Empty;
-          e.Use();
-        }
-        else if (e.keyCode == KeyCode.UpArrow)
-        {
-          NavigateHistory(older: true);
-          e.Use();
-        }
-        else if (e.keyCode == KeyCode.DownArrow)
-        {
-          NavigateHistory(older: false);
-          e.Use();
-        }
-        else if (e.keyCode == KeyCode.Tab)
-        {
-          ApplyAutocomplete();
-          e.Use();
-        }
-      }
-
-      GUI.FocusControl("DebugConsoleInput");
-      GUILayout.EndArea();
-    }
-
-    private void DrawHeatmapOverlay()
-    {
-      if (heatmapTexture == null)
-      {
-        RebuildHeatmap();
-      }
-
-      if (heatmapTexture == null)
-      {
-        return;
-      }
-
-      float size = Mathf.Min(Screen.width * 0.28f, Screen.height * 0.28f);
-      Rect panelRect = new(Screen.width - size - 14.0f, 14.0f, size, size + 22.0f);
-      GUI.Box(panelRect, "");
-
-      Rect textureRect = new(panelRect.x + 6.0f, panelRect.y + 18.0f, panelRect.width - 12.0f, panelRect.width - 12.0f);
-      GUI.DrawTexture(textureRect, heatmapTexture, ScaleMode.StretchToFill, false);
-
-      float cx = textureRect.x + textureRect.width * 0.5f;
-      float cy = textureRect.y + textureRect.height * 0.5f;
-      Color prev = GUI.color;
-      GUI.color = new Color(1.0f, 1.0f, 1.0f, 0.85f);
-      GUI.DrawTexture(new Rect(cx - 1.0f, textureRect.y, 2.0f, textureRect.height), Texture2D.whiteTexture);
-      GUI.DrawTexture(new Rect(textureRect.x, cy - 1.0f, textureRect.width, 2.0f), Texture2D.whiteTexture);
-      GUI.color = prev;
-
-      GUI.Label(
-          new Rect(panelRect.x + 8.0f, panelRect.y + 2.0f, panelRect.width - 16.0f, 18.0f),
-          $"Biome Heatmap ({Mathf.RoundToInt(heatmapWorldSpan)}m)"
-      );
-    }
-
-    private void RebuildHeatmap()
-    {
-      if (world == null || world.Settings == null || activeCamera == null)
-      {
-        return;
-      }
-
-      int resolution = Mathf.Clamp(heatmapResolution, 16, 128);
-      if (heatmapTexture == null || heatmapTexture.width != resolution || heatmapTexture.height != resolution)
-      {
-        if (heatmapTexture != null)
-        {
-          if (Application.isPlaying)
-          {
-            Destroy(heatmapTexture);
-          }
-          else
-          {
-            DestroyImmediate(heatmapTexture);
-          }
-        }
-
-        heatmapTexture = new Texture2D(resolution, resolution, TextureFormat.RGBA32, false)
-        {
-          name = "Cubus Biome Heatmap",
-          wrapMode = TextureWrapMode.Clamp,
-          filterMode = FilterMode.Point
-        };
-      }
-
-      Vector3 center = activeCamera.transform.position;
-      float span = Mathf.Max(8.0f, heatmapWorldSpan);
-
-      for (int y = 0; y < resolution; y++)
-      {
-        float nz = (y + 0.5f) / resolution - 0.5f;
-
-        for (int x = 0; x < resolution; x++)
-        {
-          float nx = (x + 0.5f) / resolution - 0.5f;
-          float worldX = center.x + nx * span;
-          float worldZ = center.z + nz * span;
-
-          world.Settings.ResolveBiomeAtWorldXZ(worldX, worldZ, out _, out byte biomeId);
-          heatmapTexture.SetPixel(x, y, GetBiomeDebugColor(biomeId));
-        }
-      }
-
-      heatmapTexture.Apply(false, false);
-    }
-
-    private static Color GetBiomeDebugColor(byte biomeId)
-    {
-      float hue = (biomeId % 64) / 64.0f;
-      Color baseColor = Color.HSVToRGB(hue, 0.8f, 0.95f);
-      return new Color(baseColor.r, baseColor.g, baseColor.b, 0.95f);
-    }
-
-    public bool RegisterCommand(string commandName, string description, Action<string[]> handler)
+    private bool RegisterCommand(string commandName, string description, Action<string[]> handler)
     {
       if (string.IsNullOrWhiteSpace(commandName) || handler == null)
       {
@@ -655,16 +472,6 @@ namespace Assets.Demo.Scripts.Player
 
       commands.Add(key, new DebugCommand(description ?? string.Empty, handler));
       return true;
-    }
-
-    public bool UnregisterCommand(string commandName)
-    {
-      if (string.IsNullOrWhiteSpace(commandName))
-      {
-        return false;
-      }
-
-      return commands.Remove(commandName.Trim().ToLowerInvariant());
     }
 
     private void RegisterBuiltInCommands()
@@ -689,37 +496,9 @@ namespace Assets.Demo.Scripts.Player
         }
       });
 
-      RegisterCommand("clear", "Clear console log output.", _ =>
-      {
-        logLines.Clear();
-      });
-
-      RegisterCommand("biome", "Print biome/material info at crosshair.", _ =>
-      {
-        if (world == null)
-        {
-          EnqueueLog("No CubusWorld found.");
-          return;
-        }
-
-        if (!TryGetCrosshairVoxel(out Vector3Int voxel))
-        {
-          EnqueueLog("No block hit under crosshair.");
-          return;
-        }
-
-        TerrainSample s = world.SampleTerrainAtWorldVoxel(voxel);
-        ushort storedMaterial = world.GetBlockMaterialAtWorldVoxel(voxel);
-
-        EnqueueLog(
-            $"Voxel={voxel}, " +
-            $"Biome={s.BiomeId} ({ResolveBiomeName(s.BiomeId)}), " +
-            $"StoredBlockMat={storedMaterial}, " +
-            $"ProceduralMat={s.SolidMaterialId}, " +
-            $"Density={s.Density:0.000}, " +
-            $"SurfaceY={s.SurfaceHeight:0.00}"
-        );
-      });
+      RegisterCommand("clear", "Clear console log output.", _ => logLines.Clear());
+      RegisterCommand("debug", "Print Cubus debug snapshot to the console.", _ => PrintDebugSnapshot("command"));
+      RegisterCommand("biome", "Print biome/material info at crosshair.", _ => EnqueueLog(BuildCrosshairSummary()));
 
       RegisterCommand("regen", "Generate world immediately.", _ =>
       {
@@ -796,57 +575,6 @@ namespace Assets.Demo.Scripts.Player
         }
       });
 
-      RegisterCommand("heatmap", "Toggle heatmap: heatmap on|off|toggle", args =>
-      {
-        if (args.Length < 2 || args[1].Equals("toggle", StringComparison.OrdinalIgnoreCase))
-        {
-          heatmapVisible = !heatmapVisible;
-        }
-        else if (args[1].Equals("on", StringComparison.OrdinalIgnoreCase))
-        {
-          heatmapVisible = true;
-        }
-        else if (args[1].Equals("off", StringComparison.OrdinalIgnoreCase))
-        {
-          heatmapVisible = false;
-        }
-        else
-        {
-          EnqueueLog("Usage: heatmap on|off|toggle");
-          return;
-        }
-
-        if (heatmapVisible)
-        {
-          RebuildHeatmap();
-        }
-
-        EnqueueLog($"Heatmap {(heatmapVisible ? "enabled" : "disabled")}");
-      });
-
-      RegisterCommand("overlay", "Toggle info overlay: overlay on|off|toggle", args =>
-      {
-        if (args.Length < 2 || args[1].Equals("toggle", StringComparison.OrdinalIgnoreCase))
-        {
-          overlayVisible = !overlayVisible;
-        }
-        else if (args[1].Equals("on", StringComparison.OrdinalIgnoreCase))
-        {
-          overlayVisible = true;
-        }
-        else if (args[1].Equals("off", StringComparison.OrdinalIgnoreCase))
-        {
-          overlayVisible = false;
-        }
-        else
-        {
-          EnqueueLog("Usage: overlay on|off|toggle");
-          return;
-        }
-
-        EnqueueLog($"Overlay {(overlayVisible ? "enabled" : "disabled")}");
-      });
-
       RegisterCommand("profiler", "Profiler controls: profiler status|reset|log on|off", args =>
       {
         if (args.Length >= 2 && args[1].Equals("reset", StringComparison.OrdinalIgnoreCase))
@@ -882,11 +610,7 @@ namespace Assets.Demo.Scripts.Player
           return;
         }
 
-        EnqueueLog(
-            $"Profiler: FPS={profilerFps:0.0}, AvgMs={profilerAvgFrameMs:0.00}, P95Ms={profilerP95FrameMs:0.00}, WorstMs={profilerWorstFrameMs:0.00}, " +
-            $"Load/s={profilerLoadsPerSecond:0.0}, BlockApply/s={profilerBlockAppliesPerSecond:0.0}, DensityApply/s={profilerDensityAppliesPerSecond:0.0}, " +
-            $"Unload/s={profilerUnloadsPerSecond:0.0}, LoadFail/s={profilerLoadFailuresPerSecond:0.0}, Log={(profilerRealtimeLogEnabled ? "on" : "off")}"
-        );
+        EnqueueLog($"Profiler: {BuildProfilerSummary()}, Log={(profilerRealtimeLogEnabled ? "on" : "off")}");
       });
     }
 
@@ -899,8 +623,7 @@ namespace Assets.Demo.Scripts.Player
       }
 
       EnqueueLog($"> {input}");
-
-      if (commandHistory.Count == 0 || !string.Equals(commandHistory[commandHistory.Count - 1], input, StringComparison.Ordinal))
+      if (commandHistory.Count == 0 || !string.Equals(commandHistory[^1], input, StringComparison.Ordinal))
       {
         commandHistory.Add(input);
       }
@@ -923,14 +646,9 @@ namespace Assets.Demo.Scripts.Player
       {
         autocompleteScratch.Clear();
         CollectAutocompleteMatches(commandKey, autocompleteScratch);
-        if (autocompleteScratch.Count > 0)
-        {
-          EnqueueLog($"Unknown command: {commandKey}. Did you mean: {string.Join(", ", autocompleteScratch)}");
-        }
-        else
-        {
-          EnqueueLog($"Unknown command: {commandKey}");
-        }
+        EnqueueLog(autocompleteScratch.Count > 0
+            ? $"Unknown command: {commandKey}. Did you mean: {string.Join(", ", autocompleteScratch)}"
+            : $"Unknown command: {commandKey}");
       }
     }
 
@@ -992,7 +710,6 @@ namespace Assets.Demo.Scripts.Player
 
       autocompleteScratch.Clear();
       CollectAutocompleteMatches(prefix, autocompleteScratch);
-
       if (autocompleteScratch.Count == 0)
       {
         return;
@@ -1043,7 +760,8 @@ namespace Assets.Demo.Scripts.Player
     private void EnqueueLog(string text)
     {
       logLines.Enqueue(text);
-      while (logLines.Count > MaxLogLines)
+      int limit = Mathf.Max(50, maxLogLines);
+      while (logLines.Count > limit)
       {
         logLines.Dequeue();
       }
