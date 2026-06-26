@@ -49,6 +49,9 @@ namespace Assets.Demo.Scripts.Player
     private Vector2 logScroll;
     private bool disabledController;
     private DemoFirstPersonController cachedFirstPersonController;
+    private CursorLockMode previousCursorLockState;
+    private bool previousCursorVisible;
+    private bool hasSavedCursorState;
 
     private const int ProfilerFrameBufferSize = 512;
     private const float HitchThresholdMs = 33.3f;
@@ -100,6 +103,7 @@ namespace Assets.Demo.Scripts.Player
     private void OnDisable()
     {
       Application.logMessageReceived -= HandleLogMessage;
+      RestoreInputAfterConsole();
     }
 
     private void Update()
@@ -159,29 +163,57 @@ namespace Assets.Demo.Scripts.Player
 
     private void SetConsoleVisible(bool visible)
     {
+      if (consoleVisible == visible)
+      {
+        return;
+      }
+
       consoleVisible = visible;
 
       if (consoleVisible)
       {
-        if (cachedFirstPersonController != null && cachedFirstPersonController.enabled)
-        {
-          cachedFirstPersonController.enabled = false;
-          disabledController = true;
-        }
-
-        Cursor.lockState = CursorLockMode.None;
-        Cursor.visible = true;
+        PrepareInputForConsole();
       }
       else
       {
-        if (disabledController && cachedFirstPersonController != null)
-        {
-          cachedFirstPersonController.enabled = true;
-        }
+        RestoreInputAfterConsole();
+      }
+    }
 
-        disabledController = false;
-        Cursor.lockState = CursorLockMode.Locked;
-        Cursor.visible = false;
+    private void PrepareInputForConsole()
+    {
+      EnsureReferences();
+
+      previousCursorLockState = Cursor.lockState;
+      previousCursorVisible = Cursor.visible;
+      hasSavedCursorState = true;
+
+      if (cachedFirstPersonController != null && cachedFirstPersonController.enabled)
+      {
+        cachedFirstPersonController.enabled = false;
+        disabledController = true;
+      }
+
+      Cursor.lockState = CursorLockMode.None;
+      Cursor.visible = true;
+    }
+
+    private void RestoreInputAfterConsole()
+    {
+      GUI.FocusControl(null);
+
+      if (disabledController && cachedFirstPersonController != null)
+      {
+        cachedFirstPersonController.enabled = true;
+      }
+
+      disabledController = false;
+
+      if (hasSavedCursorState)
+      {
+        Cursor.lockState = previousCursorLockState;
+        Cursor.visible = previousCursorVisible;
+        hasSavedCursorState = false;
       }
     }
 
@@ -233,6 +265,13 @@ namespace Assets.Demo.Scripts.Player
         commandInput = string.Empty;
         historyIndex = -1;
         historyWorkingInput = string.Empty;
+        e.Use();
+        return;
+      }
+
+      if (e.keyCode == KeyCode.Escape)
+      {
+        SetConsoleVisible(false);
         e.Use();
         return;
       }
