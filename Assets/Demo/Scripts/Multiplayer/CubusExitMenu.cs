@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
+using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
 namespace Assets.Demo.Scripts.Multiplayer
@@ -8,6 +9,7 @@ namespace Assets.Demo.Scripts.Multiplayer
   public sealed class CubusExitMenu : MonoBehaviour
   {
     [SerializeField] private Key toggleKey = Key.Escape;
+    [SerializeField] private string mainMenuSceneName = "CubusLauncher";
     [SerializeField] private int sortingOrder = 31000;
 
     private static readonly Vector2 RuntimePanelSize = new(440.0f, 250.0f);
@@ -15,8 +17,8 @@ namespace Assets.Demo.Scripts.Multiplayer
     private CanvasGroup canvasGroup;
     private Text bodyText;
     private Button optionsButton;
-    private Button exitButton;
-    private Button cancelButton;
+    private Button mainMenuButton;
+    private Button exitGameButton;
     private bool isOpen;
     private CursorLockMode previousLockState;
     private bool previousCursorVisible;
@@ -85,14 +87,14 @@ namespace Assets.Demo.Scripts.Multiplayer
         optionsButton.onClick.RemoveListener(OpenOptions);
       }
 
-      if (exitButton != null)
+      if (mainMenuButton != null)
       {
-        exitButton.onClick.RemoveListener(CloseApplication);
+        mainMenuButton.onClick.RemoveListener(ExitToMainMenu);
       }
 
-      if (cancelButton != null)
+      if (exitGameButton != null)
       {
-        cancelButton.onClick.RemoveListener(Cancel);
+        exitGameButton.onClick.RemoveListener(CloseApplication);
       }
 
       CubusUiInput.MenuOpen = false;
@@ -157,11 +159,6 @@ namespace Assets.Demo.Scripts.Multiplayer
       hasSavedCursorState = false;
     }
 
-    private void Cancel()
-    {
-      SetOpen(false, restoreCursor: true);
-    }
-
     private void OpenOptions()
     {
       if (bodyText != null)
@@ -170,14 +167,30 @@ namespace Assets.Demo.Scripts.Multiplayer
       }
     }
 
+    private void ExitToMainMenu()
+    {
+      CubusUiInput.MenuOpen = false;
+      RestoreCursorIfNeeded();
+      Cursor.lockState = CursorLockMode.None;
+      Cursor.visible = true;
+
+      if (string.IsNullOrWhiteSpace(mainMenuSceneName))
+      {
+        Debug.LogError("[CubusExitMenu] Main Menu Scene Name is empty.");
+        return;
+      }
+
+      SceneManager.LoadScene(mainMenuSceneName);
+    }
+
     private void SelectDefaultButton()
     {
-      if (EventSystem.current == null || cancelButton == null)
+      if (EventSystem.current == null || optionsButton == null)
       {
         return;
       }
 
-      EventSystem.current.SetSelectedGameObject(cancelButton.gameObject);
+      EventSystem.current.SetSelectedGameObject(optionsButton.gameObject);
     }
 
     private void BuildUi()
@@ -263,8 +276,8 @@ namespace Assets.Demo.Scripts.Multiplayer
       bodyText = AddText(content, "Pause menu", 14, FontStyle.Bold, TextAnchor.MiddleCenter, new Color(0.62f, 0.74f, 0.84f, 1.0f), 44.0f);
 
       optionsButton = AddButton(content, "Options", OpenOptions, -1.0f, 38.0f, false);
-      exitButton = AddButton(content, "Exit to Windows", CloseApplication, -1.0f, 38.0f, true);
-      cancelButton = AddButton(content, "Cancel", Cancel, -1.0f, 38.0f, false);
+      mainMenuButton = AddButton(content, "Exit to Main Menu", ExitToMainMenu, -1.0f, 38.0f, false);
+      exitGameButton = AddButton(content, "Exit Game", CloseApplication, -1.0f, 38.0f, true);
     }
 
     private static Text AddText(RectTransform parent, string value, int size, FontStyle style, TextAnchor alignment, Color color, float height)
