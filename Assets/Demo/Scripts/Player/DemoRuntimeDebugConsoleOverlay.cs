@@ -266,7 +266,8 @@ namespace Assets.Demo.Scripts.Player
       RectTransform root = canvasObject.GetComponent<RectTransform>();
       Stretch(root);
 
-      Image dim = CreateImage(root, "Dim", new Color(0.0f, 0.0f, 0.0f, 0.58f));
+      Image dim = CreateImage(root, "Dim", new Color(0.0f, 0.0f, 0.0f, 0.92f));
+      dim.raycastTarget = true;
       Stretch(dim.rectTransform);
 
       GameObject panel = new("Panel");
@@ -278,7 +279,8 @@ namespace Assets.Demo.Scripts.Player
       panelRect.anchoredPosition = new Vector2(0.0f, 34.0f);
       panelRect.sizeDelta = new Vector2(1180.0f, 640.0f);
       Image panelImage = panel.AddComponent<Image>();
-      panelImage.color = new Color(0.015f, 0.02f, 0.03f, 0.98f);
+      panelImage.color = new Color(0.015f, 0.02f, 0.03f, 1.0f);
+      panelImage.raycastTarget = true;
 
       Image header = CreateImage(panelRect, "Header", new Color(0.04f, 0.10f, 0.16f, 1.0f));
       RectTransform headerRect = header.rectTransform;
@@ -320,7 +322,8 @@ namespace Assets.Demo.Scripts.Player
       scrollRectTransform.offsetMax = new Vector2(-16.0f, -92.0f);
 
       Image scrollBg = scrollObject.AddComponent<Image>();
-      scrollBg.color = new Color(0.0f, 0.0f, 0.0f, 0.42f);
+      scrollBg.color = new Color(0.0f, 0.0f, 0.0f, 1.0f);
+      scrollBg.raycastTarget = true;
 
       scrollRect = scrollObject.AddComponent<ScrollRect>();
       scrollRect.horizontal = false;
@@ -370,7 +373,8 @@ namespace Assets.Demo.Scripts.Player
       inputRect.sizeDelta = new Vector2(-32.0f, 36.0f);
 
       Image bg = inputObject.AddComponent<Image>();
-      bg.color = new Color(0.0f, 0.0f, 0.0f, 0.82f);
+      bg.color = new Color(0.0f, 0.0f, 0.0f, 1.0f);
+      bg.raycastTarget = true;
 
       inputField = inputObject.AddComponent<InputField>();
       inputField.lineType = InputField.LineType.SingleLine;
@@ -463,7 +467,7 @@ namespace Assets.Demo.Scripts.Player
       GameObject go = new(name);
       go.transform.SetParent(parent, false);
       Text text = go.AddComponent<Text>();
-      text.font = Resources.GetBuiltinResource<Font>("Arial.ttf");
+      text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
       text.fontSize = size;
       text.fontStyle = style;
       text.color = color;
