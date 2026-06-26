@@ -1,13 +1,14 @@
 using TMPro;
 using UnityEngine;
 using UnityEngine.EventSystems;
+using UnityEngine.InputSystem;
 using UnityEngine.UI;
 
 namespace Assets.Demo.Scripts.Multiplayer
 {
   public sealed class CubusExitMenu : MonoBehaviour
   {
-    [SerializeField] private KeyCode toggleKey = KeyCode.Escape;
+    [SerializeField] private Key toggleKey = Key.Escape;
     [SerializeField] private Vector2 panelSize = new(360.0f, 170.0f);
     [SerializeField] private int sortingOrder = 31000;
 
@@ -27,7 +28,8 @@ namespace Assets.Demo.Scripts.Multiplayer
 
     private void Update()
     {
-      if (!Input.GetKeyDown(toggleKey))
+      Keyboard keyboard = Keyboard.current;
+      if (keyboard == null || !keyboard[toggleKey].wasPressedThisFrame)
       {
         return;
       }
@@ -271,15 +273,7 @@ namespace Assets.Demo.Scripts.Multiplayer
 
     private static void EnsureEventSystem()
     {
-      if (EventSystem.current != null || FindAnyObjectByType<EventSystem>() != null)
-      {
-        return;
-      }
-
-      GameObject go = new("EventSystem");
-      go.AddComponent<EventSystem>();
-      go.AddComponent<StandaloneInputModule>();
-      DontDestroyOnLoad(go);
+      CubusInputSystemUiGuard.EnsureEventSystem();
     }
 
     private static void CloseApplication()
