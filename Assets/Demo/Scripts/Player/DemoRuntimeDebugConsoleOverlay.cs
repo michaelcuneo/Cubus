@@ -9,32 +9,39 @@ using UnityEngine.UI;
 
 namespace Assets.Demo.Scripts.Player
 {
+  /// <summary>
+  /// App-wide runtime console UI. This is the only visual console.
+  /// The legacy DemoRuntimeDebugConsole remains as the command/log backend only.
+  /// </summary>
   [DefaultExecutionOrder(32001)]
   public sealed class DemoRuntimeDebugConsoleOverlay : MonoBehaviour
   {
     private const int TopmostSortingOrder = 32767;
-    private const string InputObjectName = "CubusTopmostConsoleInput";
+    private const float SlideSeconds = 0.16f;
 
-    private DemoRuntimeDebugConsole sourceConsole;
-    private FieldInfo sourceVisibleField;
-    private FieldInfo sourceLogLinesField;
-    private MethodInfo sourceExecuteCommandMethod;
-    private MethodInfo sourceRestoreInputMethod;
+    private DemoRuntimeDebugConsole backend;
+    private FieldInfo backendVisibleField;
+    private FieldInfo backendLogLinesField;
+    private MethodInfo backendExecuteCommandMethod;
+    private MethodInfo backendRestoreInputMethod;
+
     private Canvas canvas;
-    private GameObject canvasObject;
-    private RectTransform panelRect;
+    private CanvasGroup rootGroup;
+    private RectTransform panel;
     private Text logText;
     private InputField inputField;
     private ScrollRect scrollRect;
+
     private DemoFirstPersonController cachedFirstPersonController;
     private CursorLockMode previousCursorLockState;
     private bool previousCursorVisible;
     private bool hasSavedCursorState;
     private bool disabledController;
-    private bool visible;
+    private bool isOpen;
     private bool wasBackquoteDown;
     private bool wasEscapeDown;
     private bool wasEnterDown;
+    private float slideVelocity;
     private string lastRenderedLog = string.Empty;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -45,69 +52,82 @@ namespace Assets.Demo.Scripts.Player
         return;
       }
 
-      GameObject go = new("Demo Runtime Debug Console Overlay");
+      GameObject go = new("Cubus Runtime Console Scene");
       go.AddComponent<DemoRuntimeDebugConsoleOverlay>();
       DontDestroyOnLoad(go);
     }
 
     private void Awake()
     {
-      BindSourceConsole();
-      BuildCanvas();
-      SetVisible(false, true);
+      BindBackend();
+      BuildUi();
+      ForceClosed();
     }
 
     private void Start()
     {
-      SetVisible(false, true);
+      ForceClosed();
     }
 
     private void Update()
     {
-      BindSourceConsole();
-      SuppressSourceConsole();
+      BindBackend();
+      SuppressLegacyImguiConsole();
       KeepCanvasTopmost();
-      UpdateToggleInput();
+      HandleToggleKeys();
 
-      if (!visible)
+      if (!isOpen)
       {
         return;
       }
 
-      UpdateSubmitInput();
-      RenderLogFromSource();
+      HandleSubmitKey();
+      RenderLogFromBackend();
       FocusInput();
     }
 
     private void OnDestroy()
     {
       RestoreInputAfterConsole();
-      if (canvasObject != null)
-      {
-        Destroy(canvasObject);
-      }
     }
 
-    private void BindSourceConsole()
+    private void BindBackend()
     {
-      if (sourceConsole == null)
+      if (backend == null)
       {
-        sourceConsole = FindAnyObjectByType<DemoRuntimeDebugConsole>();
+        backend = FindAnyObjectByType<DemoRuntimeDebugConsole>();
       }
 
-      if (sourceConsole == null || sourceExecuteCommandMethod != null)
+      if (backend == null || backendExecuteCommandMethod != null)
       {
         return;
       }
 
       Type type = typeof(DemoRuntimeDebugConsole);
-      sourceVisibleField = type.GetField("consoleVisible", BindingFlags.Instance | BindingFlags.NonPublic);
-      sourceLogLinesField = type.GetField("logLines", BindingFlags.Instance | BindingFlags.NonPublic);
-      sourceExecuteCommandMethod = type.GetMethod("ExecuteCommand", BindingFlags.Instance | BindingFlags.NonPublic);
-      sourceRestoreInputMethod = type.GetMethod("RestoreInputAfterConsole", BindingFlags.Instance | BindingFlags.NonPublic);
+      backendVisibleField = type.GetField("consoleVisible", BindingFlags.Instance | BindingFlags.NonPublic);
+      backendLogLinesField = type.GetField("logLines", BindingFlags.Instance | BindingFlags.NonPublic);
+      backendExecuteCommandMethod = type.GetMethod("ExecuteCommand", BindingFlags.Instance | BindingFlags.NonPublic);
+      backendRestoreInputMethod = type.GetMethod("RestoreInputAfterConsole", BindingFlags.Instance | BindingFlags.NonPublic);
     }
 
-    private void UpdateToggleInput()
+    private void SuppressLegacyImguiConsole()
+    {
+      if (backend == null || backendVisibleField == null)
+      {
+        return;
+      }
+
+      bool backendWasVisible = backendVisibleField.GetValue(backend) is bool value && value;
+      if (!backendWasVisible)
+      {
+        return;
+      }
+
+      backendVisibleField.SetValue(backend, false);
+      backendRestoreInputMethod?.Invoke(backend, null);
+    }
+
+    private void HandleToggleKeys()
     {
       Keyboard keyboard = Keyboard.current;
       bool backquoteDown = keyboard != null && keyboard[Key.Backquote].isPressed;
@@ -115,19 +135,19 @@ namespace Assets.Demo.Scripts.Player
 
       if (backquoteDown && !wasBackquoteDown)
       {
-        SetVisible(!visible, true);
+        SetOpen(!isOpen);
       }
 
-      if (visible && escapeDown && !wasEscapeDown)
+      if (isOpen && escapeDown && !wasEscapeDown)
       {
-        SetVisible(false, true);
+        SetOpen(false);
       }
 
       wasBackquoteDown = backquoteDown;
       wasEscapeDown = escapeDown;
     }
 
-    private void UpdateSubmitInput()
+    private void HandleSubmitKey()
     {
       Keyboard keyboard = Keyboard.current;
       bool enterDown = keyboard != null && (keyboard[Key.Enter].isPressed || keyboard[Key.NumpadEnter].isPressed);
@@ -138,6 +158,91 @@ namespace Assets.Demo.Scripts.Player
       }
 
       wasEnterDown = enterDown;
+    }
+
+    private void SetOpen(bool open)
+    {
+      if (isOpen == open)
+      {
+        return;
+      }
+
+      isOpen = open;
+      StopAllCoroutines();
+      StartCoroutine(SlidePanel(open));
+
+      if (open)
+      {
+        PrepareInputForConsole();
+        RenderLogFromBackend(true);
+        FocusInput();
+      }
+      else
+      {
+        RestoreInputAfterConsole();
+      }
+    }
+
+    private void ForceClosed()
+    {
+      isOpen = false;
+      StopAllCoroutines();
+
+      if (rootGroup != null)
+      {
+        rootGroup.alpha = 0.0f;
+        rootGroup.interactable = false;
+        rootGroup.blocksRaycasts = false;
+      }
+
+      if (panel != null)
+      {
+        panel.anchoredPosition = GetClosedPosition();
+      }
+
+      RestoreInputAfterConsole();
+      SuppressLegacyImguiConsole();
+    }
+
+    private IEnumerator SlidePanel(bool open)
+    {
+      if (rootGroup == null || panel == null)
+      {
+        yield break;
+      }
+
+      rootGroup.interactable = open;
+      rootGroup.blocksRaycasts = open;
+
+      Vector2 start = panel.anchoredPosition;
+      Vector2 end = open ? GetOpenPosition() : GetClosedPosition();
+      float startAlpha = rootGroup.alpha;
+      float endAlpha = open ? 1.0f : 0.0f;
+      float t = 0.0f;
+
+      while (t < 1.0f)
+      {
+        t += Time.unscaledDeltaTime / Mathf.Max(0.01f, SlideSeconds);
+        float eased = 1.0f - Mathf.Pow(1.0f - Mathf.Clamp01(t), 3.0f);
+        panel.anchoredPosition = Vector2.LerpUnclamped(start, end, eased);
+        rootGroup.alpha = Mathf.Lerp(startAlpha, endAlpha, eased);
+        yield return null;
+      }
+
+      panel.anchoredPosition = end;
+      rootGroup.alpha = endAlpha;
+      rootGroup.interactable = open;
+      rootGroup.blocksRaycasts = open;
+    }
+
+    private Vector2 GetOpenPosition()
+    {
+      return new Vector2(0.0f, 32.0f);
+    }
+
+    private Vector2 GetClosedPosition()
+    {
+      return new Vector2(0.0f, -720.0f);
     }
 
     private void SubmitInput()
@@ -156,56 +261,8 @@ namespace Assets.Demo.Scripts.Player
       inputField.text = string.Empty;
       inputField.ActivateInputField();
       inputField.Select();
-
-      if (sourceConsole != null && sourceExecuteCommandMethod != null)
-      {
-        sourceExecuteCommandMethod.Invoke(sourceConsole, new object[] { command });
-      }
-    }
-
-    private void SetVisible(bool value, bool syncSource)
-    {
-      visible = value;
-
-      if (canvasObject != null)
-      {
-        canvasObject.SetActive(visible);
-      }
-
-      if (syncSource)
-      {
-        SuppressSourceConsole();
-      }
-
-      if (visible)
-      {
-        PrepareInputForConsole();
-        KeepCanvasTopmost();
-        RenderLogFromSource(true);
-        FocusInput();
-      }
-      else
-      {
-        RestoreInputAfterConsole();
-      }
-    }
-
-    private void SuppressSourceConsole()
-    {
-      if (sourceConsole == null)
-      {
-        return;
-      }
-
-      if (sourceRestoreInputMethod != null)
-      {
-        sourceRestoreInputMethod.Invoke(sourceConsole, null);
-      }
-
-      if (sourceVisibleField != null)
-      {
-        sourceVisibleField.SetValue(sourceConsole, false);
-      }
+      backendExecuteCommandMethod?.Invoke(backend, new object[] { command });
+      RenderLogFromBackend(true);
     }
 
     private void PrepareInputForConsole()
@@ -249,12 +306,12 @@ namespace Assets.Demo.Scripts.Player
       }
     }
 
-    private void BuildCanvas()
+    private void BuildUi()
     {
       EnsureEventSystem();
 
-      canvasObject = new GameObject("Cubus Topmost Runtime Console Canvas");
-      DontDestroyOnLoad(canvasObject);
+      GameObject canvasObject = new("Cubus Runtime Console Canvas");
+      canvasObject.transform.SetParent(transform, false);
 
       canvas = canvasObject.AddComponent<Canvas>();
       canvas.renderMode = RenderMode.ScreenSpaceOverlay;
@@ -267,27 +324,32 @@ namespace Assets.Demo.Scripts.Player
       scaler.matchWidthOrHeight = 0.5f;
 
       canvasObject.AddComponent<GraphicRaycaster>();
-
       RectTransform root = canvasObject.GetComponent<RectTransform>();
       Stretch(root);
 
-      Image dim = CreateImage(root, "Dim", new Color(0.0f, 0.0f, 0.0f, 0.92f));
+      rootGroup = canvasObject.AddComponent<CanvasGroup>();
+      rootGroup.alpha = 0.0f;
+      rootGroup.interactable = false;
+      rootGroup.blocksRaycasts = false;
+
+      Image dim = CreateImage(root, "Dim", new Color(0.0f, 0.0f, 0.0f, 0.72f));
       dim.raycastTarget = true;
       Stretch(dim.rectTransform);
 
-      GameObject panel = new("Panel");
-      panel.transform.SetParent(root, false);
-      panelRect = panel.AddComponent<RectTransform>();
-      panelRect.anchorMin = new Vector2(0.5f, 0.0f);
-      panelRect.anchorMax = new Vector2(0.5f, 0.0f);
-      panelRect.pivot = new Vector2(0.5f, 0.0f);
-      panelRect.anchoredPosition = new Vector2(0.0f, 34.0f);
-      panelRect.sizeDelta = new Vector2(1180.0f, 640.0f);
-      Image panelImage = panel.AddComponent<Image>();
+      GameObject panelObject = new("Console Panel");
+      panelObject.transform.SetParent(root, false);
+      panel = panelObject.AddComponent<RectTransform>();
+      panel.anchorMin = new Vector2(0.5f, 0.0f);
+      panel.anchorMax = new Vector2(0.5f, 0.0f);
+      panel.pivot = new Vector2(0.5f, 0.0f);
+      panel.sizeDelta = new Vector2(1180.0f, 640.0f);
+      panel.anchoredPosition = GetClosedPosition();
+
+      Image panelImage = panelObject.AddComponent<Image>();
       panelImage.color = new Color(0.015f, 0.02f, 0.03f, 1.0f);
       panelImage.raycastTarget = true;
 
-      Image header = CreateImage(panelRect, "Header", new Color(0.04f, 0.10f, 0.16f, 1.0f));
+      Image header = CreateImage(panel, "Header", new Color(0.04f, 0.10f, 0.16f, 1.0f));
       RectTransform headerRect = header.rectTransform;
       headerRect.anchorMin = new Vector2(0.0f, 1.0f);
       headerRect.anchorMax = new Vector2(1.0f, 1.0f);
@@ -296,14 +358,12 @@ namespace Assets.Demo.Scripts.Player
       headerRect.sizeDelta = new Vector2(0.0f, 46.0f);
 
       Text title = CreateText(headerRect, "Title", "CUBUS RUNTIME CONSOLE", 18, FontStyle.Bold, new Color(0.72f, 0.93f, 1.0f, 1.0f));
-      RectTransform titleRect = title.rectTransform;
-      titleRect.anchorMin = Vector2.zero;
-      titleRect.anchorMax = Vector2.one;
-      titleRect.offsetMin = new Vector2(18.0f, 0.0f);
-      titleRect.offsetMax = new Vector2(-18.0f, 0.0f);
+      Stretch(title.rectTransform);
+      title.rectTransform.offsetMin = new Vector2(18.0f, 0.0f);
+      title.rectTransform.offsetMax = new Vector2(-18.0f, 0.0f);
       title.alignment = TextAnchor.MiddleLeft;
 
-      Text help = CreateText(panelRect, "Help", "` or Esc to close  |  Enter to run  |  Existing console commands/logs mirrored here", 13, FontStyle.Bold, new Color(0.68f, 0.82f, 0.92f, 1.0f));
+      Text help = CreateText(panel, "Help", "` or Esc to close  |  Enter to run", 13, FontStyle.Bold, new Color(0.68f, 0.82f, 0.92f, 1.0f));
       RectTransform helpRect = help.rectTransform;
       helpRect.anchorMin = new Vector2(0.0f, 1.0f);
       helpRect.anchorMax = new Vector2(1.0f, 1.0f);
@@ -312,22 +372,22 @@ namespace Assets.Demo.Scripts.Player
       helpRect.sizeDelta = new Vector2(-32.0f, 28.0f);
       help.alignment = TextAnchor.MiddleLeft;
 
-      BuildScrollLog(panelRect);
-      BuildInput(panelRect);
+      BuildLog(panel);
+      BuildInput(panel);
     }
 
-    private void BuildScrollLog(RectTransform parent)
+    private void BuildLog(RectTransform parent)
     {
       GameObject scrollObject = new("Log Scroll");
       scrollObject.transform.SetParent(parent, false);
-      RectTransform scrollRectTransform = scrollObject.AddComponent<RectTransform>();
-      scrollRectTransform.anchorMin = new Vector2(0.0f, 0.0f);
-      scrollRectTransform.anchorMax = new Vector2(1.0f, 1.0f);
-      scrollRectTransform.offsetMin = new Vector2(16.0f, 60.0f);
-      scrollRectTransform.offsetMax = new Vector2(-16.0f, -92.0f);
+      RectTransform scrollTransform = scrollObject.AddComponent<RectTransform>();
+      scrollTransform.anchorMin = new Vector2(0.0f, 0.0f);
+      scrollTransform.anchorMax = new Vector2(1.0f, 1.0f);
+      scrollTransform.offsetMin = new Vector2(16.0f, 60.0f);
+      scrollTransform.offsetMax = new Vector2(-16.0f, -92.0f);
 
       Image scrollBg = scrollObject.AddComponent<Image>();
-      scrollBg.color = new Color(0.0f, 0.0f, 0.0f, 1.0f);
+      scrollBg.color = Color.black;
       scrollBg.raycastTarget = true;
 
       scrollRect = scrollObject.AddComponent<ScrollRect>();
@@ -353,8 +413,7 @@ namespace Assets.Demo.Scripts.Player
       content.sizeDelta = new Vector2(-16.0f, 1200.0f);
 
       logText = CreateText(content, "Log Text", string.Empty, 13, FontStyle.Normal, new Color(0.90f, 0.95f, 1.0f, 1.0f));
-      RectTransform logRect = logText.rectTransform;
-      Stretch(logRect);
+      Stretch(logText.rectTransform);
       logText.alignment = TextAnchor.UpperLeft;
       logText.horizontalOverflow = HorizontalWrapMode.Wrap;
       logText.verticalOverflow = VerticalWrapMode.Overflow;
@@ -368,7 +427,7 @@ namespace Assets.Demo.Scripts.Player
 
     private void BuildInput(RectTransform parent)
     {
-      GameObject inputObject = new(InputObjectName);
+      GameObject inputObject = new("Runtime Console Input");
       inputObject.transform.SetParent(parent, false);
       RectTransform inputRect = inputObject.AddComponent<RectTransform>();
       inputRect.anchorMin = new Vector2(0.0f, 0.0f);
@@ -378,7 +437,7 @@ namespace Assets.Demo.Scripts.Player
       inputRect.sizeDelta = new Vector2(-32.0f, 36.0f);
 
       Image bg = inputObject.AddComponent<Image>();
-      bg.color = new Color(0.0f, 0.0f, 0.0f, 1.0f);
+      bg.color = Color.black;
       bg.raycastTarget = true;
 
       inputField = inputObject.AddComponent<InputField>();
@@ -386,23 +445,20 @@ namespace Assets.Demo.Scripts.Player
       inputField.textComponent = CreateText(inputRect, "Text", string.Empty, 15, FontStyle.Bold, Color.white);
       inputField.placeholder = CreateText(inputRect, "Placeholder", "type command...", 15, FontStyle.Normal, new Color(0.65f, 0.74f, 0.82f, 0.75f));
 
-      RectTransform textRect = inputField.textComponent.rectTransform;
-      textRect.offsetMin = new Vector2(10.0f, 5.0f);
-      textRect.offsetMax = new Vector2(-10.0f, -5.0f);
-
-      RectTransform placeholderRect = inputField.placeholder.rectTransform;
-      placeholderRect.offsetMin = new Vector2(10.0f, 5.0f);
-      placeholderRect.offsetMax = new Vector2(-10.0f, -5.0f);
+      inputField.textComponent.rectTransform.offsetMin = new Vector2(10.0f, 5.0f);
+      inputField.textComponent.rectTransform.offsetMax = new Vector2(-10.0f, -5.0f);
+      inputField.placeholder.rectTransform.offsetMin = new Vector2(10.0f, 5.0f);
+      inputField.placeholder.rectTransform.offsetMax = new Vector2(-10.0f, -5.0f);
     }
 
-    private void RenderLogFromSource(bool force = false)
+    private void RenderLogFromBackend(bool force = false)
     {
-      if (logText == null || sourceConsole == null || sourceLogLinesField == null)
+      if (logText == null || backend == null || backendLogLinesField == null)
       {
         return;
       }
 
-      if (sourceLogLinesField.GetValue(sourceConsole) is not IEnumerable lines)
+      if (backendLogLinesField.GetValue(backend) is not IEnumerable lines)
       {
         return;
       }
@@ -433,7 +489,7 @@ namespace Assets.Demo.Scripts.Player
 
     private void KeepCanvasTopmost()
     {
-      if (canvas == null || canvasObject == null)
+      if (canvas == null)
       {
         return;
       }
@@ -441,12 +497,12 @@ namespace Assets.Demo.Scripts.Player
       canvas.renderMode = RenderMode.ScreenSpaceOverlay;
       canvas.overrideSorting = true;
       canvas.sortingOrder = TopmostSortingOrder;
-      canvasObject.transform.SetAsLastSibling();
+      canvas.transform.SetAsLastSibling();
     }
 
     private void FocusInput()
     {
-      if (inputField == null || !visible)
+      if (inputField == null || !isOpen)
       {
         return;
       }
