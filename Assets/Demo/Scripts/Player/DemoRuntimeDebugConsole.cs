@@ -499,7 +499,7 @@ namespace Assets.Demo.Scripts.Player
         profilerLastTotalLoadFailures = totalLoadFailures;
       }
 
-      EmitRealtimeProfilerLog(elapsed);
+      // EmitRealtimeProfilerLog(elapsed);
 
       profilerWindowFrameCount = 0;
       profilerWindowElapsed = 0.0f;
