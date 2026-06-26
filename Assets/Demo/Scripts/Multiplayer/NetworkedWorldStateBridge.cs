@@ -32,6 +32,7 @@ namespace Assets.Demo.Scripts.Multiplayer
     private CubusNetworkManager net;
     private bool callbacksRegistered;
     private bool sawServerWorldState;
+    private bool consumedLaunchResetRequest;
     private string appliedSignature;
 
     public bool HasServerWorldState => sawServerWorldState;
@@ -90,6 +91,14 @@ namespace Assets.Demo.Scripts.Multiplayer
     {
       RegisterCallbacks(conn);
 
+      if (CubusGameLaunchContext.HasLaunch && CubusGameLaunchContext.ResetConnectedWorldOnLaunch && !consumedLaunchResetRequest)
+      {
+        consumedLaunchResetRequest = true;
+        Debug.Log("[CubusWorldState] Dev launch requested connected world reset.");
+        ResetServerWorldFromCurrentSceneSettings();
+        return;
+      }
+
       if (!sawServerWorldState && publishSceneSettingsIfMissing)
       {
         PublishCurrentSceneSettings();
@@ -100,6 +109,7 @@ namespace Assets.Demo.Scripts.Multiplayer
     {
       callbacksRegistered = false;
       sawServerWorldState = false;
+      consumedLaunchResetRequest = false;
     }
 
     private void RegisterCallbacks(DbConnection conn)
@@ -299,11 +309,8 @@ namespace Assets.Demo.Scripts.Multiplayer
       }
 
       WorldStreamer streamer = world.GetComponent<WorldStreamer>();
-
       world.ClearWorld();
 
-      // Streamed worlds will refill chunks around the viewer. Non-streamed demo scenes
-      // need an explicit full generation pass after the settings swap.
       if (streamer == null)
       {
         world.GenerateWorld();
