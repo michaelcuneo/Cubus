@@ -27,7 +27,6 @@ namespace Assets.Demo.Scripts.Player
     }
 
     [SerializeField] private Key printDebugSnapshotKey = Key.F3;
-    [SerializeField] private Key toggleHeatmapKey = Key.F4;
     [SerializeField] private Key toggleConsoleKey = Key.Backquote;
     [SerializeField] private bool consoleVisible;
     [SerializeField] private bool profilerRealtimeLogEnabled = true;
@@ -119,11 +118,6 @@ namespace Assets.Demo.Scripts.Player
         PrintDebugSnapshot("F3 debug snapshot");
       }
 
-      if (keyboard[toggleHeatmapKey].wasPressedThisFrame)
-      {
-        PrintDebugSnapshot("F4 heatmap/debug snapshot");
-      }
-
       if (keyboard[toggleConsoleKey].wasPressedThisFrame)
       {
         SetConsoleVisible(!consoleVisible);
@@ -207,7 +201,7 @@ namespace Assets.Demo.Scripts.Player
 
       GUI.Box(rect, string.Empty);
       GUILayout.BeginArea(new Rect(rect.x + 8.0f, rect.y + 8.0f, rect.width - 16.0f, rect.height - 16.0f));
-      GUILayout.Label("Runtime Console (` to close, F3 to print Cubus debug snapshot)");
+      GUILayout.Label("Runtime Console (` to close, F3 debug snapshot, command: dev on)");
 
       logScroll = GUILayout.BeginScrollView(logScroll, GUILayout.Height(rect.height - 82.0f));
       foreach (string line in logLines)
@@ -383,10 +377,7 @@ namespace Assets.Demo.Scripts.Player
           ? "world=none"
           : $"mode={world.Settings.TerrainSystem} worldReady={world.IsWorldReady} initialReady={world.IsInitialTerrainReady} generationProgress={world.GenerationProgress:0.00} status='{world.GenerationStatus}' spawn={world.SuggestedSpawnLocation}";
 
-      string crosshairSummary = BuildCrosshairSummary();
-      string profilerSummary = BuildProfilerSummary();
-
-      return $"{worldSummary}; {crosshairSummary}; {profilerSummary}";
+      return $"{worldSummary}; {BuildCrosshairSummary()}; {BuildProfilerSummary()}; devMode={Assets.Demo.Scripts.Multiplayer.CubusDeveloperMode.IsEnabled}";
     }
 
     private string BuildCrosshairSummary()
@@ -499,6 +490,31 @@ namespace Assets.Demo.Scripts.Player
       RegisterCommand("clear", "Clear console log output.", _ => logLines.Clear());
       RegisterCommand("debug", "Print Cubus debug snapshot to the console.", _ => PrintDebugSnapshot("command"));
       RegisterCommand("biome", "Print biome/material info at crosshair.", _ => EnqueueLog(BuildCrosshairSummary()));
+
+      RegisterCommand("dev", "Developer mode controls: dev on|off|status", args =>
+      {
+        if (args.Length < 2 || args[1].Equals("status", StringComparison.OrdinalIgnoreCase))
+        {
+          EnqueueLog($"Developer mode is {(Assets.Demo.Scripts.Multiplayer.CubusDeveloperMode.IsEnabled ? "ON" : "OFF")}.");
+          return;
+        }
+
+        if (args[1].Equals("on", StringComparison.OrdinalIgnoreCase))
+        {
+          Assets.Demo.Scripts.Multiplayer.CubusDeveloperMode.IsEnabled = true;
+          EnqueueLog("Developer mode enabled. Launcher dev world tools are now visible.");
+          return;
+        }
+
+        if (args[1].Equals("off", StringComparison.OrdinalIgnoreCase))
+        {
+          Assets.Demo.Scripts.Multiplayer.CubusDeveloperMode.IsEnabled = false;
+          EnqueueLog("Developer mode disabled. Launcher dev world tools are hidden.");
+          return;
+        }
+
+        EnqueueLog("Usage: dev on|off|status");
+      });
 
       RegisterCommand("regen", "Generate world immediately.", _ =>
       {
@@ -623,7 +639,7 @@ namespace Assets.Demo.Scripts.Player
       }
 
       EnqueueLog($"> {input}");
-      if (commandHistory.Count == 0 || !string.Equals(commandHistory[^1], input, StringComparison.Ordinal))
+      if (commandHistory.Count == 0 || !string.Equals(commandHistory[commandHistory.Count - 1], input, StringComparison.Ordinal))
       {
         commandHistory.Add(input);
       }
