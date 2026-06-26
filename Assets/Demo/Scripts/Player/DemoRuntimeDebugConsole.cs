@@ -210,39 +210,52 @@ namespace Assets.Demo.Scripts.Player
       }
       GUILayout.EndScrollView();
 
+      HandleConsoleInputEvents();
+
       GUI.SetNextControlName("DebugConsoleInput");
       commandInput = GUILayout.TextField(commandInput);
 
-      Event e = Event.current;
-      if (e.type == EventType.KeyDown)
-      {
-        if (e.keyCode == KeyCode.Return)
-        {
-          ExecuteCommand(commandInput);
-          commandInput = string.Empty;
-          historyIndex = -1;
-          historyWorkingInput = string.Empty;
-          e.Use();
-        }
-        else if (e.keyCode == KeyCode.UpArrow)
-        {
-          NavigateHistory(older: true);
-          e.Use();
-        }
-        else if (e.keyCode == KeyCode.DownArrow)
-        {
-          NavigateHistory(older: false);
-          e.Use();
-        }
-        else if (e.keyCode == KeyCode.Tab)
-        {
-          ApplyAutocomplete();
-          e.Use();
-        }
-      }
-
       GUI.FocusControl("DebugConsoleInput");
       GUILayout.EndArea();
+    }
+
+    private void HandleConsoleInputEvents()
+    {
+      Event e = Event.current;
+      if (e.type != EventType.KeyDown)
+      {
+        return;
+      }
+
+      if (e.keyCode == KeyCode.Return || e.keyCode == KeyCode.KeypadEnter)
+      {
+        ExecuteCommand(commandInput);
+        commandInput = string.Empty;
+        historyIndex = -1;
+        historyWorkingInput = string.Empty;
+        e.Use();
+        return;
+      }
+
+      if (e.keyCode == KeyCode.UpArrow)
+      {
+        NavigateHistory(older: true);
+        e.Use();
+        return;
+      }
+
+      if (e.keyCode == KeyCode.DownArrow)
+      {
+        NavigateHistory(older: false);
+        e.Use();
+        return;
+      }
+
+      if (e.keyCode == KeyCode.Tab)
+      {
+        ApplyAutocomplete();
+        e.Use();
+      }
     }
 
     private void UpdateProfilerTelemetry()
