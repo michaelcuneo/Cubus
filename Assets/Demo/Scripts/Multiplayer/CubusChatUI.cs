@@ -9,6 +9,7 @@ namespace Assets.Demo.Scripts.Multiplayer
   /// <summary>
   /// Minimal IMGUI chat overlay backed by the replicated <c>chat_message</c> table.
   /// Press Enter to start typing, Enter again to send, or Escape to cancel.
+  /// The chat panel stays hidden until the player is composing a message.
   /// </summary>
   public sealed class CubusChatUI : MonoBehaviour
   {
@@ -124,6 +125,11 @@ namespace Assets.Demo.Scripts.Multiplayer
 
       HandleInputEvents();
 
+      if (!composing)
+      {
+        return;
+      }
+
       float x = 10.0f;
       float y = Screen.height - panelSize.y - 10.0f;
       GUILayout.BeginArea(new Rect(x, y, panelSize.x, panelSize.y), GUI.skin.box);
@@ -137,15 +143,8 @@ namespace Assets.Demo.Scripts.Multiplayer
       }
       GUILayout.EndScrollView();
 
-      if (composing)
-      {
-        GUILayout.Label($"> {draft}<color=#ffffffaa>_</color>");
-        GUILayout.Label("<i>Enter to send  -  Esc to cancel</i>");
-      }
-      else
-      {
-        GUILayout.Label("<i>Press Enter to chat</i>");
-      }
+      GUILayout.Label($"> {draft}<color=#ffffffaa>_</color>");
+      GUILayout.Label("<i>Enter to send  -  Esc to cancel</i>");
 
       GUILayout.EndArea();
     }
