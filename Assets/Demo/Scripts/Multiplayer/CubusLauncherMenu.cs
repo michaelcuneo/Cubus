@@ -1,3 +1,4 @@
+using System.Collections;
 using System.IO;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain;
 using UnityEngine;
@@ -39,6 +40,10 @@ namespace Assets.Demo.Scripts.Multiplayer
     private TerrainSystem terrainSystem = TerrainSystem.Block;
     private string status = "Choose how to start Cubus.";
     private Vector2 scroll;
+    private bool isLoadingGameplayScene;
+    private float loadingProgress;
+    private float loadingStartedAt;
+    private string loadingScenePath;
 
     private void Awake()
     {
@@ -64,6 +69,8 @@ namespace Assets.Demo.Scripts.Multiplayer
       GUILayout.Label("<b>Cubus</b>");
       GUILayout.Label("Create a local world, or connect to a hosted Cubus world.");
       GUILayout.Space(10.0f);
+
+      GUI.enabled = !isLoadingGameplayScene;
 
       GUILayout.BeginHorizontal();
       if (GUILayout.Toggle(mode == SetupMode.Local, "Local Game", GUI.skin.button))
@@ -91,11 +98,36 @@ namespace Assets.Demo.Scripts.Multiplayer
         StartSelectedGame();
       }
 
+      GUI.enabled = true;
+
       GUILayout.Space(8.0f);
       GUILayout.Label($"<b>Status:</b> {status}");
 
+      if (isLoadingGameplayScene)
+      {
+        DrawLoadingStatus();
+      }
+
       GUILayout.EndScrollView();
       GUILayout.EndArea();
+    }
+
+    private void DrawLoadingStatus()
+    {
+      float elapsed = Time.realtimeSinceStartup - loadingStartedAt;
+      float progressPercent = Mathf.Clamp01(loadingProgress) * 100.0f;
+      GUILayout.Space(12.0f);
+      GUILayout.Label("<b>Loading Scene</b>");
+      GUILayout.Label($"Scene: {loadingScenePath}");
+      GUILayout.Label($"Elapsed: {elapsed:0.0}s");
+      GUILayout.Label($"Progress: {progressPercent:0}%");
+
+      Rect progressRect = GUILayoutUtility.GetRect(1.0f, 18.0f, GUILayout.ExpandWidth(true));
+      GUI.Box(progressRect, GUIContent.none);
+      Rect fill = progressRect;
+      fill.width *= Mathf.Clamp01(loadingProgress);
+      GUI.Box(fill, GUIContent.none);
+      GUILayout.Label("Next stage: CubusGame bootstrap will apply launch settings and prewarm terrain before player control is enabled.");
     }
 
     private void DrawWorldFields()
@@ -150,6 +182,11 @@ namespace Assets.Demo.Scripts.Multiplayer
 
     private void StartSelectedGame()
     {
+      if (isLoadingGameplayScene)
+      {
+        return;
+      }
+
       if (!TryBuildLaunchContext())
       {
         return;
@@ -168,8 +205,33 @@ namespace Assets.Demo.Scripts.Multiplayer
         return;
       }
 
-      status = $"Loading {scenePath}...";
-      SceneManager.LoadScene(scenePath);
+      StartCoroutine(LoadGameplaySceneRoutine(scenePath));
+    }
+
+    private IEnumerator LoadGameplaySceneRoutine(string scenePath)
+    {
+      isLoadingGameplayScene = true;
+      loadingProgress = 0.0f;
+      loadingStartedAt = Time.realtimeSinceStartup;
+      loadingScenePath = scenePath;
+      status = $"Loading scene {scenePath}...";
+      Debug.Log($"[CubusLauncher] Loading gameplay scene: {scenePath}");
+
+      AsyncOperation operation = SceneManager.LoadSceneAsync(scenePath);
+      if (operation == null)
+      {
+        status = $"Failed to start loading scene {scenePath}.";
+        isLoadingGameplayScene = false;
+        yield break;
+      }
+
+      operation.allowSceneActivation = true;
+      while (!operation.isDone)
+      {
+        loadingProgress = Mathf.Clamp01(operation.progress / 0.9f);
+        status = $"Loading scene {scenePath}: {loadingProgress * 100.0f:0}%";
+        yield return null;
+      }
     }
 
     private bool TryBuildLaunchContext()
