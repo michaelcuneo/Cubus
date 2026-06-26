@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
+using Assets.Demo.Scripts.Multiplayer;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
@@ -9,10 +10,6 @@ using UnityEngine.UI;
 
 namespace Assets.Demo.Scripts.Player
 {
-  /// <summary>
-  /// App-wide runtime console UI. This is the only visual console.
-  /// The legacy DemoRuntimeDebugConsole remains as the command/log backend only.
-  /// </summary>
   [DefaultExecutionOrder(32001)]
   public sealed class DemoRuntimeDebugConsoleOverlay : MonoBehaviour
   {
@@ -83,6 +80,7 @@ namespace Assets.Demo.Scripts.Player
         return;
       }
 
+      CubusUiInput.ConsoleOpen = true;
       HandleSubmitKey();
       RenderLogFromBackend();
       FocusInput();
@@ -90,6 +88,7 @@ namespace Assets.Demo.Scripts.Player
 
     private void OnDestroy()
     {
+      CubusUiInput.ConsoleOpen = false;
       RestoreInputAfterConsole();
     }
 
@@ -142,6 +141,7 @@ namespace Assets.Demo.Scripts.Player
 
       if (isOpen && escapeDown && !wasEscapeDown)
       {
+        CubusUiInput.SuppressMenuInputForCurrentFrame();
         SetOpen(false);
       }
 
@@ -170,6 +170,13 @@ namespace Assets.Demo.Scripts.Player
       }
 
       isOpen = open;
+      CubusUiInput.ConsoleOpen = open;
+
+      if (!open)
+      {
+        CubusUiInput.SuppressMenuInputForCurrentFrame();
+      }
+
       StopAllCoroutines();
       StartCoroutine(SlidePanel(open));
 
@@ -188,6 +195,7 @@ namespace Assets.Demo.Scripts.Player
     private void ForceClosed()
     {
       isOpen = false;
+      CubusUiInput.ConsoleOpen = false;
       StopAllCoroutines();
 
       if (rootGroup != null)
@@ -217,7 +225,7 @@ namespace Assets.Demo.Scripts.Player
       rootGroup.blocksRaycasts = open;
 
       Vector2 start = panel.anchoredPosition;
-      Vector2 end = open ? GetOpenPosition() : GetClosedPosition();
+      Vector2 end = open ? Vector2.zero : GetClosedPosition();
       float startAlpha = rootGroup.alpha;
       float endAlpha = open ? 1.0f : 0.0f;
       float t = 0.0f;
@@ -237,14 +245,9 @@ namespace Assets.Demo.Scripts.Player
       rootGroup.blocksRaycasts = open;
     }
 
-    private Vector2 GetOpenPosition()
-    {
-      return new Vector2(0.0f, 32.0f);
-    }
-
     private Vector2 GetClosedPosition()
     {
-      return new Vector2(0.0f, -720.0f);
+      return new Vector2(0.0f, -Screen.height * 0.6f);
     }
 
     private void SubmitInput()
@@ -269,6 +272,8 @@ namespace Assets.Demo.Scripts.Player
 
     private void PrepareInputForConsole()
     {
+      CubusUiInput.ConsoleOpen = true;
+
       if (!hasSavedCursorState)
       {
         previousCursorLockState = Cursor.lockState;
@@ -293,6 +298,8 @@ namespace Assets.Demo.Scripts.Player
 
     private void RestoreInputAfterConsole()
     {
+      CubusUiInput.ConsoleOpen = false;
+
       if (disabledController && cachedFirstPersonController != null)
       {
         cachedFirstPersonController.enabled = true;
@@ -320,11 +327,6 @@ namespace Assets.Demo.Scripts.Player
       canvas.overrideSorting = true;
       canvas.sortingOrder = TopmostSortingOrder;
 
-      CanvasScaler scaler = canvasObject.AddComponent<CanvasScaler>();
-      scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-      scaler.referenceResolution = new Vector2(1920.0f, 1080.0f);
-      scaler.matchWidthOrHeight = 0.5f;
-
       canvasObject.AddComponent<GraphicRaycaster>();
       RectTransform root = canvasObject.GetComponent<RectTransform>();
       Stretch(root);
@@ -334,17 +336,18 @@ namespace Assets.Demo.Scripts.Player
       rootGroup.interactable = false;
       rootGroup.blocksRaycasts = false;
 
-      Image dim = CreateImage(root, "Dim", new Color(0.0f, 0.0f, 0.0f, 0.72f));
+      Image dim = CreateImage(root, "Console Input Shield", new Color(0.0f, 0.0f, 0.0f, 0.28f));
       dim.raycastTarget = true;
       Stretch(dim.rectTransform);
 
       GameObject panelObject = new("Console Panel");
       panelObject.transform.SetParent(root, false);
       panel = panelObject.AddComponent<RectTransform>();
-      panel.anchorMin = new Vector2(0.5f, 0.0f);
-      panel.anchorMax = new Vector2(0.5f, 0.0f);
+      panel.anchorMin = new Vector2(0.0f, 0.0f);
+      panel.anchorMax = new Vector2(1.0f, 0.5f);
       panel.pivot = new Vector2(0.5f, 0.0f);
-      panel.sizeDelta = new Vector2(1180.0f, 640.0f);
+      panel.offsetMin = Vector2.zero;
+      panel.offsetMax = Vector2.zero;
       panel.anchoredPosition = GetClosedPosition();
 
       Image panelImage = panelObject.AddComponent<Image>();
