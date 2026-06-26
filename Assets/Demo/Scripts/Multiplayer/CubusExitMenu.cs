@@ -265,10 +265,6 @@ namespace Assets.Demo.Scripts.Multiplayer
       optionsButton = AddButton(content, "Options", OpenOptions, -1.0f, 38.0f, false);
       exitButton = AddButton(content, "Exit to Windows", CloseApplication, -1.0f, 38.0f, true);
       cancelButton = AddButton(content, "Cancel", Cancel, -1.0f, 38.0f, false);
-
-      optionsButton.onClick.AddListener(OpenOptions);
-      exitButton.onClick.AddListener(CloseApplication);
-      cancelButton.onClick.AddListener(Cancel);
     }
 
     private static Text AddText(RectTransform parent, string value, int size, FontStyle style, TextAnchor alignment, Color color, float height)
