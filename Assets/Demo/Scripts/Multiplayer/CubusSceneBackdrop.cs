@@ -114,22 +114,14 @@ namespace Assets.Demo.Scripts.Multiplayer
       canvas.renderMode = RenderMode.ScreenSpaceOverlay;
       canvas.sortingOrder = -1000;
 
-      CanvasScaler scaler = canvasObject.AddComponent<CanvasScaler>();
-      scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-      scaler.referenceResolution = new Vector2(1920.0f, 1080.0f);
-      scaler.matchWidthOrHeight = 0.5f;
-
       GraphicRaycaster raycaster = canvasObject.AddComponent<GraphicRaycaster>();
       raycaster.enabled = false;
 
       RectTransform canvasRect = canvasObject.GetComponent<RectTransform>();
-      canvasRect.anchorMin = Vector2.zero;
-      canvasRect.anchorMax = Vector2.one;
-      canvasRect.offsetMin = Vector2.zero;
-      canvasRect.offsetMax = Vector2.zero;
+      StretchToParent(canvasRect);
 
-      CreateImage(canvasRect, "Background", Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero, new Color(0.02f, 0.025f, 0.035f, 1.0f));
-      CreateImage(canvasRect, "Center Panel", new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(760.0f, 860.0f), Vector2.zero, new Color(0.08f, 0.12f, 0.18f, 0.92f));
+      Image background = CreateFullScreenImage(canvasRect, "Full Screen Background");
+      background.color = new Color(0.02f, 0.025f, 0.035f, 1.0f);
     }
 
     private static bool ShouldUseBackdrop(string sceneName)
@@ -138,22 +130,29 @@ namespace Assets.Demo.Scripts.Multiplayer
              string.Equals(sceneName, "CubusLoading", System.StringComparison.OrdinalIgnoreCase);
     }
 
-    private static void CreateImage(RectTransform parent, string name, Vector2 anchorMin, Vector2 anchorMax, Vector2 sizeDelta, Vector2 anchoredPosition, Color color)
+    private static Image CreateFullScreenImage(RectTransform parent, string name)
     {
       GameObject imageObject = new(name);
       imageObject.transform.SetParent(parent, false);
 
       RectTransform rect = imageObject.AddComponent<RectTransform>();
-      rect.anchorMin = anchorMin;
-      rect.anchorMax = anchorMax;
-      rect.offsetMin = Vector2.zero;
-      rect.offsetMax = Vector2.zero;
-      rect.sizeDelta = sizeDelta;
-      rect.anchoredPosition = anchoredPosition;
+      StretchToParent(rect);
 
       Image image = imageObject.AddComponent<Image>();
-      image.color = color;
       image.raycastTarget = false;
+      return image;
+    }
+
+    private static void StretchToParent(RectTransform rect)
+    {
+      rect.anchorMin = Vector2.zero;
+      rect.anchorMax = Vector2.one;
+      rect.pivot = new Vector2(0.5f, 0.5f);
+      rect.anchoredPosition = Vector2.zero;
+      rect.sizeDelta = Vector2.zero;
+      rect.offsetMin = Vector2.zero;
+      rect.offsetMax = Vector2.zero;
+      rect.localScale = Vector3.one;
     }
   }
 }
