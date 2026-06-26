@@ -1,5 +1,8 @@
 using TMPro;
 using UnityEngine;
+#if UNITY_EDITOR
+using UnityEditor;
+#endif
 
 namespace Assets.Demo.Scripts.Multiplayer
 {
@@ -65,6 +68,14 @@ namespace Assets.Demo.Scripts.Multiplayer
         return runtimeFontAsset;
       }
 
+#if UNITY_EDITOR
+      runtimeFontAsset = AssetDatabase.LoadAssetAtPath<TMP_FontAsset>("Packages/com.unity.textmeshpro/Package Resources/TMP Essential Resources/Fonts & Materials/LiberationSans SDF.asset");
+      if (runtimeFontAsset != null)
+      {
+        return runtimeFontAsset;
+      }
+#endif
+
       if (!loggedMissingFont)
       {
         loggedMissingFont = true;
@@ -99,7 +110,6 @@ namespace Assets.Demo.Scripts.Multiplayer
       TMP_FontAsset fontAsset = GetRuntimeFontAsset();
       if (fontAsset == null)
       {
-        text.enabled = false;
         return;
       }
 
