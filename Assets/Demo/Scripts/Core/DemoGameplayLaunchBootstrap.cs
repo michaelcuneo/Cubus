@@ -6,16 +6,16 @@ using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
-namespace Assets.Demo.Scripts.Multiplayer
+namespace Assets.Demo.Scripts.Core
 {
   [DefaultExecutionOrder(-10000)]
-  public sealed class CubusGameplayLaunchBootstrap : MonoBehaviour
+  public sealed class DemoGameplayLaunchBootstrap : MonoBehaviour
   {
     [SerializeField] private CubusWorld world;
     [SerializeField] private CubusWorldStorage storage;
-    [SerializeField] private CubusNetworkManager network;
+    [SerializeField] private DemoNetworkManager network;
     [SerializeField] private bool requireLauncherSelection = true;
-    [SerializeField] private string launcherSceneName = "CubusLauncher";
+    [SerializeField] private string launcherSceneName = "DemoLauncher";
     [SerializeField] private float connectedWorldReadyTimeoutSeconds = 30.0f;
     [SerializeField] private bool logLoadingDiagnostics = true;
 
@@ -46,7 +46,7 @@ namespace Assets.Demo.Scripts.Multiplayer
         if (requireLauncherSelection)
         {
           SetStage("No launch context", "Gameplay scene was opened directly. Loading launcher scene instead.");
-          Debug.LogWarning("[CubusLaunch] Gameplay scene loaded without launcher selection. Loading launcher scene instead.");
+          Debug.LogWarning("[DemoLaunch] Gameplay scene loaded without launcher selection. Loading launcher scene instead.");
           network?.Disconnect();
 
           Cursor.lockState = CursorLockMode.None;
@@ -83,7 +83,7 @@ namespace Assets.Demo.Scripts.Multiplayer
       else
       {
         lastWarning = $"Unsupported launch mode: {CubusGameLaunchContext.Mode}";
-        Debug.LogWarning($"[CubusLaunch] {lastWarning}");
+        Debug.LogWarning($"[DemoLaunch] {lastWarning}");
       }
 
       isPreparingWorld = false;
@@ -95,8 +95,8 @@ namespace Assets.Demo.Scripts.Multiplayer
     {
       if (world == null || world.Settings == null)
       {
-        lastWarning = "No CubusWorld found in gameplay scene.";
-        Debug.LogError($"[CubusLaunch] {lastWarning}");
+        lastWarning = "No DemoWorld found in gameplay scene.";
+        Debug.LogError($"[DemoLaunch] {lastWarning}");
         return false;
       }
 
@@ -137,7 +137,7 @@ namespace Assets.Demo.Scripts.Multiplayer
       if (streamer != null)
       {
         SetStage("Prewarming streamed terrain", "Starting the WorldStreamer under launcher control.");
-        Debug.Log($"[CubusLaunch] Preparing local streamed world '{CubusGameLaunchContext.WorldId}' before spawning.");
+        Debug.Log($"[DemoLaunch] Preparing local streamed world '{CubusGameLaunchContext.WorldId}' before spawning.");
         yield return EnableStreamerForBootstrap(streamer);
         streamer.ClearStreamingState();
         streamer.RegenerateStreamedWorld();
@@ -145,22 +145,22 @@ namespace Assets.Demo.Scripts.Multiplayer
       }
       else
       {
-        SetStage("Generating non-streamed world", "Running CubusWorld.GenerateWorldAsync before player spawn.");
-        Debug.Log($"[CubusLaunch] Generating local world '{CubusGameLaunchContext.WorldId}' before spawning.");
+        SetStage("Generating non-streamed world", "Running DemoWorld.GenerateWorldAsync before player spawn.");
+        Debug.Log($"[DemoLaunch] Generating local world '{CubusGameLaunchContext.WorldId}' before spawning.");
         yield return world.GenerateWorldAsync();
         world.BroadcastInitialTerrainReady(Vector3.zero);
       }
 
       SetStage("Local world ready", "Initial terrain is ready. Player spawn released.");
-      Debug.Log($"[CubusLaunch] Local world '{CubusGameLaunchContext.WorldId}' is ready. Player spawn released.");
+      Debug.Log($"[DemoLaunch] Local world '{CubusGameLaunchContext.WorldId}' is ready. Player spawn released.");
     }
 
     private IEnumerator PrepareConnectedWorldThenSpawn()
     {
       if (network == null)
       {
-        lastWarning = "No CubusNetworkManager found in gameplay scene.";
-        Debug.LogError($"[CubusLaunch] {lastWarning}");
+        lastWarning = "No DemoNetworkManager found in gameplay scene.";
+        Debug.LogError($"[DemoLaunch] {lastWarning}");
         yield break;
       }
 
@@ -186,7 +186,7 @@ namespace Assets.Demo.Scripts.Multiplayer
       SetStage("Connecting to SpaceTimeDB", $"{CubusGameLaunchContext.ServerUri} / {CubusGameLaunchContext.ModuleName} / {CubusGameLaunchContext.WorldId}");
       network.Connect();
 
-      Debug.Log($"[CubusLaunch] Connecting to {CubusGameLaunchContext.ServerUri} / {CubusGameLaunchContext.ModuleName} / {CubusGameLaunchContext.WorldId}. Waiting for authoritative terrain before spawning.");
+      Debug.Log($"[DemoLaunch] Connecting to {CubusGameLaunchContext.ServerUri} / {CubusGameLaunchContext.ModuleName} / {CubusGameLaunchContext.WorldId}. Waiting for authoritative terrain before spawning.");
       yield return WaitForInitialTerrainReady("connected world", connectedWorldReadyTimeoutSeconds);
     }
 
@@ -197,7 +197,7 @@ namespace Assets.Demo.Scripts.Multiplayer
         yield break;
       }
 
-      SetStage($"Waiting for {label} terrain", "Waiting for CubusWorld.BroadcastInitialTerrainReady. Streaming details are logged to the console.");
+      SetStage($"Waiting for {label} terrain", "Waiting for DemoWorld.BroadcastInitialTerrainReady. Streaming details are logged to the console.");
       float startTime = Time.realtimeSinceStartup;
       int lastLoggedSecond = -1;
 
@@ -213,8 +213,8 @@ namespace Assets.Demo.Scripts.Multiplayer
 
         if (timeoutSeconds > 0.0f && elapsed > timeoutSeconds)
         {
-          lastWarning = $"Timed out waiting for {label} terrain after {timeoutSeconds:0.0}s. Player remains gated until CubusWorld broadcasts initial terrain ready.";
-          Debug.LogWarning($"[CubusLaunch] {lastWarning} {BuildDebugSummary()}");
+          lastWarning = $"Timed out waiting for {label} terrain after {timeoutSeconds:0.0}s. Player remains gated until DemoWorld broadcasts initial terrain ready.";
+          Debug.LogWarning($"[DemoLaunch] {lastWarning} {BuildDebugSummary()}");
           yield break;
         }
 
@@ -232,7 +232,7 @@ namespace Assets.Demo.Scripts.Multiplayer
 
       streamer.enabled = false;
       disabledStreamerAutoStartForLaunch = true;
-      Debug.Log("[CubusLaunch] WorldStreamer disabled before Start so launcher bootstrap can control terrain preparation.");
+      Debug.Log("[DemoLaunch] WorldStreamer disabled before Start so launcher bootstrap can control terrain preparation.");
     }
 
     private IEnumerator EnableStreamerForBootstrap(WorldStreamer streamer)

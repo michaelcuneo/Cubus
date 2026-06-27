@@ -1,14 +1,14 @@
 using UnityEngine;
 
-namespace Assets.Demo.Scripts.Multiplayer
+namespace Assets.Demo.Scripts.Core
 {
   /// <summary>
   /// Runtime-only developer mode switch. The console owns toggling this; launcher
   /// and gameplay UI can read it to expose destructive/reset tools during dev.
   /// </summary>
-  public static class CubusDeveloperMode
+  public static class DemoDeveloperMode
   {
-    private const string PrefKey = "Cubus.DeveloperMode.Enabled";
+    private const string PrefKey = "Demo.DeveloperMode.Enabled";
 
     public static bool IsEnabled
     {
@@ -17,7 +17,7 @@ namespace Assets.Demo.Scripts.Multiplayer
       {
         PlayerPrefs.SetInt(PrefKey, value ? 1 : 0);
         PlayerPrefs.Save();
-        Debug.Log($"[CubusDev] Developer mode {(value ? "enabled" : "disabled")}.");
+        Debug.Log($"[DemoDev] Developer mode {(value ? "enabled" : "disabled")}.");
       }
     }
   }

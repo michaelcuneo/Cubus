@@ -9,7 +9,7 @@ using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
-namespace Assets.Demo.Scripts.Player
+namespace Assets.Demo.Scripts.UI.Console
 {
   [DefaultExecutionOrder(32000)]
   public sealed class DemoRuntimeDebugConsole : MonoBehaviour
