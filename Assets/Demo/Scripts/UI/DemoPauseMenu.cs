@@ -4,12 +4,12 @@ using UnityEngine.InputSystem;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
-namespace Assets.Demo.Scripts.Multiplayer
+namespace Assets.Demo.Scripts.UI
 {
-  public sealed class CubusExitMenu : MonoBehaviour
+  public sealed class DemoExitMenu : MonoBehaviour
   {
     [SerializeField] private Key toggleKey = Key.Escape;
-    [SerializeField] private string mainMenuSceneName = "CubusLauncher";
+    [SerializeField] private string mainMenuSceneName = "DemoLauncher";
     [SerializeField] private int sortingOrder = 31000;
 
     private static readonly Vector2 RuntimePanelSize = new(440.0f, 250.0f);

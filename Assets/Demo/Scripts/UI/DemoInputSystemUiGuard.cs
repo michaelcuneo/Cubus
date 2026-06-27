@@ -2,21 +2,21 @@ using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.InputSystem.UI;
 
-namespace Assets.Demo.Scripts.Multiplayer
+namespace Assets.Demo.Scripts.UI
 {
   [DefaultExecutionOrder(-32000)]
-  public sealed class CubusInputSystemUiGuard : MonoBehaviour
+  public sealed class DemoInputSystemUiGuard : MonoBehaviour
   {
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
     private static void Bootstrap()
     {
-      if (FindAnyObjectByType<CubusInputSystemUiGuard>() != null)
+      if (FindAnyObjectByType<DemoInputSystemUiGuard>() != null)
       {
         return;
       }
 
-      GameObject go = new("Cubus Input System UI Guard");
-      go.AddComponent<CubusInputSystemUiGuard>();
+      GameObject go = new("Demo Input System UI Guard");
+      go.AddComponent<DemoInputSystemUiGuard>();
       DontDestroyOnLoad(go);
     }
 

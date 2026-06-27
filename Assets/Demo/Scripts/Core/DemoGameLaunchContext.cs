@@ -1,9 +1,9 @@
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain;
 using UnityEngine;
 
-namespace Assets.Demo.Scripts.Multiplayer
+namespace Assets.Demo.Scripts.Core
 {
-  public enum CubusGameLaunchMode
+  public enum DemoGameLaunchMode
   {
     None = 0,
     Local = 1,
@@ -15,10 +15,10 @@ namespace Assets.Demo.Scripts.Multiplayer
   /// The starter UI writes this before loading gameplay; the gameplay bootstrap
   /// consumes it once and starts the selected local or connected world flow.
   /// </summary>
-  public static class CubusGameLaunchContext
+  public static class DemoGameLaunchContext
   {
     public static bool HasLaunch { get; private set; }
-    public static CubusGameLaunchMode Mode { get; private set; }
+    public static DemoGameLaunchMode Mode { get; private set; }
     public static string ServerUri { get; private set; }
     public static string ModuleName { get; private set; }
     public static string WorldId { get; private set; }
@@ -33,7 +33,7 @@ namespace Assets.Demo.Scripts.Multiplayer
     public static bool ResetConnectedWorldOnLaunch { get; private set; }
 
     public static void Set(
-        CubusGameLaunchMode mode,
+        DemoGameLaunchMode mode,
         string serverUri,
         string moduleName,
         string worldId,
@@ -66,7 +66,7 @@ namespace Assets.Demo.Scripts.Multiplayer
     public static void Clear()
     {
       HasLaunch = false;
-      Mode = CubusGameLaunchMode.None;
+      Mode = DemoGameLaunchMode.None;
       ServerUri = string.Empty;
       ModuleName = string.Empty;
       WorldId = string.Empty;

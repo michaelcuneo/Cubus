@@ -4,14 +4,14 @@ using SpacetimeDB.Types;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
-namespace Assets.Demo.Scripts.Multiplayer
+namespace Assets.Demo.Scripts.UI
 {
   /// <summary>
   /// Minimal IMGUI chat overlay backed by the replicated <c>chat_message</c> table.
   /// Press Enter to start typing, Enter again to send, or Escape to cancel.
   /// The chat panel stays hidden until the player is composing a message.
   /// </summary>
-  public sealed class CubusChatUI : MonoBehaviour
+  public sealed class DemoChatUI : MonoBehaviour
   {
     [SerializeField] private int maxVisibleMessages = 12;
     [SerializeField] private KeyCode openKey = KeyCode.Return;
@@ -19,7 +19,7 @@ namespace Assets.Demo.Scripts.Multiplayer
 
     private readonly List<ChatMessage> messages = new();
 
-    private CubusNetworkManager net;
+    private DemoNetworkManager net;
     private bool callbacksRegistered;
     private bool composing;
     private string draft = string.Empty;
@@ -27,7 +27,7 @@ namespace Assets.Demo.Scripts.Multiplayer
 
     private void OnEnable()
     {
-      net = CubusNetworkManager.Instance;
+      net = DemoNetworkManager.Instance;
       if (net != null)
       {
         net.Connected += HandleConnected;

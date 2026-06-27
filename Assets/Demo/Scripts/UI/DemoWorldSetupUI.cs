@@ -6,7 +6,7 @@ using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World;
 using UnityEngine;
 using Random = UnityEngine.Random;
 
-namespace Assets.Demo.Scripts.Multiplayer
+namespace Assets.Demo.Scripts.UI
 {
   /// <summary>
   /// Simple in-game world setup menu for the demo. This is intentionally IMGUI so
@@ -14,7 +14,7 @@ namespace Assets.Demo.Scripts.Multiplayer
   /// main menu can call the same public methods later.
   /// </summary>
   [DefaultExecutionOrder(-425)]
-  public sealed class CubusWorldSetupUI : MonoBehaviour
+  public sealed class DemoWorldSetupUI : MonoBehaviour
   {
     private enum SetupMode
     {

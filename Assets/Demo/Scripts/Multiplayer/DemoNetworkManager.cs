@@ -13,7 +13,7 @@ namespace Assets.Demo.Scripts.Multiplayer
   /// thread, and exposes connection state to the other multiplayer components.
   /// </summary>
   [DefaultExecutionOrder(-500)]
-  public sealed class CubusNetworkManager : MonoBehaviour
+  public sealed class DemoNetworkManager : MonoBehaviour
   {
     [Header("Server")]
     [Tooltip("SpacetimeDB host URI. Use http://127.0.0.1:3000 for a local `spacetime start`.")]
@@ -25,14 +25,14 @@ namespace Assets.Demo.Scripts.Multiplayer
     [Tooltip("Subscribe to the authoritative world_chunk table. Off by default: a blanket subscription downloads every stored chunk at once, which does not scale (use a near-player subscription before enabling).")]
     [SerializeField] private bool subscribeToWorldChunks = false;
 
-    [Tooltip("Leave this off for launcher-driven gameplay. CubusGameplayLaunchBootstrap calls Connect() only for Connected mode.")]
+    [Tooltip("Leave this off for launcher-driven gameplay. DemoGameplayLaunchBootstrap calls Connect() only for Connected mode.")]
     [SerializeField] private bool connectOnStart = false;
     [SerializeField] private bool verboseLogging = true;
 
-    [Tooltip("Automatically attach the in-game chat overlay (CubusChatUI) to this object on startup.")]
+    [Tooltip("Automatically attach the in-game chat overlay (DemoChatUI) to this object on startup.")]
     [SerializeField] private bool enableChatOverlay = true;
 
-    [Tooltip("Automatically attach the Escape exit-to-Windows overlay (CubusExitMenu) to this object on startup.")]
+    [Tooltip("Automatically attach the Escape exit-to-Windows overlay (DemoExitMenu) to this object on startup.")]
     [SerializeField] private bool enableExitMenu = true;
 
     [Tooltip("If the first connect fails (commonly a stale auth token saved while connected to a different server), clear the saved token and retry once with a fresh identity.")]
@@ -41,7 +41,7 @@ namespace Assets.Demo.Scripts.Multiplayer
 
     private bool hasRetriedWithFreshToken;
 
-    public static CubusNetworkManager Instance { get; private set; }
+    public static DemoNetworkManager Instance { get; private set; }
 
     public DbConnection Conn { get; private set; }
     public Identity LocalIdentity { get; private set; }
@@ -74,14 +74,14 @@ namespace Assets.Demo.Scripts.Multiplayer
       Instance = this;
       DontDestroyOnLoad(gameObject);
 
-      if (enableChatOverlay && GetComponent<CubusChatUI>() == null)
+      if (enableChatOverlay && GetComponent<DemoChatUI>() == null)
       {
-        gameObject.AddComponent<CubusChatUI>();
+        gameObject.AddComponent<DemoChatUI>();
       }
 
-      if (enableExitMenu && GetComponent<CubusExitMenu>() == null)
+      if (enableExitMenu && GetComponent<DemoExitMenu>() == null)
       {
-        gameObject.AddComponent<CubusExitMenu>();
+        gameObject.AddComponent<DemoExitMenu>();
       }
     }
 

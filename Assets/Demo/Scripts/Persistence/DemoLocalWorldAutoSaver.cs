@@ -6,9 +6,9 @@ using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World;
 using UnityEngine;
 
-namespace Assets.Demo.Scripts.Multiplayer
+namespace Assets.Demo.Scripts.Persistence
 {
-  public sealed class CubusLocalWorldAutoSaver : MonoBehaviour
+  public sealed class DemoLocalWorldAutoSaver : MonoBehaviour
   {
     private bool hasSaved;
     private CubusWorld world;
@@ -16,13 +16,13 @@ namespace Assets.Demo.Scripts.Multiplayer
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     private static void Bootstrap()
     {
-      if (FindAnyObjectByType<CubusLocalWorldAutoSaver>() != null)
+      if (FindAnyObjectByType<DemoLocalWorldAutoSaver>() != null)
       {
         return;
       }
 
-      GameObject go = new("Cubus Local World Auto Saver");
-      go.AddComponent<CubusLocalWorldAutoSaver>();
+      GameObject go = new("Demo Local World Auto Saver");
+      go.AddComponent<DemoLocalWorldAutoSaver>();
       DontDestroyOnLoad(go);
     }
 

@@ -5,13 +5,13 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 using Random = UnityEngine.Random;
 
-namespace Assets.Demo.Scripts.Multiplayer
+namespace Assets.Demo.Scripts.UI
 {
   /// <summary>
   /// Starter-scene menu. Put this in a lightweight launcher scene, then load the
   /// gameplay scene only after the player chooses Local or Connected.
   /// </summary>
-  public sealed class CubusLauncherMenu : MonoBehaviour
+  public sealed class DemoLauncherMenu : MonoBehaviour
   {
     private enum SetupMode
     {

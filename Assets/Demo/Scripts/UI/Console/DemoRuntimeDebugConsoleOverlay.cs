@@ -8,7 +8,7 @@ using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
 using UnityEngine.UI;
 
-namespace Assets.Demo.Scripts.Player
+namespace Assets.Demo.Scripts.UI.Console
 {
   [DefaultExecutionOrder(32001)]
   public sealed class DemoRuntimeDebugConsoleOverlay : MonoBehaviour
