@@ -17,23 +17,27 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         IReadOnlyDictionary<int, DensityVoxelOverride> overrides)
     {
       DensityChunkData chunkData = new(chunkCoord, false);
+      DensityVoxel[] voxels = chunkData.GetRawVoxelArray();
       float scale = Mathf.Max(0.001f, snapshot.DensitySampleScale);
 
       const int size = VoxelConstants.ChunkSize;
+      int baseWorldX = chunkCoord.x * size;
+      int baseWorldY = chunkCoord.y * size;
+      int baseWorldZ = chunkCoord.z * size;
 
       for (int z = 0; z < size; z++)
       {
+        int worldZ = baseWorldZ + z;
+        int zBase = size * size * z;
+
         for (int x = 0; x < size; x++)
         {
-          Vector3Int baseWorldVoxel = chunkData.LocalToWorldVoxel(x, 0, z);
-          BiomeBlendSample blend = snapshot.ResolveBiomeBlendAtWorldXZ(
-              baseWorldVoxel.x,
-              baseWorldVoxel.z
-          );
+          int worldX = baseWorldX + x;
+          BiomeBlendSample blend = snapshot.ResolveBiomeBlendAtWorldXZ(worldX, worldZ);
 
           for (int y = 0; y < size; y++)
           {
-            Vector3Int worldVoxel = chunkData.LocalToWorldVoxel(x, y, z);
+            Vector3Int worldVoxel = new(worldX, baseWorldY + y, worldZ);
 
             TerrainSample sample = BiomeTerrainSampler.Sample(
                 snapshot,
@@ -46,15 +50,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
                 ? (ushort)Mathf.Clamp(sample.SolidMaterialId, 1, 65535)
                 : (ushort)0;
 
-            chunkData.SetVoxel(
-                x,
-                y,
-                z,
-                new DensityVoxel(
-                    sample.Density,
-                    materialId
-                )
-            );
+            voxels[x + size * y + zBase] = new DensityVoxel(sample.Density, materialId);
           }
         }
       }
@@ -76,6 +72,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         return;
       }
 
+      DensityVoxel[] voxels = chunkData.GetRawVoxelArray();
+
       foreach (KeyValuePair<int, DensityVoxelOverride> pair in overrides)
       {
         int voxelIndex = pair.Key;
@@ -85,21 +83,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
           continue;
         }
 
-        int x = voxelIndex % VoxelConstants.ChunkSize;
-        int y = voxelIndex / VoxelConstants.ChunkSize % VoxelConstants.ChunkSize;
-        int z = voxelIndex / (VoxelConstants.ChunkSize * VoxelConstants.ChunkSize);
-
         DensityVoxelOverride edit = pair.Value;
-
-        chunkData.SetVoxel(
-            x,
-            y,
-            z,
-            new DensityVoxel(
-                edit.Density,
-                edit.MaterialId
-            )
-        );
+        voxels[voxelIndex] = new DensityVoxel(edit.Density, edit.MaterialId);
       }
     }
   }
