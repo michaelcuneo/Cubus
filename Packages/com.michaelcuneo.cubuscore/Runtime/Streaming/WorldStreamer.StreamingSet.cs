@@ -176,7 +176,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       hasLastViewerChunkCoord = true;
       BuildChunkSet(viewerChunkCoord, ActiveDesiredRadiusInChunks, desiredChunkCoords);
       BuildChunkSet(viewerChunkCoord, ActiveKeepRadiusInChunks, keepChunkCoords);
-      PruneKnownEmptyChunksOutsideCurrentInterest(); QueueGeneratedChunksForRender(viewerChunkCoord);
+      PruneKnownEmptyChunksOutsideCurrentInterest();
+      QueueGeneratedChunksForRender(viewerChunkCoord);
       UnloadOutsideKeepSet();
       pendingLoadQueueNeedsPrioritization = true;
       pendingRenderQueueNeedsPrioritization = true;
