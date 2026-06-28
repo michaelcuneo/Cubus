@@ -22,7 +22,7 @@ namespace Assets.Demo.Scripts.Multiplayer
   {
     private readonly DemoNetworkManager net;
     private readonly string worldId;
-    private readonly ConcurrentDictionary<Vector3Int, WorldChunkRecord> cache = new();
+    private readonly ConcurrentDictionary<ChunkLayerKey, WorldChunkRecord> cache = new();
     private readonly FileWorldChunkStore localCache;
 
     private bool callbacksRegistered;
@@ -84,7 +84,7 @@ namespace Assets.Demo.Scripts.Multiplayer
     {
       if (chunk.WorldId == worldId)
       {
-        cache.TryRemove(new Vector3Int(chunk.Cx, chunk.Cy, chunk.Cz), out _);
+        cache.TryRemove(new ChunkLayerKey(new Vector3Int(chunk.Cx, chunk.Cy, chunk.Cz), (TerrainSystem)chunk.TerrainSystem), out _);
       }
     }
 
@@ -106,7 +106,7 @@ namespace Assets.Demo.Scripts.Multiplayer
           chunk.HasSurface,
           chunk.Payload?.ToArray() ?? Array.Empty<byte>());
 
-      cache[coord] = record;
+      cache[new ChunkLayerKey(coord, record.TerrainSystem)] = record;
       ChunkReceived?.Invoke(record);
     }
 
@@ -129,18 +129,23 @@ namespace Assets.Demo.Scripts.Multiplayer
 
     public void SaveChunk(WorldChunkRecord chunk)
     {
+      SaveChunkLayer(chunk);
+    }
+
+    public void SaveChunkLayer(WorldChunkRecord chunk)
+    {
       if (chunk.WorldId != worldId || net == null)
       {
         return;
       }
 
       // Cache locally immediately so a just-generated chunk is treated as known.
-      cache[chunk.ChunkCoord] = chunk;
+      cache[new ChunkLayerKey(chunk.ChunkCoord, chunk.TerrainSystem)] = chunk;
 
       // Persist the deterministic base chunk to disk so re-entry and restarts load
       // fast instead of regenerating. This is the local, per-client cache - not the
       // shared DB - so it never bloats world_chunk.
-      localCache.SaveChunk(chunk);
+      localCache.SaveChunkLayer(chunk);
 
       // Uploading every generated chunk floods world_chunk (tens of thousands of
       // rows) and makes the initial subscription too large to decode. Only push
@@ -180,18 +185,47 @@ namespace Assets.Demo.Scripts.Multiplayer
         return false;
       }
 
-      // RAM cache first (chunks generated/received this session), then the on-disk
-      // cache (chunks saved by previous sessions) - both far cheaper than
-      // regenerating the terrain.
-      if (cache.TryGetValue(chunkCoord, out chunk))
+      foreach (WorldChunkRecord cached in cache.Values)
       {
-        return true;
+        if (cached.ChunkCoord == chunkCoord)
+        {
+          chunk = cached;
+          return true;
+        }
       }
 
       if (localCache.TryLoadChunk(id, chunkCoord, out chunk))
       {
+        cache[new ChunkLayerKey(chunkCoord, chunk.TerrainSystem)] = chunk;
+        return true;
+      }
+
+      chunk = default;
+      return false;
+    }
+
+    public bool TryLoadChunkLayer(string id, Vector3Int chunkCoord, TerrainSystem terrainSystem, out WorldChunkRecord chunk)
+    {
+      if (id != worldId)
+      {
+        chunk = default;
+        return false;
+      }
+
+      ChunkLayerKey key = new(chunkCoord, terrainSystem);
+
+      // RAM cache first (chunks generated/received this session), then the on-disk
+      // cache (chunks saved by previous sessions) - both far cheaper than
+      // regenerating the terrain.
+      if (cache.TryGetValue(key, out chunk))
+      {
+        return true;
+      }
+
+      if (localCache.TryLoadChunkLayer(id, chunkCoord, terrainSystem, out chunk))
+      {
         // Promote to the RAM cache so subsequent reads this session skip disk IO.
-        cache[chunkCoord] = chunk;
+        cache[key] = chunk;
         return true;
       }
 
@@ -208,11 +242,11 @@ namespace Assets.Demo.Scripts.Multiplayer
 
       HashSet<Vector3Int> seen = new();
 
-      foreach (Vector3Int coord in cache.Keys)
+      foreach (ChunkLayerKey key in cache.Keys)
       {
-        if (seen.Add(coord))
+        if (seen.Add(key.ChunkCoord))
         {
-          yield return coord;
+          yield return key.ChunkCoord;
         }
       }
 
@@ -259,7 +293,7 @@ namespace Assets.Demo.Scripts.Multiplayer
 
     public void RequestChunk(string id, Vector3Int chunkCoord)
     {
-      if (id == worldId && cache.TryGetValue(chunkCoord, out WorldChunkRecord record))
+      if (id == worldId && TryLoadChunk(id, chunkCoord, out WorldChunkRecord record))
       {
         ChunkReceived?.Invoke(record);
       }
@@ -267,6 +301,22 @@ namespace Assets.Demo.Scripts.Multiplayer
       {
         ChunkUnavailable?.Invoke(id, chunkCoord);
       }
+    }
+
+    private readonly struct ChunkLayerKey : IEquatable<ChunkLayerKey>
+    {
+      public readonly Vector3Int ChunkCoord;
+      public readonly TerrainSystem TerrainSystem;
+
+      public ChunkLayerKey(Vector3Int chunkCoord, TerrainSystem terrainSystem)
+      {
+        ChunkCoord = chunkCoord;
+        TerrainSystem = terrainSystem;
+      }
+
+      public bool Equals(ChunkLayerKey other) => ChunkCoord == other.ChunkCoord && TerrainSystem == other.TerrainSystem;
+      public override bool Equals(object obj) => obj is ChunkLayerKey other && Equals(other);
+      public override int GetHashCode() => HashCode.Combine(ChunkCoord, TerrainSystem);
     }
   }
 }
