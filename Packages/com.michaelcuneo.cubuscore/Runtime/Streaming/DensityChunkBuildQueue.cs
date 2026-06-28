@@ -175,19 +175,11 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       request.ChunkDataSnapshots ??= new Dictionary<Vector3Int, DensityChunkData>();
       request.ChunkDataSnapshots[request.ChunkCoord] = chunkData;
 
-      if (!chunkData.HasSurfaceCrossing())
-      {
-        return new DensityChunkBuildResult
-        {
-          ChunkCoord = request.ChunkCoord,
-          ChunkData = chunkData,
-          MeshData = null,
-          IsEmpty = true,
-          HasSurfaceCrossing = false,
-          GenerationId = request.GenerationId
-        };
-      }
-
+      // Do not pre-reject chunks with chunkData.HasSurfaceCrossing() here.
+      // Marching cubes samples a +X/+Y/+Z shell around the root chunk, so a surface
+      // can cross exactly on the root boundary even when the root chunk's own 16^3
+      // samples are all-solid or all-air. Let the mesher sample the full grid and
+      // decide whether the resulting mesh is empty.
       MeshData meshData = DensityMeshDataBuilder.GenerateFromChunkSnapshots(
           request.ChunkCoord,
           request.WorldSnapshot,
