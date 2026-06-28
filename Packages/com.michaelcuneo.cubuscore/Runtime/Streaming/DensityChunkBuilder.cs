@@ -38,8 +38,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
           for (int y = 0; y < size; y++)
           {
-            Vector3Int worldVoxel = new(worldX, baseWorldY + y, worldZ);
-            TerrainSample sample = columnSampler.SampleAt(worldVoxel, scale);
+            TerrainSample sample = columnSampler.SampleAt(worldX, baseWorldY + y, worldZ, scale);
 
             ushort materialId = sample.Density > 0.0f
                 ? (ushort)Mathf.Clamp(sample.SolidMaterialId, 1, 65535)
