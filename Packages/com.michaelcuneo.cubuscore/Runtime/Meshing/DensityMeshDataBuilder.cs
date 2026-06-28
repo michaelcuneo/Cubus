@@ -169,9 +169,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
       }
 
       int numSamplesAxis = numCellsAxis + 1;
-      Vector3[] normalGrid = new Vector3[densityGrid.Length];
-      BuildNormalGrid(densityGrid, normalGrid, numSamplesAxis);
-
       MeshData mesh = MeshDataPool.Rent(4096, 6144);
 
       Span<float> densities = stackalloc float[8];
@@ -198,7 +195,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
               int sampleIndex = ToSampleIndex(sx, sy, sz, numSamplesAxis);
 
               densities[corner] = densityGrid[sampleIndex];
-              normals[corner] = normalGrid[sampleIndex];
               materials[corner] = materialGrid[sampleIndex];
 
               positions[corner] = new Vector3(
@@ -221,6 +217,14 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
             if (MarchingCubesTables.TriangleTable[cubeIndex, 0] < 0)
             {
               continue;
+            }
+
+            for (int corner = 0; corner < 8; corner++)
+            {
+              int sx = x + MarchingCubesTables.CubeCornerOffset[corner, 0];
+              int sy = y + MarchingCubesTables.CubeCornerOffset[corner, 1];
+              int sz = z + MarchingCubesTables.CubeCornerOffset[corner, 2];
+              normals[corner] = SampleNormal(densityGrid, numSamplesAxis, sx, sy, sz);
             }
 
             for (int i = 0; i < 12; i++)
@@ -287,25 +291,16 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
       return sx + samplesAxis * (sy + samplesAxis * sz);
     }
 
-    private static void BuildNormalGrid(float[] densities, Vector3[] normals, int samplesAxis)
+    private static Vector3 SampleNormal(float[] densities, int samplesAxis, int x, int y, int z)
     {
-      for (int z = 0; z < samplesAxis; z++)
-      {
-        for (int y = 0; y < samplesAxis; y++)
-        {
-          for (int x = 0; x < samplesAxis; x++)
-          {
-            float dx = SampleDensity(densities, samplesAxis, x + 1, y, z) - SampleDensity(densities, samplesAxis, x - 1, y, z);
-            float dy = SampleDensity(densities, samplesAxis, x, y + 1, z) - SampleDensity(densities, samplesAxis, x, y - 1, z);
-            float dz = SampleDensity(densities, samplesAxis, x, y, z + 1) - SampleDensity(densities, samplesAxis, x, y, z - 1);
+      float dx = SampleDensity(densities, samplesAxis, x + 1, y, z) - SampleDensity(densities, samplesAxis, x - 1, y, z);
+      float dy = SampleDensity(densities, samplesAxis, x, y + 1, z) - SampleDensity(densities, samplesAxis, x, y - 1, z);
+      float dz = SampleDensity(densities, samplesAxis, x, y, z + 1) - SampleDensity(densities, samplesAxis, x, y, z - 1);
 
-            Vector3 normal = new Vector3(-dx, -dy, -dz);
-            normals[ToSampleIndex(x, y, z, samplesAxis)] = normal.sqrMagnitude > 0.000001f
-                ? normal.normalized
-                : Vector3.up;
-          }
-        }
-      }
+      Vector3 normal = new(-dx, -dy, -dz);
+      return normal.sqrMagnitude > 0.000001f
+          ? normal.normalized
+          : Vector3.up;
     }
 
     private static float SampleDensity(float[] densities, int samplesAxis, int x, int y, int z)
