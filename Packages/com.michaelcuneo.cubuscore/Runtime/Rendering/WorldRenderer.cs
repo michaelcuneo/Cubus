@@ -762,7 +762,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
 
     private void PopulateLookupTexture(Texture2D texture, MaterialAtlasSide side)
     {
-      if (texture == null || blockMaterialDatabase == null)
+      if (texture == null || blockMaterialDatabase == null || blockMaterialDatabase.Definitions == null)
       {
         return;
       }
@@ -774,27 +774,35 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
         pixels[i] = new Color(0, 0, 0, 0);
       }
 
-      for (int i = 0; i < blockMaterialDatabase.Materials.Count; i++)
+      int atlasColumns = Mathf.Max(1, biomeAtlasGrid.x);
+      int atlasRows = Mathf.Max(1, biomeAtlasGrid.y);
+      int atlasTileCount = atlasColumns * atlasRows;
+
+      for (int i = 0; i < blockMaterialDatabase.Definitions.Count; i++)
       {
-        BlockMaterialDefinition definition = blockMaterialDatabase.Materials[i];
+        BlockMaterialDefinition definition = blockMaterialDatabase.Definitions[i];
         if (definition == null)
         {
           continue;
         }
 
         int materialId = Mathf.Clamp(definition.MaterialId, 0, LookupTextureSize - 1);
-        Vector2Int atlasCoord = side switch
+        int tileId = side switch
         {
-          MaterialAtlasSide.Top => definition.TopAtlasCoord,
-          MaterialAtlasSide.Side => definition.SideAtlasCoord,
-          MaterialAtlasSide.Bottom => definition.BottomAtlasCoord,
-          MaterialAtlasSide.Props => definition.PropsAtlasCoord,
-          _ => Vector2Int.zero
+          MaterialAtlasSide.Top => definition.TopTileId,
+          MaterialAtlasSide.Side => definition.SideTileId,
+          MaterialAtlasSide.Bottom => definition.BottomTileId,
+          MaterialAtlasSide.Props => definition.SideTileId,
+          _ => definition.SideTileId
         };
 
+        int zeroBasedTileId = Mathf.Clamp(tileId - 1, 0, Mathf.Max(0, atlasTileCount - 1));
+        int atlasX = zeroBasedTileId % atlasColumns;
+        int atlasY = zeroBasedTileId / atlasColumns;
+
         pixels[materialId] = new Color(
-          atlasCoord.x / 255.0f,
-          atlasCoord.y / 255.0f,
+          atlasX / 255.0f,
+          atlasY / 255.0f,
           0,
           1
         );
