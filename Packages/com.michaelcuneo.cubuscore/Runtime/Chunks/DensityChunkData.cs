@@ -22,6 +22,12 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Chunks
       }
     }
 
+    private DensityChunkData(Vector3Int chunkCoord, DensityVoxel[] voxelData)
+    {
+      ChunkCoord = chunkCoord;
+      voxels = voxelData ?? new DensityVoxel[VoxelConstants.ChunkVolume];
+    }
+
     public DensityVoxel GetVoxel(int x, int y, int z)
     {
       return voxels[GetIndex(x, y, z)];
@@ -134,9 +140,9 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Chunks
 
     public DensityChunkData Clone()
     {
-      DensityChunkData copy = new(ChunkCoord);
-      System.Array.Copy(voxels, copy.voxels, voxels.Length);
-      return copy;
+      DensityVoxel[] copiedVoxels = new DensityVoxel[voxels.Length];
+      System.Array.Copy(voxels, copiedVoxels, voxels.Length);
+      return new DensityChunkData(ChunkCoord, copiedVoxels);
     }
   }
 }
