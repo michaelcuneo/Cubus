@@ -146,6 +146,10 @@ namespace Assets.Demo.Scripts.UI
       {
         terrainSystem = TerrainSystem.SmoothDensity;
       }
+      if (GUILayout.Toggle(terrainSystem == TerrainSystem.Hybrid, "Hybrid", GUI.skin.button))
+      {
+        terrainSystem = TerrainSystem.Hybrid;
+      }
       GUILayout.EndHorizontal();
 
       GUILayout.BeginHorizontal();
