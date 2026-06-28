@@ -5,6 +5,7 @@ using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World;
 using UnityEngine;
 using Random = UnityEngine.Random;
+using Assets.Demo.Scripts.Multiplayer;
 
 namespace Assets.Demo.Scripts.UI
 {
@@ -25,7 +26,7 @@ namespace Assets.Demo.Scripts.UI
     [Header("References")]
     [SerializeField] private CubusWorld world;
     [SerializeField] private CubusWorldStorage storage;
-    [SerializeField] private CubusNetworkManager network;
+    [SerializeField] private DemoNetworkManager network;
     [SerializeField] private NetworkedWorldStateBridge worldStateBridge;
 
     [Header("Defaults")]
@@ -517,7 +518,7 @@ namespace Assets.Demo.Scripts.UI
     {
       if (world == null)
       {
-        world = FindObjectOfType<CubusWorld>();
+        world = FindAnyObjectByType<CubusWorld>();
       }
 
       if (storage == null && world != null)
@@ -527,14 +528,14 @@ namespace Assets.Demo.Scripts.UI
 
       if (network == null)
       {
-        network = CubusNetworkManager.Instance != null
-            ? CubusNetworkManager.Instance
-            : FindObjectOfType<CubusNetworkManager>();
+        network = DemoNetworkManager.Instance != null
+            ? DemoNetworkManager.Instance
+            : FindAnyObjectByType<DemoNetworkManager>();
       }
 
       if (worldStateBridge == null)
       {
-        worldStateBridge = FindObjectOfType<NetworkedWorldStateBridge>();
+        worldStateBridge = FindAnyObjectByType<NetworkedWorldStateBridge>();
       }
     }
   }

@@ -15,7 +15,7 @@ namespace Assets.Demo.Scripts.Multiplayer
   {
     [SerializeField] private BlockEditTool editTool;
 
-    private CubusNetworkManager net;
+    private DemoNetworkManager net;
     private bool callbacksRegistered;
 
     public bool IsReady => net != null && net.IsConnected && net.IsSubscriptionApplied;
@@ -36,7 +36,7 @@ namespace Assets.Demo.Scripts.Multiplayer
 
     private void OnEnable()
     {
-      net = CubusNetworkManager.Instance;
+      net = DemoNetworkManager.Instance;
       if (net != null)
       {
         net.Connected += HandleConnected;

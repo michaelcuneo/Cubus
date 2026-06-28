@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using Assets.Demo.Scripts.UI;
 using SpacetimeDB;
 using SpacetimeDB.Types;
 using UnityEngine;
@@ -36,10 +37,7 @@ namespace Assets.Demo.Scripts.Multiplayer
     [SerializeField] private bool enableExitMenu = true;
 
     [Tooltip("If the first connect fails (commonly a stale auth token saved while connected to a different server), clear the saved token and retry once with a fresh identity.")]
-    [SerializeField] private bool retryFreshIdentityOnConnectError = false;
     private readonly ConcurrentQueue<Action> mainThreadActions = new();
-
-    private bool hasRetriedWithFreshToken;
 
     public static DemoNetworkManager Instance { get; private set; }
 
@@ -74,9 +72,9 @@ namespace Assets.Demo.Scripts.Multiplayer
       Instance = this;
       DontDestroyOnLoad(gameObject);
 
-      if (enableChatOverlay && GetComponent<DemoChatUI>() == null)
+      if (enableChatOverlay && GetComponent<DemoChatUi>() == null)
       {
-        gameObject.AddComponent<DemoChatUI>();
+        gameObject.AddComponent<DemoChatUi>();
       }
 
       if (enableExitMenu && GetComponent<DemoExitMenu>() == null)
@@ -176,7 +174,6 @@ namespace Assets.Demo.Scripts.Multiplayer
         AuthToken.SaveToken(authToken);
       }
 
-      hasRetriedWithFreshToken = false;
       LocalIdentity = identity;
       IsConnected = true;
 
@@ -278,7 +275,6 @@ namespace Assets.Demo.Scripts.Multiplayer
       IsConnected = false;
       IsSubscriptionApplied = false;
       LocalIdentity = default;
-      hasRetriedWithFreshToken = false;
 
       AuthToken.SaveToken(string.Empty);
       Connect();

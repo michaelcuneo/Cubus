@@ -4,6 +4,7 @@ using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using Random = UnityEngine.Random;
+using Assets.Demo.Scripts.Core;
 
 namespace Assets.Demo.Scripts.UI
 {
@@ -278,8 +279,8 @@ namespace Assets.Demo.Scripts.UI
         }
       }
 
-      CubusGameLaunchContext.Set(
-          mode == SetupMode.Local ? CubusGameLaunchMode.Local : CubusGameLaunchMode.Connected,
+      DemoGameLaunchContext.Set(
+          mode == SetupMode.Local ? DemoGameLaunchMode.Local : DemoGameLaunchMode.Connected,
           serverUri,
           moduleName,
           worldId,

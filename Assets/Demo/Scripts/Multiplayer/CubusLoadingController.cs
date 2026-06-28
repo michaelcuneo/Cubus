@@ -8,6 +8,8 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
+using Assets.Demo.Scripts.Core;
+using Assets.Demo.Scripts.UI;
 
 namespace Assets.Demo.Scripts.Multiplayer
 {
@@ -47,7 +49,7 @@ namespace Assets.Demo.Scripts.Multiplayer
 
     private CubusWorld world;
     private WorldStreamer streamer;
-    private CubusNetworkManager network;
+    private DemoNetworkManager network;
 
     private CanvasGroup canvasGroup;
     private Text statusText;
@@ -95,7 +97,7 @@ namespace Assets.Demo.Scripts.Multiplayer
       Keyboard keyboard = Keyboard.current;
       bool enterDown = keyboard != null && (keyboard[Key.Enter].isPressed || keyboard[Key.NumpadEnter].isPressed);
 
-      if (!preparationDone && !failed && !CubusUiInput.IsCapturing && enterDown && !wasEnterDown)
+      if (!preparationDone && !failed && !DemoUiInput.IsCapturing && enterDown && !wasEnterDown)
       {
         forceReleaseRequested = true;
       }
@@ -114,22 +116,22 @@ namespace Assets.Demo.Scripts.Multiplayer
 
     private IEnumerator Start()
     {
-      if (!CubusGameLaunchContext.HasLaunch)
+      if (!DemoGameLaunchContext.HasLaunch)
       {
-        Fail("No Cubus launch context was found. Returning to launcher.");
+        Fail("No Demo launch context was found. Returning to launcher.");
         yield return LoadLauncherScene();
         yield break;
       }
 
       if (string.IsNullOrWhiteSpace(gameplaySceneName))
       {
-        Fail("Gameplay Scene Name is empty on CubusLoadingController.");
+        Fail("Gameplay Scene Name is empty on DemoLoadingController.");
         yield break;
       }
 
       if (!TryFindSceneInBuildSettings(gameplaySceneName.Trim(), out string gameplayScenePath))
       {
-        Fail($"Scene '{gameplaySceneName}' is not in Build Settings. Add CubusGame and CubusLoading to Build Settings.");
+        Fail($"Scene '{gameplaySceneName}' is not in Build Settings. Add DemoGame and DemoLoading to Build Settings.");
         yield break;
       }
 
@@ -258,7 +260,7 @@ namespace Assets.Demo.Scripts.Multiplayer
         yield break;
       }
 
-      status = CubusGameLaunchContext.Mode == CubusGameLaunchMode.Connected
+      status = DemoGameLaunchContext.Mode == DemoGameLaunchMode.Connected
           ? "Preparing connected terrain"
           : "Preparing local terrain";
 
@@ -466,9 +468,9 @@ namespace Assets.Demo.Scripts.Multiplayer
         return;
       }
 
-      canvasGroup.alpha = CubusUiInput.ConsoleOpen ? 0.0f : 1.0f;
-      canvasGroup.interactable = !CubusUiInput.ConsoleOpen;
-      canvasGroup.blocksRaycasts = !CubusUiInput.ConsoleOpen;
+      canvasGroup.alpha = DemoUiInput.ConsoleOpen ? 0.0f : 1.0f;
+      canvasGroup.interactable = !DemoUiInput.ConsoleOpen;
+      canvasGroup.blocksRaycasts = !DemoUiInput.ConsoleOpen;
 
       float elapsed = Time.realtimeSinceStartup - startedAt;
       float combinedProgress = GetCombinedProgress();
@@ -507,7 +509,7 @@ namespace Assets.Demo.Scripts.Multiplayer
 
       if (forceReleaseButton != null)
       {
-        forceReleaseButton.interactable = !preparationDone && !failed && !CubusUiInput.ConsoleOpen;
+        forceReleaseButton.interactable = !preparationDone && !failed && !DemoUiInput.ConsoleOpen;
       }
     }
 
@@ -535,9 +537,9 @@ namespace Assets.Demo.Scripts.Multiplayer
 
       if (network == null)
       {
-        network = CubusNetworkManager.Instance != null
-            ? CubusNetworkManager.Instance
-            : FindAnyObjectByType<CubusNetworkManager>();
+        network = DemoNetworkManager.Instance != null
+            ? DemoNetworkManager.Instance
+            : FindAnyObjectByType<DemoNetworkManager>();
       }
     }
 
@@ -563,7 +565,7 @@ namespace Assets.Demo.Scripts.Multiplayer
 
     private void RequestForceRelease()
     {
-      if (preparationDone || failed || CubusUiInput.ConsoleOpen)
+      if (preparationDone || failed || DemoUiInput.ConsoleOpen)
       {
         return;
       }
@@ -574,9 +576,9 @@ namespace Assets.Demo.Scripts.Multiplayer
 
     private void BuildLoadingUi()
     {
-      CubusInputSystemUiGuard.EnsureEventSystem();
+      DemoInputSystemUiGuard.EnsureEventSystem();
 
-      GameObject canvasObject = new("Cubus Loading Canvas");
+      GameObject canvasObject = new("Demo Loading Canvas");
       canvasObject.transform.SetParent(transform, false);
 
       Canvas canvas = canvasObject.AddComponent<Canvas>();

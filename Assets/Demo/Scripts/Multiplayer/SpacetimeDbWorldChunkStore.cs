@@ -20,14 +20,14 @@ namespace Assets.Demo.Scripts.Multiplayer
   /// </summary>
   public sealed class SpacetimeDbWorldChunkStore : IAuthoritativeWorldChunkStore
   {
-    private readonly CubusNetworkManager net;
+    private readonly DemoNetworkManager net;
     private readonly string worldId;
     private readonly ConcurrentDictionary<Vector3Int, WorldChunkRecord> cache = new();
     private readonly FileWorldChunkStore localCache;
 
     private bool callbacksRegistered;
 
-    public SpacetimeDbWorldChunkStore(CubusNetworkManager net, string worldId)
+    public SpacetimeDbWorldChunkStore(DemoNetworkManager net, string worldId)
     {
       this.net = net;
       this.worldId = string.IsNullOrWhiteSpace(worldId) ? "demo_world" : worldId;

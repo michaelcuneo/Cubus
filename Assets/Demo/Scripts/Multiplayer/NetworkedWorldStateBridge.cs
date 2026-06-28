@@ -5,6 +5,7 @@ using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World;
 using SpacetimeDB;
 using SpacetimeDB.Types;
 using UnityEngine;
+using Assets.Demo.Scripts.Core;
 
 namespace Assets.Demo.Scripts.Multiplayer
 {
@@ -29,7 +30,7 @@ namespace Assets.Demo.Scripts.Multiplayer
     [Tooltip("Optional demo/profile id stored with the server world state. Keep stable for the same generation rules.")]
     [SerializeField] private string generationProfileId = "demo_default";
 
-    private CubusNetworkManager net;
+    private DemoNetworkManager net;
     private bool callbacksRegistered;
     private bool sawServerWorldState;
     private bool consumedLaunchResetRequest;
@@ -42,13 +43,13 @@ namespace Assets.Demo.Scripts.Multiplayer
     {
       if (world == null)
       {
-        world = FindObjectOfType<CubusWorld>();
+        world = FindAnyObjectByType<CubusWorld>();
       }
     }
 
     private void OnEnable()
     {
-      net = CubusNetworkManager.Instance;
+      net = DemoNetworkManager.Instance;
 
       if (net == null)
       {
@@ -91,7 +92,7 @@ namespace Assets.Demo.Scripts.Multiplayer
     {
       RegisterCallbacks(conn);
 
-      if (CubusGameLaunchContext.HasLaunch && CubusGameLaunchContext.ResetConnectedWorldOnLaunch && !consumedLaunchResetRequest)
+      if (DemoGameLaunchContext.HasLaunch && DemoGameLaunchContext.ResetConnectedWorldOnLaunch && !consumedLaunchResetRequest)
       {
         consumedLaunchResetRequest = true;
         Debug.Log("[CubusWorldState] Dev launch requested connected world reset.");
@@ -203,12 +204,12 @@ namespace Assets.Demo.Scripts.Multiplayer
     {
       if (net == null)
       {
-        net = CubusNetworkManager.Instance;
+        net = DemoNetworkManager.Instance;
       }
 
       if (world == null)
       {
-        world = FindObjectOfType<CubusWorld>();
+        world = FindAnyObjectByType<CubusWorld>();
       }
 
       if (net == null || !net.IsConnected || net.Conn == null)

@@ -1,6 +1,6 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
-using Assets.Demo.Scripts.Multiplayer;
+using Assets.Demo.Scripts.UI;
 
 namespace Assets.Demo.Scripts.Player
 {
@@ -51,7 +51,7 @@ namespace Assets.Demo.Scripts.Player
       // down completely: no look, no movement, and crucially no cursor re-lock,
       // so the cursor stays free to click menu buttons and keystrokes go to the
       // chat field instead of the player.
-      if (CubusUiInput.IsCapturing)
+      if (DemoUiInput.IsCapturing)
       {
         return;
       }

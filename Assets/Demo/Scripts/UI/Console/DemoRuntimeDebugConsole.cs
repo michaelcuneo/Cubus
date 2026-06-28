@@ -8,6 +8,7 @@ using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using Assets.Demo.Scripts.Player;
 
 namespace Assets.Demo.Scripts.UI.Console
 {
@@ -570,7 +571,7 @@ namespace Assets.Demo.Scripts.UI.Console
           ? "world=none"
           : $"mode={world.Settings.TerrainSystem} worldReady={world.IsWorldReady} initialReady={world.IsInitialTerrainReady} generationProgress={world.GenerationProgress:0.00} status='{world.GenerationStatus}' spawn={world.SuggestedSpawnLocation}";
 
-      return $"{worldSummary}; {BuildCrosshairSummary()}; {BuildProfilerSummary()}; devMode={Assets.Demo.Scripts.Multiplayer.CubusDeveloperMode.IsEnabled}";
+      return $"{worldSummary}; {BuildCrosshairSummary()}; {BuildProfilerSummary()}; devMode={Assets.Demo.Scripts.Core.DemoDeveloperMode.IsEnabled}";
     }
 
     private string BuildCrosshairSummary()
@@ -688,20 +689,20 @@ namespace Assets.Demo.Scripts.UI.Console
       {
         if (args.Length < 2 || args[1].Equals("status", StringComparison.OrdinalIgnoreCase))
         {
-          EnqueueLog($"Developer mode is {(Assets.Demo.Scripts.Multiplayer.CubusDeveloperMode.IsEnabled ? "ON" : "OFF")}.");
+          EnqueueLog($"Developer mode is {(Assets.Demo.Scripts.Core.DemoDeveloperMode.IsEnabled ? "ON" : "OFF")}.");
           return;
         }
 
         if (args[1].Equals("on", StringComparison.OrdinalIgnoreCase))
         {
-          Assets.Demo.Scripts.Multiplayer.CubusDeveloperMode.IsEnabled = true;
+          Assets.Demo.Scripts.Core.DemoDeveloperMode.IsEnabled = true;
           EnqueueLog("Developer mode enabled. Launcher dev world tools are now visible.");
           return;
         }
 
         if (args[1].Equals("off", StringComparison.OrdinalIgnoreCase))
         {
-          Assets.Demo.Scripts.Multiplayer.CubusDeveloperMode.IsEnabled = false;
+          Assets.Demo.Scripts.Core.DemoDeveloperMode.IsEnabled = false;
           EnqueueLog("Developer mode disabled. Launcher dev world tools are hidden.");
           return;
         }

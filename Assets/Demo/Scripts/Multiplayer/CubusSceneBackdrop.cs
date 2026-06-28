@@ -22,7 +22,7 @@ namespace Assets.Demo.Scripts.Multiplayer
 
     public static void RemoveAllBackdrops()
     {
-      CubusSceneBackdrop[] backdrops = FindObjectsByType<CubusSceneBackdrop>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+      CubusSceneBackdrop[] backdrops = FindObjectsByType<CubusSceneBackdrop>(FindObjectsInactive.Include);
       for (int i = backdrops.Length - 1; i >= 0; i--)
       {
         if (backdrops[i] != null)

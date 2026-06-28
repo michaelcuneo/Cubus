@@ -5,6 +5,10 @@ using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using Assets.Demo.Scripts.Multiplayer;
+using Assets.Demo.Scripts.UI;
+using Assets.Demo.Scripts.Persistence;
+using Assets.Demo.Scripts.Core;
 
 namespace Assets.Demo.Scripts.Core
 {
@@ -41,7 +45,7 @@ namespace Assets.Demo.Scripts.Core
     {
       SetStage("Checking launch context", string.Empty);
 
-      if (!CubusGameLaunchContext.HasLaunch)
+      if (!DemoGameLaunchContext.HasLaunch)
       {
         if (requireLauncherSelection)
         {
@@ -72,17 +76,17 @@ namespace Assets.Demo.Scripts.Core
 
       yield return null;
 
-      if (CubusGameLaunchContext.Mode == CubusGameLaunchMode.Local)
+      if (DemoGameLaunchContext.Mode == DemoGameLaunchMode.Local)
       {
         yield return PrepareLocalWorldThenSpawn();
       }
-      else if (CubusGameLaunchContext.Mode == CubusGameLaunchMode.Connected)
+      else if (DemoGameLaunchContext.Mode == DemoGameLaunchMode.Connected)
       {
         yield return PrepareConnectedWorldThenSpawn();
       }
       else
       {
-        lastWarning = $"Unsupported launch mode: {CubusGameLaunchContext.Mode}";
+        lastWarning = $"Unsupported launch mode: {DemoGameLaunchContext.Mode}";
         Debug.LogWarning($"[DemoLaunch] {lastWarning}");
       }
 
@@ -101,21 +105,21 @@ namespace Assets.Demo.Scripts.Core
       }
 
       WorldSettings settings = world.Settings;
-      settings.TerrainSystem = CubusGameLaunchContext.TerrainSystem;
-      settings.WorldSeed = CubusGameLaunchContext.WorldSeed;
-      settings.VoxelSize = CubusGameLaunchContext.VoxelSize;
+      settings.TerrainSystem = DemoGameLaunchContext.TerrainSystem;
+      settings.WorldSeed = DemoGameLaunchContext.WorldSeed;
+      settings.VoxelSize = DemoGameLaunchContext.VoxelSize;
       settings.UseWorldBounds = true;
-      settings.WorldMinChunkXZ = CubusGameLaunchContext.WorldMinChunkXZ;
-      settings.WorldMaxChunkXZ = CubusGameLaunchContext.WorldMaxChunkXZ;
-      settings.BlockMinChunkY = CubusGameLaunchContext.MinChunkY;
-      settings.BlockMaxChunkY = CubusGameLaunchContext.MaxChunkY;
-      settings.DensityMinChunkY = CubusGameLaunchContext.MinChunkY;
-      settings.DensityMaxChunkY = CubusGameLaunchContext.MaxChunkY;
+      settings.WorldMinChunkXZ = DemoGameLaunchContext.WorldMinChunkXZ;
+      settings.WorldMaxChunkXZ = DemoGameLaunchContext.WorldMaxChunkXZ;
+      settings.BlockMinChunkY = DemoGameLaunchContext.MinChunkY;
+      settings.BlockMaxChunkY = DemoGameLaunchContext.MaxChunkY;
+      settings.DensityMinChunkY = DemoGameLaunchContext.MinChunkY;
+      settings.DensityMaxChunkY = DemoGameLaunchContext.MaxChunkY;
       settings.InvalidateBiomeVariableCache();
 
       if (network != null)
       {
-        network.WorldId = CubusGameLaunchContext.WorldId;
+        network.WorldId = DemoGameLaunchContext.WorldId;
       }
 
       return true;
@@ -137,7 +141,7 @@ namespace Assets.Demo.Scripts.Core
       if (streamer != null)
       {
         SetStage("Prewarming streamed terrain", "Starting the WorldStreamer under launcher control.");
-        Debug.Log($"[DemoLaunch] Preparing local streamed world '{CubusGameLaunchContext.WorldId}' before spawning.");
+        Debug.Log($"[DemoLaunch] Preparing local streamed world '{DemoGameLaunchContext.WorldId}' before spawning.");
         yield return EnableStreamerForBootstrap(streamer);
         streamer.ClearStreamingState();
         streamer.RegenerateStreamedWorld();
@@ -146,13 +150,13 @@ namespace Assets.Demo.Scripts.Core
       else
       {
         SetStage("Generating non-streamed world", "Running DemoWorld.GenerateWorldAsync before player spawn.");
-        Debug.Log($"[DemoLaunch] Generating local world '{CubusGameLaunchContext.WorldId}' before spawning.");
+        Debug.Log($"[DemoLaunch] Generating local world '{DemoGameLaunchContext.WorldId}' before spawning.");
         yield return world.GenerateWorldAsync();
         world.BroadcastInitialTerrainReady(Vector3.zero);
       }
 
       SetStage("Local world ready", "Initial terrain is ready. Player spawn released.");
-      Debug.Log($"[DemoLaunch] Local world '{CubusGameLaunchContext.WorldId}' is ready. Player spawn released.");
+      Debug.Log($"[DemoLaunch] Local world '{DemoGameLaunchContext.WorldId}' is ready. Player spawn released.");
     }
 
     private IEnumerator PrepareConnectedWorldThenSpawn()
@@ -179,14 +183,14 @@ namespace Assets.Demo.Scripts.Core
       }
 
       network.ConfigureServer(
-          CubusGameLaunchContext.ServerUri,
-          CubusGameLaunchContext.ModuleName,
-          CubusGameLaunchContext.WorldId);
+          DemoGameLaunchContext.ServerUri,
+          DemoGameLaunchContext.ModuleName,
+          DemoGameLaunchContext.WorldId);
 
-      SetStage("Connecting to SpaceTimeDB", $"{CubusGameLaunchContext.ServerUri} / {CubusGameLaunchContext.ModuleName} / {CubusGameLaunchContext.WorldId}");
+      SetStage("Connecting to SpaceTimeDB", $"{DemoGameLaunchContext.ServerUri} / {DemoGameLaunchContext.ModuleName} / {DemoGameLaunchContext.WorldId}");
       network.Connect();
 
-      Debug.Log($"[DemoLaunch] Connecting to {CubusGameLaunchContext.ServerUri} / {CubusGameLaunchContext.ModuleName} / {CubusGameLaunchContext.WorldId}. Waiting for authoritative terrain before spawning.");
+      Debug.Log($"[DemoLaunch] Connecting to {DemoGameLaunchContext.ServerUri} / {DemoGameLaunchContext.ModuleName} / {DemoGameLaunchContext.WorldId}. Waiting for authoritative terrain before spawning.");
       yield return WaitForInitialTerrainReady("connected world", connectedWorldReadyTimeoutSeconds);
     }
 
@@ -252,7 +256,7 @@ namespace Assets.Demo.Scripts.Core
 
     private string DescribeLaunchSettings()
     {
-      return $"Mode={CubusGameLaunchContext.Mode}, WorldId={CubusGameLaunchContext.WorldId}, Terrain={CubusGameLaunchContext.TerrainSystem}, Seed={CubusGameLaunchContext.WorldSeed}, Bounds={CubusGameLaunchContext.WorldMinChunkXZ}..{CubusGameLaunchContext.WorldMaxChunkXZ}, Y={CubusGameLaunchContext.MinChunkY}..{CubusGameLaunchContext.MaxChunkY}";
+      return $"Mode={DemoGameLaunchContext.Mode}, WorldId={DemoGameLaunchContext.WorldId}, Terrain={DemoGameLaunchContext.TerrainSystem}, Seed={DemoGameLaunchContext.WorldSeed}, Bounds={DemoGameLaunchContext.WorldMinChunkXZ}..{DemoGameLaunchContext.WorldMaxChunkXZ}, Y={DemoGameLaunchContext.MinChunkY}..{DemoGameLaunchContext.MaxChunkY}";
     }
 
     private void SetStage(string stage, string detail)
@@ -309,7 +313,7 @@ namespace Assets.Demo.Scripts.Core
     {
       if (world == null)
       {
-        world = FindObjectOfType<CubusWorld>();
+        world = FindAnyObjectByType<CubusWorld>();
       }
 
       if (storage == null && world != null)
@@ -321,9 +325,9 @@ namespace Assets.Demo.Scripts.Core
 
       if (network == null)
       {
-        network = CubusNetworkManager.Instance != null
-            ? CubusNetworkManager.Instance
-            : FindObjectOfType<CubusNetworkManager>();
+        network = DemoNetworkManager.Instance != null
+            ? DemoNetworkManager.Instance
+            : FindAnyObjectByType<DemoNetworkManager>();
       }
     }
   }

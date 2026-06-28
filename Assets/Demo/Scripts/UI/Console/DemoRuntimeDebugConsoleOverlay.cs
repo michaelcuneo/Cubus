@@ -2,7 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
-using Assets.Demo.Scripts.Multiplayer;
+using Assets.Demo.Scripts.Player;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
@@ -80,7 +80,7 @@ namespace Assets.Demo.Scripts.UI.Console
         return;
       }
 
-      CubusUiInput.ConsoleOpen = true;
+      DemoUiInput.ConsoleOpen = true;
       HandleSubmitKey();
       RenderLogFromBackend();
       FocusInput();
@@ -88,7 +88,7 @@ namespace Assets.Demo.Scripts.UI.Console
 
     private void OnDestroy()
     {
-      CubusUiInput.ConsoleOpen = false;
+      DemoUiInput.ConsoleOpen = false;
       RestoreInputAfterConsole();
     }
 
@@ -141,7 +141,7 @@ namespace Assets.Demo.Scripts.UI.Console
 
       if (isOpen && escapeDown && !wasEscapeDown)
       {
-        CubusUiInput.SuppressMenuInputForCurrentFrame();
+        DemoUiInput.SuppressMenuInputForCurrentFrame();
         SetOpen(false);
       }
 
@@ -170,11 +170,11 @@ namespace Assets.Demo.Scripts.UI.Console
       }
 
       isOpen = open;
-      CubusUiInput.ConsoleOpen = open;
+      DemoUiInput.ConsoleOpen = open;
 
       if (!open)
       {
-        CubusUiInput.SuppressMenuInputForCurrentFrame();
+        DemoUiInput.SuppressMenuInputForCurrentFrame();
       }
 
       StopAllCoroutines();
@@ -195,7 +195,7 @@ namespace Assets.Demo.Scripts.UI.Console
     private void ForceClosed()
     {
       isOpen = false;
-      CubusUiInput.ConsoleOpen = false;
+      DemoUiInput.ConsoleOpen = false;
       StopAllCoroutines();
 
       if (rootGroup != null)
@@ -272,7 +272,7 @@ namespace Assets.Demo.Scripts.UI.Console
 
     private void PrepareInputForConsole()
     {
-      CubusUiInput.ConsoleOpen = true;
+      DemoUiInput.ConsoleOpen = true;
 
       if (!hasSavedCursorState)
       {
@@ -298,7 +298,7 @@ namespace Assets.Demo.Scripts.UI.Console
 
     private void RestoreInputAfterConsole()
     {
-      CubusUiInput.ConsoleOpen = false;
+      DemoUiInput.ConsoleOpen = false;
 
       if (disabledController && cachedFirstPersonController != null)
       {

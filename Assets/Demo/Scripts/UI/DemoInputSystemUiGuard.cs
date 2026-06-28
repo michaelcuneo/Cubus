@@ -37,7 +37,7 @@ namespace Assets.Demo.Scripts.UI
 
     public static void FixAllEventSystems()
     {
-      EventSystem[] eventSystems = FindObjectsByType<EventSystem>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+      EventSystem[] eventSystems = FindObjectsByType<EventSystem>(FindObjectsInactive.Include);
       for (int i = 0; i < eventSystems.Length; i++)
       {
         EventSystem eventSystem = eventSystems[i];

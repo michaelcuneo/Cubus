@@ -59,12 +59,12 @@ namespace Assets.Demo.Scripts.UI
         return;
       }
 
-      if (CubusUiInput.ShouldSuppressMenuInput)
+      if (DemoUiInput.ShouldSuppressMenuInput)
       {
         return;
       }
 
-      if (!isOpen && CubusUiInput.IsCapturing)
+      if (!isOpen && DemoUiInput.IsCapturing)
       {
         return;
       }
@@ -97,7 +97,7 @@ namespace Assets.Demo.Scripts.UI
         exitGameButton.onClick.RemoveListener(CloseApplication);
       }
 
-      CubusUiInput.MenuOpen = false;
+      DemoUiInput.MenuOpen = false;
       RestoreCursorIfNeeded();
     }
 
@@ -109,7 +109,7 @@ namespace Assets.Demo.Scripts.UI
       }
 
       isOpen = open;
-      CubusUiInput.MenuOpen = open;
+      DemoUiInput.MenuOpen = open;
 
       if (bodyText != null)
       {
@@ -169,14 +169,14 @@ namespace Assets.Demo.Scripts.UI
 
     private void ExitToMainMenu()
     {
-      CubusUiInput.MenuOpen = false;
+      DemoUiInput.MenuOpen = false;
       RestoreCursorIfNeeded();
       Cursor.lockState = CursorLockMode.None;
       Cursor.visible = true;
 
       if (string.IsNullOrWhiteSpace(mainMenuSceneName))
       {
-        Debug.LogError("[CubusExitMenu] Main Menu Scene Name is empty.");
+        Debug.LogError("[DemoExitMenu] Main Menu Scene Name is empty.");
         return;
       }
 
@@ -195,9 +195,9 @@ namespace Assets.Demo.Scripts.UI
 
     private void BuildUi()
     {
-      CubusInputSystemUiGuard.EnsureEventSystem();
+      DemoInputSystemUiGuard.EnsureEventSystem();
 
-      GameObject canvasObject = new("Cubus Exit Menu Canvas");
+      GameObject canvasObject = new("Demo Exit Menu Canvas");
       canvasObject.transform.SetParent(transform, false);
 
       Canvas canvas = canvasObject.AddComponent<Canvas>();
