@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
+using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain;
 using UnityEngine;
 
 namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
@@ -44,6 +45,11 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
 
     public void SaveChunk(WorldChunkRecord chunk)
     {
+      SaveChunkLayer(chunk);
+    }
+
+    public void SaveChunkLayer(WorldChunkRecord chunk)
+    {
       _ = Task.Run(() => WriteChunk(chunk));
     }
 
@@ -51,10 +57,10 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
     {
       try
       {
-        string dir = GetChunkDirectory(chunk.WorldId);
+        string dir = GetChunkDirectory(chunk.WorldId, chunk.TerrainSystem);
         Directory.CreateDirectory(dir);
 
-        string path = GetChunkPath(chunk.WorldId, chunk.ChunkCoord);
+        string path = GetChunkPath(chunk.WorldId, chunk.ChunkCoord, chunk.TerrainSystem);
 
         using FileStream stream = File.Open(path, FileMode.Create, FileAccess.Write, FileShare.None);
         using BinaryWriter writer = new(stream);
@@ -69,14 +75,41 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
       }
       catch (System.Exception ex)
       {
-        Debug.LogWarning($"Failed to save Cubus chunk file. WorldId={chunk.WorldId}, Chunk={chunk.ChunkCoord}, Error={ex.Message}");
+        Debug.LogWarning($"Failed to save Cubus chunk file. WorldId={chunk.WorldId}, Chunk={chunk.ChunkCoord}, Terrain={chunk.TerrainSystem}, Error={ex.Message}");
       }
     }
 
     public bool TryLoadChunk(string worldId, Vector3Int chunkCoord, out WorldChunkRecord chunk)
     {
-      string path = GetChunkPath(worldId, chunkCoord);
+      return TryLoadLegacyChunk(worldId, chunkCoord, out chunk);
+    }
 
+    public bool TryLoadChunkLayer(string worldId, Vector3Int chunkCoord, TerrainSystem terrainSystem, out WorldChunkRecord chunk)
+    {
+      string path = GetChunkPath(worldId, chunkCoord, terrainSystem);
+
+      if (TryReadChunk(path, worldId, chunkCoord, out chunk))
+      {
+        return chunk.TerrainSystem == terrainSystem;
+      }
+
+      if (TryLoadLegacyChunk(worldId, chunkCoord, out chunk))
+      {
+        return chunk.TerrainSystem == terrainSystem;
+      }
+
+      chunk = default;
+      return false;
+    }
+
+    private bool TryLoadLegacyChunk(string worldId, Vector3Int chunkCoord, out WorldChunkRecord chunk)
+    {
+      string path = GetLegacyChunkPath(worldId, chunkCoord);
+      return TryReadChunk(path, worldId, chunkCoord, out chunk);
+    }
+
+    private static bool TryReadChunk(string path, string worldId, Vector3Int chunkCoord, out WorldChunkRecord chunk)
+    {
       if (!File.Exists(path))
       {
         chunk = default;
@@ -86,7 +119,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
       using FileStream stream = File.OpenRead(path);
       using BinaryReader reader = new(stream);
 
-      var terrainSystem = (Runtime.Terrain.TerrainSystem)reader.ReadInt32();
+      var terrainSystem = (TerrainSystem)reader.ReadInt32();
       var payloadFormat = (CubusChunkPayloadFormat)reader.ReadByte();
       int payloadVersion = reader.ReadInt32();
       bool isEmpty = reader.ReadBoolean();
@@ -110,8 +143,26 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
 
     public IEnumerable<Vector3Int> EnumerateChunkCoords(string worldId)
     {
-      string dir = GetChunkDirectory(worldId);
+      HashSet<Vector3Int> seen = new();
 
+      foreach (Vector3Int coord in EnumerateChunkCoordsInDirectory(GetChunkDirectory(worldId, TerrainSystem.Block)))
+      {
+        if (seen.Add(coord)) yield return coord;
+      }
+
+      foreach (Vector3Int coord in EnumerateChunkCoordsInDirectory(GetChunkDirectory(worldId, TerrainSystem.SmoothDensity)))
+      {
+        if (seen.Add(coord)) yield return coord;
+      }
+
+      foreach (Vector3Int coord in EnumerateChunkCoordsInDirectory(GetLegacyChunkDirectory(worldId)))
+      {
+        if (seen.Add(coord)) yield return coord;
+      }
+    }
+
+    private static IEnumerable<Vector3Int> EnumerateChunkCoordsInDirectory(string dir)
+    {
       if (!Directory.Exists(dir))
       {
         yield break;
@@ -160,17 +211,35 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
       return Path.Combine(GetWorldDirectory(worldId), "manifest.json");
     }
 
-    private string GetChunkDirectory(string worldId)
+    private string GetChunkDirectory(string worldId, TerrainSystem terrainSystem)
+    {
+      return Path.Combine(GetWorldDirectory(worldId), "chunks", GetTerrainLayerDirectoryName(terrainSystem));
+    }
+
+    private string GetLegacyChunkDirectory(string worldId)
     {
       return Path.Combine(GetWorldDirectory(worldId), "chunks");
     }
 
-    private string GetChunkPath(string worldId, Vector3Int chunkCoord)
+    private string GetChunkPath(string worldId, Vector3Int chunkCoord, TerrainSystem terrainSystem)
     {
       return Path.Combine(
-          GetChunkDirectory(worldId),
+          GetChunkDirectory(worldId, terrainSystem),
           $"{chunkCoord.x}_{chunkCoord.y}_{chunkCoord.z}.chunk"
       );
+    }
+
+    private string GetLegacyChunkPath(string worldId, Vector3Int chunkCoord)
+    {
+      return Path.Combine(
+          GetLegacyChunkDirectory(worldId),
+          $"{chunkCoord.x}_{chunkCoord.y}_{chunkCoord.z}.chunk"
+      );
+    }
+
+    private static string GetTerrainLayerDirectoryName(TerrainSystem terrainSystem)
+    {
+      return terrainSystem == TerrainSystem.Block ? "block" : "density";
     }
 
     private static string Sanitize(string value)
