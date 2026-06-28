@@ -136,31 +136,57 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     {
       bool hasGenerationContext = StreamingGenerationContext.TryGet(out TerrainSystem mode, out WorldGenerationSnapshot snapshot);
 
-      if (store != null && !string.IsNullOrWhiteSpace(worldId) && store.TryLoadChunk(worldId, chunkCoord, out WorldChunkRecord record))
+      if (hasGenerationContext && store != null && !string.IsNullOrWhiteSpace(worldId))
       {
-        if (!hasGenerationContext || record.TerrainSystem == mode)
+        ChunkLoadResult loaded = new()
         {
-          ChunkLoadResult loaded = new() { ChunkCoord = chunkCoord, GenerationId = generationId, Loaded = true, TerrainSystem = record.TerrainSystem };
+          ChunkCoord = chunkCoord,
+          GenerationId = generationId,
+          Loaded = true,
+          TerrainSystem = mode
+        };
 
-          switch (record.TerrainSystem)
-          {
-            case TerrainSystem.Block:
-              loaded.BlockChunkData = CubusChunkPayloadCodec.DecodeBlockChunk(record);
-              // Player edits are stored as a sparse override layer, not baked into the
-              // saved record, so re-apply them on top of the stored chunk.
-              BlockChunkBuilder.ApplyOverrides(loaded.BlockChunkData, blockOverrides);
-              break;
-            case TerrainSystem.SmoothDensity:
-              loaded.DensityChunkData = CubusChunkPayloadCodec.DecodeDensityChunk(record);
-              DensityChunkBuilder.ApplyOverrides(loaded.DensityChunkData, densityOverrides);
-              break;
-            default:
-              loaded.Loaded = false;
-              break;
-          }
+        if ((mode == TerrainSystem.Block || mode == TerrainSystem.Hybrid) &&
+            store.TryLoadChunkLayer(worldId, chunkCoord, TerrainSystem.Block, out WorldChunkRecord blockRecord))
+        {
+          loaded.BlockChunkData = CubusChunkPayloadCodec.DecodeBlockChunk(blockRecord);
+          // Player edits are stored as a sparse override layer, not baked into the
+          // saved record, so re-apply them on top of the stored chunk.
+          BlockChunkBuilder.ApplyOverrides(loaded.BlockChunkData, blockOverrides);
+        }
 
+        if ((mode == TerrainSystem.SmoothDensity || mode == TerrainSystem.Hybrid) &&
+            store.TryLoadChunkLayer(worldId, chunkCoord, TerrainSystem.SmoothDensity, out WorldChunkRecord densityRecord))
+        {
+          loaded.DensityChunkData = CubusChunkPayloadCodec.DecodeDensityChunk(densityRecord);
+          DensityChunkBuilder.ApplyOverrides(loaded.DensityChunkData, densityOverrides);
+        }
+
+        if (HasRequiredLoadedLayers(mode, loaded))
+        {
           return loaded;
         }
+      }
+      else if (store != null && !string.IsNullOrWhiteSpace(worldId) && store.TryLoadChunk(worldId, chunkCoord, out WorldChunkRecord record))
+      {
+        ChunkLoadResult loaded = new() { ChunkCoord = chunkCoord, GenerationId = generationId, Loaded = true, TerrainSystem = record.TerrainSystem };
+
+        switch (record.TerrainSystem)
+        {
+          case TerrainSystem.Block:
+            loaded.BlockChunkData = CubusChunkPayloadCodec.DecodeBlockChunk(record);
+            BlockChunkBuilder.ApplyOverrides(loaded.BlockChunkData, blockOverrides);
+            break;
+          case TerrainSystem.SmoothDensity:
+            loaded.DensityChunkData = CubusChunkPayloadCodec.DecodeDensityChunk(record);
+            DensityChunkBuilder.ApplyOverrides(loaded.DensityChunkData, densityOverrides);
+            break;
+          default:
+            loaded.Loaded = false;
+            break;
+        }
+
+        return loaded;
       }
 
       if (hasGenerationContext)
@@ -199,6 +225,17 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       }
 
       return new ChunkLoadResult { ChunkCoord = chunkCoord, GenerationId = generationId, Loaded = false, IsMissingFromStorage = true };
+    }
+
+    private static bool HasRequiredLoadedLayers(TerrainSystem mode, ChunkLoadResult loaded)
+    {
+      return mode switch
+      {
+        TerrainSystem.Block => loaded.BlockChunkData != null,
+        TerrainSystem.SmoothDensity => loaded.DensityChunkData != null,
+        TerrainSystem.Hybrid => loaded.BlockChunkData != null && loaded.DensityChunkData != null,
+        _ => false
+      };
     }
   }
 
