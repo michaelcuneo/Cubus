@@ -48,7 +48,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
     public static bool TryGetBlockSnapshot(out WorldGenerationSnapshot snapshot)
     {
-      if (TryGet(out TerrainSystem activeTerrainSystem, out snapshot) && activeTerrainSystem == TerrainSystem.Block)
+      if (TryGet(out TerrainSystem activeTerrainSystem, out snapshot) &&
+          (activeTerrainSystem == TerrainSystem.Block || activeTerrainSystem == TerrainSystem.Hybrid))
       {
         return true;
       }
