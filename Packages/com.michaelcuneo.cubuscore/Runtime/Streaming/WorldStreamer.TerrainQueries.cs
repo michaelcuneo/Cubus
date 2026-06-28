@@ -107,7 +107,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         return;
       }
 
-      if (HasChunkData(chunkCoord))
+      if (HasRequiredChunkData(chunkCoord))
       {
         QueueRender(chunkCoord);
       }

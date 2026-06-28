@@ -15,7 +15,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
           world,
           keepChunkCoords,
           knownEmptyChunks,
-          HasChunkData,
+          HasRequiredChunkData,
           chunkLoadQueue.IsInFlight,
           pendingLoadSet.Contains,
           c => QueueLoad(c)

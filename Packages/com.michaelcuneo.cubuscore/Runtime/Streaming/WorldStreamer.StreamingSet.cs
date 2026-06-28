@@ -83,7 +83,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       candidateChunksBuffer.Sort(GetChunkPriorityComparison(ComputeSortPivot()));
       for (int i = 0; i < candidateChunksBuffer.Count; i++)
       {
-        if (HasChunkData(candidateChunksBuffer[i])) QueueRender(candidateChunksBuffer[i]);
+        if (HasRequiredChunkData(candidateChunksBuffer[i])) QueueRender(candidateChunksBuffer[i]);
         else QueueLoad(candidateChunksBuffer[i]);
       }
     }
