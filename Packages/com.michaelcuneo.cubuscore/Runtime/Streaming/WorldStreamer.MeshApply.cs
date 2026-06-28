@@ -1,7 +1,5 @@
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Chunks;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing;
-using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain;
-using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Voxels;
 using UnityEngine;
 
 namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
@@ -12,13 +10,12 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     {
       float applyStartTime = Time.realtimeSinceStartup;
 
-      if (world.Settings.TerrainSystem == TerrainSystem.Block)
+      if (IsBlockTerrainEnabled)
       {
         ProcessCompletedBlockBuildResults(meshApplyBudget, applyStartTime);
-        return;
       }
 
-      if (world.Settings.TerrainSystem == TerrainSystem.SmoothDensity)
+      if (IsDensityTerrainEnabled)
       {
         ProcessCompletedDensityBuildResults(meshApplyBudget, applyStartTime);
       }
