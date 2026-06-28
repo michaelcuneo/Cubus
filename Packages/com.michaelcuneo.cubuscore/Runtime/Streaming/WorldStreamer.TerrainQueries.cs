@@ -59,7 +59,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
       return chunkCoord;
     }
-
     public Vector3 CalculateSurfaceWorldPositionFromVoxel(Vector3Int targetVoxel, float clearance)
     {
       float voxelSize = Mathf.Max(0.0001f, world.Settings.VoxelSize);
@@ -116,6 +115,34 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       {
         QueueLoad(chunkCoord);
       }
+    }
+
+    public void SetStreamingFocusVoxel(Vector3Int voxelCoord)
+    {
+      overrideStreamingFocusVoxel = voxelCoord;
+      hasOverrideStreamingFocusVoxel = true;
+      ForceRefreshStreamingSet();
+    }
+
+    public void ClearStreamingFocusVoxel()
+    {
+      hasOverrideStreamingFocusVoxel = false;
+      ForceRefreshStreamingSet();
+    }
+
+    private Vector3Int GetStreamingFocusChunkCoord()
+    {
+      if (hasOverrideStreamingFocusVoxel)
+      {
+        return VoxelToChunkCoord(overrideStreamingFocusVoxel);
+      }
+
+      if (viewer != null)
+      {
+        return WorldToChunkCoord(viewer.position);
+      }
+
+      return Vector3Int.zero;
     }
 
     private int GetSurfaceChunkYForColumn(int x, int z, int fallbackVoxelY)
