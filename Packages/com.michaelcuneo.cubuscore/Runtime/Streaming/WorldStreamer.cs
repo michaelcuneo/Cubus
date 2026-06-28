@@ -40,8 +40,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     private readonly HashSet<Vector3Int> pendingLoadSet = new();
     private readonly Queue<Vector3Int> pendingRenderQueue = new();
     private readonly HashSet<Vector3Int> pendingRenderSet = new();
-    private readonly Queue<Vector3Int> pendingUnloadQueue = new();
-    private readonly HashSet<Vector3Int> pendingUnloadSet = new();
+    private readonly WorldStreamingQueueSet pendingUnload = new();
     private readonly HashSet<Vector3Int> knownEmptyChunks = new();
     private readonly Dictionary<Vector2Int, int> surfaceChunkYCache = new();
     private readonly List<Vector3Int> candidateChunksBuffer = new();
@@ -95,7 +94,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     public int KeepChunkCount => keepChunkCoords.Count;
     public int PendingLoadCount => pendingLoadQueue.Count;
     public int PendingRenderCount => pendingRenderQueue.Count;
-    public int PendingUnloadCount => pendingUnloadQueue.Count;
+    public int PendingUnloadCount => pendingUnload.Count;
     public int PendingLoadSetCount => pendingLoadSet.Count;
     public int PendingRenderSetCount => pendingRenderSet.Count;
     public int KnownEmptyChunkCount => knownEmptyChunks.Count;
@@ -391,7 +390,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       chunkLoadQueue.IncrementGeneration();
       pendingLoadQueue.Clear(); pendingLoadSet.Clear();
       pendingRenderQueue.Clear(); pendingRenderSet.Clear();
-      pendingUnloadQueue.Clear(); pendingUnloadSet.Clear();
+      pendingUnload.Clear();
       hasLastViewerChunkCoord = false;
       pendingLoadQueueNeedsPrioritization = false;
       pendingRenderQueueNeedsPrioritization = false;
@@ -403,7 +402,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       desiredChunkCoords.Clear(); keepChunkCoords.Clear();
       pendingLoadQueue.Clear(); pendingLoadSet.Clear();
       pendingRenderQueue.Clear(); pendingRenderSet.Clear();
-      pendingUnloadQueue.Clear(); pendingUnloadSet.Clear();
+      pendingUnload.Clear();
       knownEmptyChunks.Clear();
       buildQueue.IncrementGeneration(); densityBuildQueue.IncrementGeneration(); chunkLoadQueue.IncrementGeneration();
       hasLastViewerChunkCoord = false;
@@ -617,68 +616,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       keepChunkCoords.Add(spawnTargetChunkCoord);
       if (worldRenderer.HasChunkView(spawnTargetChunkCoord) || pendingRenderSet.Contains(spawnTargetChunkCoord) || chunkLoadQueue.IsInFlight(spawnTargetChunkCoord)) return;
       if (HasChunkData(spawnTargetChunkCoord)) QueueRender(spawnTargetChunkCoord); else QueueLoad(spawnTargetChunkCoord);
-    }
-
-    private void QueueLoad(Vector3Int chunkCoord, bool requestPrioritization = true)
-    {
-      if (pendingLoadSet.Add(chunkCoord))
-      {
-        pendingLoadQueue.Enqueue(chunkCoord);
-
-        if (requestPrioritization)
-        {
-          pendingLoadQueueNeedsPrioritization = true;
-        }
-      }
-    }
-
-    private void QueueRender(Vector3Int chunkCoord, bool requestPrioritization = true)
-    {
-      if (pendingRenderSet.Add(chunkCoord))
-      {
-        pendingRenderQueue.Enqueue(chunkCoord);
-
-        if (requestPrioritization)
-        {
-          pendingRenderQueueNeedsPrioritization = true;
-        }
-      }
-    }
-
-    private void PrioritizePendingQueues()
-    {
-      if (!hasLastViewerChunkCoord)
-      {
-        return;
-      }
-
-      if (pendingLoadQueueNeedsPrioritization)
-      {
-        PrioritizeQueue(pendingLoadQueue, pendingLoadSet, true);
-        pendingLoadQueueNeedsPrioritization = false;
-      }
-
-      if (pendingRenderQueueNeedsPrioritization)
-      {
-        PrioritizeQueue(pendingRenderQueue, pendingRenderSet, false);
-        pendingRenderQueueNeedsPrioritization = false;
-      }
-    }
-
-    private void PrioritizeQueue(Queue<Vector3Int> queue, HashSet<Vector3Int> membership, bool allowKeepOnlyChunks)
-    {
-      if (queue.Count < 2) return;
-      queueSortBuffer.Clear();
-      while (queue.Count > 0)
-      {
-        Vector3Int c = queue.Dequeue();
-        if (!membership.Contains(c)) continue;
-        if (!desiredChunkCoords.Contains(c) && !(allowKeepOnlyChunks && keepChunkCoords.Contains(c))) continue;
-        queueSortBuffer.Add(c);
-      }
-
-      queueSortBuffer.Sort(GetChunkPriorityComparison(ComputeSortPivot()));
-      for (int i = 0; i < queueSortBuffer.Count; i++) queue.Enqueue(queueSortBuffer[i]);
     }
 
     private void ProcessLoadQueue(int loadBudget, int renderBudget)
@@ -1096,8 +1033,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       QueueRender(chunkCoord);
     }
 
-    private Vector3 GetSpawnReferencePosition() => viewer != null ? viewer.position : desiredInitialSpawnLocation;
-
     private Vector3Int WorldToChunkCoord(Vector3 worldPos)
     {
       Vector3 local = transform.InverseTransformPoint(worldPos);
@@ -1107,97 +1042,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         VoxelMath.FloorDiv(Mathf.FloorToInt(voxel.y), VoxelConstants.ChunkSize),
         VoxelMath.FloorDiv(Mathf.FloorToInt(voxel.z), VoxelConstants.ChunkSize)
       );
-    }
-
-    private Vector3Int WorldToSurfaceChunkCoord(Vector3 worldPos)
-    {
-      Vector3Int c = WorldToChunkCoord(worldPos);
-      c.y = GetSurfaceChunkYForColumn(c.x, c.z, c.y * VoxelConstants.ChunkSize);
-      return c;
-    }
-
-    private int GetSurfaceChunkYForColumn(int x, int z, int fallbackVoxelY)
-    {
-      if (generator == null) return VoxelMath.FloorDiv(fallbackVoxelY, VoxelConstants.ChunkSize);
-      Vector2Int column = new(x, z);
-      if (surfaceChunkYCache.TryGetValue(column, out int cached)) return cached;
-      int y = generator.GetSurfaceChunkYForChunkColumn(column); surfaceChunkYCache[column] = y; return y;
-    }
-
-    private void UnloadOutsideKeepSet()
-    {
-      unloadChunksBuffer.Clear();
-      foreach (Vector3Int c in worldRenderer.ActiveChunkViews.Keys) if (!keepChunkCoords.Contains(c)) unloadChunksBuffer.Add(c);
-      for (int i = 0; i < unloadChunksBuffer.Count; i++)
-      {
-        Vector3Int chunkCoord = unloadChunksBuffer[i];
-        if (pendingUnloadSet.Add(chunkCoord)) pendingUnloadQueue.Enqueue(chunkCoord);
-      }
-    }
-
-    private void ProcessUnloadQueue(int unloadBudget)
-    {
-      int count = 0;
-      while (count < unloadBudget && pendingUnloadQueue.Count > 0)
-      {
-        Vector3Int chunkCoord = pendingUnloadQueue.Dequeue();
-        pendingUnloadSet.Remove(chunkCoord);
-
-        if (keepChunkCoords.Contains(chunkCoord))
-        {
-          continue;
-        }
-
-        worldRenderer.RemoveChunk(chunkCoord);
-        if (evictCachedChunkDataOutsideKeepSet && storage != null)
-        {
-          world.Data.BlockChunks.Remove(chunkCoord);
-          world.Data.DensityChunks.Remove(chunkCoord);
-        }
-
-        totalChunkUnloadsApplied++;
-        count++;
-      }
-    }
-
-    private void TryBroadcastInitialTerrainReady()
-    {
-      if (hasBroadcastInitialTerrainReady) return;
-      if (!worldRenderer.HasChunkView(spawnTargetChunkCoord))
-      {
-        QueueSpawnTargetForRender();
-        return;
-      }
-      if (worldRenderer.ActiveChunkViews.Count < initialSpawnRequiredRenderedChunks) return;
-
-      Vector3 spawn = CalculateInitialSpawnLocation();
-      world.BroadcastInitialTerrainReady(spawn);
-      hasBroadcastInitialTerrainReady = true;
-      ForceRefreshStreamingSet();
-    }
-
-    private Vector3 CalculateInitialSpawnLocation()
-    {
-      float voxelSize = Mathf.Max(0.0001f, world.Settings.VoxelSize);
-      float densityScale = Mathf.Max(0.001f, world.Settings.DensitySampleScale);
-
-      float localVoxelX = spawnTargetChunkCoord.x * VoxelConstants.ChunkSize + VoxelConstants.ChunkSize * 0.5f;
-      float localVoxelZ = spawnTargetChunkCoord.z * VoxelConstants.ChunkSize + VoxelConstants.ChunkSize * 0.5f;
-
-      Vector3Int sampleVoxel = new(
-        Mathf.FloorToInt(localVoxelX),
-        0,
-        Mathf.FloorToInt(localVoxelZ)
-      );
-
-      TerrainSample sample = BiomeTerrainSampler.Sample(world.Settings, sampleVoxel, densityScale);
-      float localVoxelY = sample.SurfaceHeight + Mathf.Max(0.0f, initialSpawnClearance);
-
-      return transform.TransformPoint(new Vector3(
-        localVoxelX * voxelSize,
-        localVoxelY * voxelSize,
-        localVoxelZ * voxelSize
-      ));
     }
   }
 }
