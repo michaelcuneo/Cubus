@@ -20,6 +20,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       DensityVoxel[] voxels = chunkData.GetRawVoxelArray();
       TerrainColumnSampler columnSampler = new();
       float scale = Mathf.Max(0.001f, snapshot.DensitySampleScale);
+      bool hasSolid = false;
+      bool hasAir = false;
 
       const int size = VoxelConstants.ChunkSize;
       int baseWorldX = chunkCoord.x * size;
@@ -39,6 +41,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
           for (int y = 0; y < size; y++)
           {
             TerrainSample sample = columnSampler.SampleAt(worldX, baseWorldY + y, worldZ, scale);
+            if (sample.Density > 0.0f) hasSolid = true;
+            else hasAir = true;
 
             ushort materialId = sample.Density > 0.0f
                 ? (ushort)Mathf.Clamp(sample.SolidMaterialId, 1, 65535)
@@ -48,6 +52,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
           }
         }
       }
+
+      chunkData.MarkSurfaceCrossingKnown(hasSolid && hasAir);
 
       if (overrides != null)
       {
@@ -80,6 +86,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         DensityVoxelOverride edit = pair.Value;
         voxels[voxelIndex] = new DensityVoxel(edit.Density, edit.MaterialId);
       }
+
+      chunkData.InvalidateSurfaceCrossingCache();
     }
   }
 }
