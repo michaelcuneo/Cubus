@@ -100,12 +100,24 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     public int DesiredChunkCount => desiredChunkCoords.Count;
     public int KeepChunkCount => keepChunkCoords.Count;
     public int PendingLoadCount => pendingLoadQueue.Count;
-    public int PendingRenderCount => pendingRenderQueue.Count;
-    public int PendingBlockRenderCount => pendingBlockRenderQueue.Count;
-    public int PendingDensityRenderCount => pendingDensityRenderQueue.Count;
+    public int PendingRenderCount =>
+      pendingRenderQueue.Count +
+      pendingRenderRetryQueue.Count +
+      pendingBlockRenderQueue.Count +
+      pendingBlockRenderRetryQueue.Count +
+      pendingDensityRenderQueue.Count +
+      pendingDensityRenderRetryQueue.Count;
+    public int PendingBlockRenderCount => pendingBlockRenderQueue.Count + pendingBlockRenderRetryQueue.Count;
+    public int PendingDensityRenderCount => pendingDensityRenderQueue.Count + pendingDensityRenderRetryQueue.Count;
     public int PendingUnloadCount => pendingUnload.Count;
     public int PendingLoadSetCount => pendingLoadSet.Count;
-    public int PendingRenderSetCount => pendingRenderSet.Count;
+    public int PendingRenderSetCount =>
+      pendingRenderSet.Count +
+      pendingRenderRetrySet.Count +
+      pendingBlockRenderSet.Count +
+      pendingBlockRenderRetrySet.Count +
+      pendingDensityRenderSet.Count +
+      pendingDensityRenderRetrySet.Count;
     public int KnownEmptyChunkCount => knownEmptyChunks.Count;
     public int ActiveChunkLoadTaskCount => chunkLoadQueue.ActiveTaskCount;
     public int ActiveBlockBuildTaskCount => buildQueue.ActiveTaskCount;
@@ -367,6 +379,10 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
           pendingLoadQueue.Count > 0 ||
           pendingRenderQueue.Count > 0 ||
           pendingRenderRetryQueue.Count > 0 ||
+          pendingBlockRenderQueue.Count > 0 ||
+          pendingBlockRenderRetryQueue.Count > 0 ||
+          pendingDensityRenderQueue.Count > 0 ||
+          pendingDensityRenderRetryQueue.Count > 0 ||
           chunkLoadQueue.ActiveTaskCount > 0 ||
           buildQueue.ActiveTaskCount > 0 ||
           densityBuildQueue.ActiveTaskCount > 0;
