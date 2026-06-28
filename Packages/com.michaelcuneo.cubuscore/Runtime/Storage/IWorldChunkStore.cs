@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain;
 using UnityEngine;
 
 namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
@@ -11,7 +12,10 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
     bool TryLoadWorldManifest(string worldId, out WorldManifest manifest);
 
     void SaveChunk(WorldChunkRecord chunk);
+    void SaveChunkLayer(WorldChunkRecord chunk);
+
     bool TryLoadChunk(string worldId, Vector3Int chunkCoord, out WorldChunkRecord chunk);
+    bool TryLoadChunkLayer(string worldId, Vector3Int chunkCoord, TerrainSystem terrainSystem, out WorldChunkRecord chunk);
 
     IEnumerable<Vector3Int> EnumerateChunkCoords(string worldId);
 
