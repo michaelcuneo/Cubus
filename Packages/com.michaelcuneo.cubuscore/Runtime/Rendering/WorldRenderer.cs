@@ -54,9 +54,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
 
     private float timeSinceLastCollisionUpdate;
 
-    // Public coord-level compatibility map used by streamers/unloaders. Internally
-    // block and density use separate views so both layers can render at the same
-    // chunk coordinate without replacing each other's mesh/material.
     private readonly Dictionary<Vector3Int, ChunkView> activeChunkViews = new();
     private readonly Dictionary<Vector3Int, ChunkView> activeBlockChunkViews = new();
     private readonly Dictionary<Vector3Int, ChunkView> activeDensityChunkViews = new();
@@ -70,6 +67,14 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
     private Texture2D propsLookupTexture;
 
     private const int LookupTextureSize = 256;
+
+    private enum MaterialAtlasSide
+    {
+      Top,
+      Side,
+      Bottom,
+      Props
+    }
 
     private CubusWorld world;
     private ChunkPool chunkPool;
