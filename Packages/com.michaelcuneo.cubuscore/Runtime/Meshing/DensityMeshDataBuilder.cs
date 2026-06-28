@@ -116,6 +116,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
       if (densityGrid == null || materialGrid == null || numCellsAxis <= 0) return null;
 
       int numSamplesAxis = numCellsAxis + 1;
+      int samplesAxisSquared = numSamplesAxis * numSamplesAxis;
       int totalSamples = numSamplesAxis * numSamplesAxis * numSamplesAxis;
       Vector3[] normalCache = ArrayPool<Vector3>.Shared.Rent(totalSamples);
       bool[] normalComputed = ArrayPool<bool>.Shared.Rent(totalSamples);
@@ -136,29 +137,79 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
         for (int y = 0; y < numCellsAxis; y++)
         for (int x = 0; x < numCellsAxis; x++)
         {
+          int i000 = x + numSamplesAxis * (y + numSamplesAxis * z);
+          int i100 = i000 + 1;
+          int i010 = i000 + numSamplesAxis;
+          int i110 = i010 + 1;
+          int i001 = i000 + samplesAxisSquared;
+          int i101 = i001 + 1;
+          int i011 = i001 + numSamplesAxis;
+          int i111 = i011 + 1;
+
+          float d0 = densityGrid[i000];
+          float d1 = densityGrid[i100];
+          float d2 = densityGrid[i110];
+          float d3 = densityGrid[i010];
+          float d4 = densityGrid[i001];
+          float d5 = densityGrid[i101];
+          float d6 = densityGrid[i111];
+          float d7 = densityGrid[i011];
+
           int cubeIndex = 0;
-          for (int corner = 0; corner < 8; corner++)
-          {
-            int sx = x + MarchingCubesTables.CubeCornerOffset[corner, 0];
-            int sy = y + MarchingCubesTables.CubeCornerOffset[corner, 1];
-            int sz = z + MarchingCubesTables.CubeCornerOffset[corner, 2];
-            int sampleIndex = ToSampleIndex(sx, sy, sz, numSamplesAxis);
-            densities[corner] = densityGrid[sampleIndex];
-            materials[corner] = materialGrid[sampleIndex];
-            positions[corner] = new Vector3(sx * cellWorldSize, sy * cellWorldSize, sz * cellWorldSize);
-            if (densities[corner] > 0.0f) cubeIndex |= 1 << corner;
-          }
+          if (d0 > 0.0f) cubeIndex |= 1;
+          if (d1 > 0.0f) cubeIndex |= 2;
+          if (d2 > 0.0f) cubeIndex |= 4;
+          if (d3 > 0.0f) cubeIndex |= 8;
+          if (d4 > 0.0f) cubeIndex |= 16;
+          if (d5 > 0.0f) cubeIndex |= 32;
+          if (d6 > 0.0f) cubeIndex |= 64;
+          if (d7 > 0.0f) cubeIndex |= 128;
 
           if (cubeIndex == 0 || cubeIndex == 255) continue;
           if (MarchingCubesTables.TriangleTable[cubeIndex, 0] < 0) continue;
 
-          for (int corner = 0; corner < 8; corner++)
-          {
-            int sx = x + MarchingCubesTables.CubeCornerOffset[corner, 0];
-            int sy = y + MarchingCubesTables.CubeCornerOffset[corner, 1];
-            int sz = z + MarchingCubesTables.CubeCornerOffset[corner, 2];
-            normals[corner] = SampleNormalCached(densityGrid, normalCache, normalComputed, numSamplesAxis, sx, sy, sz);
-          }
+          densities[0] = d0;
+          densities[1] = d1;
+          densities[2] = d2;
+          densities[3] = d3;
+          densities[4] = d4;
+          densities[5] = d5;
+          densities[6] = d6;
+          densities[7] = d7;
+
+          materials[0] = materialGrid[i000];
+          materials[1] = materialGrid[i100];
+          materials[2] = materialGrid[i110];
+          materials[3] = materialGrid[i010];
+          materials[4] = materialGrid[i001];
+          materials[5] = materialGrid[i101];
+          materials[6] = materialGrid[i111];
+          materials[7] = materialGrid[i011];
+
+          float px0 = x * cellWorldSize;
+          float py0 = y * cellWorldSize;
+          float pz0 = z * cellWorldSize;
+          float px1 = (x + 1) * cellWorldSize;
+          float py1 = (y + 1) * cellWorldSize;
+          float pz1 = (z + 1) * cellWorldSize;
+
+          positions[0] = new Vector3(px0, py0, pz0);
+          positions[1] = new Vector3(px1, py0, pz0);
+          positions[2] = new Vector3(px1, py1, pz0);
+          positions[3] = new Vector3(px0, py1, pz0);
+          positions[4] = new Vector3(px0, py0, pz1);
+          positions[5] = new Vector3(px1, py0, pz1);
+          positions[6] = new Vector3(px1, py1, pz1);
+          positions[7] = new Vector3(px0, py1, pz1);
+
+          normals[0] = SampleNormalCached(densityGrid, normalCache, normalComputed, numSamplesAxis, 0, 0, i000);
+          normals[1] = SampleNormalCached(densityGrid, normalCache, normalComputed, numSamplesAxis, 1, 0, i100);
+          normals[2] = SampleNormalCached(densityGrid, normalCache, normalComputed, numSamplesAxis, 1, 1, i110);
+          normals[3] = SampleNormalCached(densityGrid, normalCache, normalComputed, numSamplesAxis, 0, 1, i010);
+          normals[4] = SampleNormalCached(densityGrid, normalCache, normalComputed, numSamplesAxis, 0, 0, i001);
+          normals[5] = SampleNormalCached(densityGrid, normalCache, normalComputed, numSamplesAxis, 1, 0, i101);
+          normals[6] = SampleNormalCached(densityGrid, normalCache, normalComputed, numSamplesAxis, 1, 1, i111);
+          normals[7] = SampleNormalCached(densityGrid, normalCache, normalComputed, numSamplesAxis, 0, 1, i011);
 
           for (int i = 0; i < 12; i++) edgeIndices[i] = -1;
           ushort materialId = ChooseMaterial(densities, materials);
@@ -209,31 +260,33 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
 
     private static int ToSampleIndex(int sx, int sy, int sz, int samplesAxis) => sx + samplesAxis * (sy + samplesAxis * sz);
 
-    private static Vector3 SampleNormalCached(float[] densities, Vector3[] normalCache, bool[] normalComputed, int samplesAxis, int x, int y, int z)
+    private static Vector3 SampleNormalCached(float[] densities, Vector3[] normalCache, bool[] normalComputed, int samplesAxis, int xOffset, int yOffset, int index)
     {
-      int index = ToSampleIndex(x, y, z, samplesAxis);
       if (normalComputed[index]) return normalCache[index];
-      Vector3 normal = SampleNormal(densities, samplesAxis, x, y, z);
+      Vector3 normal = SampleNormal(densities, samplesAxis, xOffset, yOffset, index);
       normalCache[index] = normal;
       normalComputed[index] = true;
       return normal;
     }
 
-    private static Vector3 SampleNormal(float[] densities, int samplesAxis, int x, int y, int z)
+    private static Vector3 SampleNormal(float[] densities, int samplesAxis, int xOffset, int yOffset, int index)
     {
-      float dx = SampleDensity(densities, samplesAxis, x + 1, y, z) - SampleDensity(densities, samplesAxis, x - 1, y, z);
-      float dy = SampleDensity(densities, samplesAxis, x, y + 1, z) - SampleDensity(densities, samplesAxis, x, y - 1, z);
-      float dz = SampleDensity(densities, samplesAxis, x, y, z + 1) - SampleDensity(densities, samplesAxis, x, y, z - 1);
+      int samplesAxisSquared = samplesAxis * samplesAxis;
+      int ix = index % samplesAxis;
+      int iz = index / samplesAxisSquared;
+
+      int leftIndex = xOffset == 0 && ix == 0 ? index : index - 1;
+      int rightIndex = xOffset == 1 && ix == samplesAxis - 1 ? index : index + 1;
+      int downIndex = yOffset == 0 && ((index / samplesAxis) % samplesAxis) == 0 ? index : index - samplesAxis;
+      int upIndex = yOffset == 1 && ((index / samplesAxis) % samplesAxis) == samplesAxis - 1 ? index : index + samplesAxis;
+      int backIndex = iz == 0 ? index : index - samplesAxisSquared;
+      int forwardIndex = iz == samplesAxis - 1 ? index : index + samplesAxisSquared;
+
+      float dx = densities[rightIndex] - densities[leftIndex];
+      float dy = densities[upIndex] - densities[downIndex];
+      float dz = densities[forwardIndex] - densities[backIndex];
       Vector3 normal = new(-dx, -dy, -dz);
       return normal.sqrMagnitude > 0.000001f ? normal.normalized : Vector3.up;
-    }
-
-    private static float SampleDensity(float[] densities, int samplesAxis, int x, int y, int z)
-    {
-      x = Mathf.Clamp(x, 0, samplesAxis - 1);
-      y = Mathf.Clamp(y, 0, samplesAxis - 1);
-      z = Mathf.Clamp(z, 0, samplesAxis - 1);
-      return densities[ToSampleIndex(x, y, z, samplesAxis)];
     }
 
     private static int AddOrGetEdgeVertex(MeshData mesh, int edgeIndex, Span<Vector3> positions, Span<float> densities, Span<Vector3> normals, Span<Vector3> edgeVertices, Span<Vector3> edgeNormals, Span<int> edgeIndices, Color32 color)
