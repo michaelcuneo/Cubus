@@ -43,7 +43,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
           continue;
         }
 
-        if (worldRenderer.HasChunkView(c) || knownEmptyChunks.Contains(c))
+        if (knownEmptyChunks.Contains(c))
         {
           continue;
         }
@@ -158,11 +158,5 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
       return IsAnyTerrainEnabled;
     }
-
-    private bool HasBlockChunkData(Vector3Int c) =>
-      world.Data.BlockChunks.ContainsKey(c);
-
-    private bool HasDensityChunkData(Vector3Int c) =>
-      world.Data.DensityChunks.ContainsKey(c);
   }
 }
