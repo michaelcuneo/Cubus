@@ -155,9 +155,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Validation
         $"Duration={sampleDurationSeconds:0.00}s, " +
         $"Interval={sampleIntervalSeconds:0.00}s, " +
         $"InitialStageActive={sourceStreamer.IsInitialStreamingStageActive}, " +
-        $"InitialTerrainReady={sourceStreamer.HasBroadcastInitialTerrainReady}, " +
         $"LastViewerChunk={sourceStreamer.LastViewerChunkCoord}, " +
-        $"SpawnTargetChunk={sourceStreamer.SpawnTargetChunkCoord}, " +
         $"PeakDesiredChunks={peakDesiredChunks}, " +
         $"PeakKeepChunks={peakKeepChunks}, " +
         $"PeakPendingLoad={peakPendingLoad}, " +
