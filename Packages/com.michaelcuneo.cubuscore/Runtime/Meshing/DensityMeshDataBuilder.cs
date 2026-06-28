@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Chunks;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Core;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Voxels;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World;
@@ -58,6 +60,90 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
           numCellsAxis,
           safeCellStep * snapshot.VoxelSize,
           flipWinding);
+    }
+
+    public static MeshData GenerateFromChunkSnapshots(
+        Vector3Int chunkCoord,
+        WorldGenerationSnapshot snapshot,
+        int cellStep,
+        bool flipWinding,
+        DensityChunkData rootChunkData,
+        IReadOnlyDictionary<Vector3Int, DensityChunkData> chunkDataSnapshots,
+        Func<Vector3Int, DensityVoxel> fallbackSampleVoxelAtWorld)
+    {
+      if (rootChunkData == null)
+      {
+        return Generate(chunkCoord, snapshot, cellStep, flipWinding, fallbackSampleVoxelAtWorld);
+      }
+
+      int safeCellStep = Mathf.Clamp(cellStep, 1, 4);
+      int numCellsAxis = Mathf.CeilToInt((float)VoxelConstants.ChunkSize / safeCellStep);
+      int numSamplesAxis = numCellsAxis + 1;
+      int totalSamples = numSamplesAxis * numSamplesAxis * numSamplesAxis;
+      int baseWorldX = chunkCoord.x * VoxelConstants.ChunkSize;
+      int baseWorldY = chunkCoord.y * VoxelConstants.ChunkSize;
+      int baseWorldZ = chunkCoord.z * VoxelConstants.ChunkSize;
+
+      float[] densityGrid = new float[totalSamples];
+      ushort[] materialGrid = new ushort[totalSamples];
+
+      for (int sz = 0; sz < numSamplesAxis; sz++)
+      {
+        int lz = sz * safeCellStep;
+
+        for (int sy = 0; sy < numSamplesAxis; sy++)
+        {
+          int ly = sy * safeCellStep;
+
+          for (int sx = 0; sx < numSamplesAxis; sx++)
+          {
+            int lx = sx * safeCellStep;
+            DensityVoxel voxel;
+
+            if (lx < VoxelConstants.ChunkSize && ly < VoxelConstants.ChunkSize && lz < VoxelConstants.ChunkSize)
+            {
+              voxel = rootChunkData.GetVoxel(lx, ly, lz);
+            }
+            else
+            {
+              Vector3Int worldVoxel = new(baseWorldX + lx, baseWorldY + ly, baseWorldZ + lz);
+              voxel = SampleSnapshotOrFallback(chunkDataSnapshots, fallbackSampleVoxelAtWorld, worldVoxel);
+            }
+
+            int index = ToSampleIndex(sx, sy, sz, numSamplesAxis);
+            densityGrid[index] = voxel.Density;
+            materialGrid[index] = voxel.MaterialId;
+          }
+        }
+      }
+
+      return BuildFromGrids(
+          densityGrid,
+          materialGrid,
+          numCellsAxis,
+          safeCellStep * snapshot.VoxelSize,
+          flipWinding);
+    }
+
+    private static DensityVoxel SampleSnapshotOrFallback(
+        IReadOnlyDictionary<Vector3Int, DensityChunkData> chunkDataSnapshots,
+        Func<Vector3Int, DensityVoxel> fallbackSampleVoxelAtWorld,
+        Vector3Int worldVoxel)
+    {
+      Vector3Int sampleChunkCoord = VoxelMath.WorldVoxelToChunkCoord(worldVoxel);
+      Vector3Int localCoord = VoxelMath.WorldVoxelToLocalCoord(worldVoxel);
+
+      if (chunkDataSnapshots != null &&
+          chunkDataSnapshots.TryGetValue(sampleChunkCoord, out DensityChunkData chunkData) &&
+          chunkData != null &&
+          chunkData.IsInBounds(localCoord.x, localCoord.y, localCoord.z))
+      {
+        return chunkData.GetVoxel(localCoord.x, localCoord.y, localCoord.z);
+      }
+
+      return fallbackSampleVoxelAtWorld != null
+          ? fallbackSampleVoxelAtWorld(worldVoxel)
+          : DensityVoxel.Empty;
     }
 
     /// <summary>
