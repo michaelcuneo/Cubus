@@ -1,4 +1,5 @@
 using System;
+using System.Buffers;
 using System.Collections.Generic;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Chunks;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Core;
@@ -27,39 +28,47 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
       int numSamplesAxis = numCellsAxis + 1;
       int totalSamples = numSamplesAxis * numSamplesAxis * numSamplesAxis;
 
-      float[] densityGrid = new float[totalSamples];
-      ushort[] materialGrid = new ushort[totalSamples];
+      float[] densityGrid = ArrayPool<float>.Shared.Rent(totalSamples);
+      ushort[] materialGrid = ArrayPool<ushort>.Shared.Rent(totalSamples);
 
-      for (int sz = 0; sz < numSamplesAxis; sz++)
+      try
       {
-        for (int sy = 0; sy < numSamplesAxis; sy++)
+        for (int sz = 0; sz < numSamplesAxis; sz++)
         {
-          for (int sx = 0; sx < numSamplesAxis; sx++)
+          for (int sy = 0; sy < numSamplesAxis; sy++)
           {
-            int lx = sx * safeCellStep;
-            int ly = sy * safeCellStep;
-            int lz = sz * safeCellStep;
+            for (int sx = 0; sx < numSamplesAxis; sx++)
+            {
+              int lx = sx * safeCellStep;
+              int ly = sy * safeCellStep;
+              int lz = sz * safeCellStep;
 
-            Vector3Int worldVoxel = new(
-                chunkCoord.x * VoxelConstants.ChunkSize + lx,
-                chunkCoord.y * VoxelConstants.ChunkSize + ly,
-                chunkCoord.z * VoxelConstants.ChunkSize + lz
-            );
+              Vector3Int worldVoxel = new(
+                  chunkCoord.x * VoxelConstants.ChunkSize + lx,
+                  chunkCoord.y * VoxelConstants.ChunkSize + ly,
+                  chunkCoord.z * VoxelConstants.ChunkSize + lz
+              );
 
-            DensityVoxel voxel = sampleVoxelAtWorld(worldVoxel);
-            int index = ToSampleIndex(sx, sy, sz, numSamplesAxis);
-            densityGrid[index] = voxel.Density;
-            materialGrid[index] = voxel.MaterialId;
+              DensityVoxel voxel = sampleVoxelAtWorld(worldVoxel);
+              int index = ToSampleIndex(sx, sy, sz, numSamplesAxis);
+              densityGrid[index] = voxel.Density;
+              materialGrid[index] = voxel.MaterialId;
+            }
           }
         }
-      }
 
-      return BuildFromGrids(
-          densityGrid,
-          materialGrid,
-          numCellsAxis,
-          safeCellStep * snapshot.VoxelSize,
-          flipWinding);
+        return BuildFromGrids(
+            densityGrid,
+            materialGrid,
+            numCellsAxis,
+            safeCellStep * snapshot.VoxelSize,
+            flipWinding);
+      }
+      finally
+      {
+        ArrayPool<float>.Shared.Return(densityGrid);
+        ArrayPool<ushort>.Shared.Return(materialGrid);
+      }
     }
 
     public static MeshData GenerateFromChunkSnapshots(
@@ -84,45 +93,53 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
       int baseWorldY = chunkCoord.y * VoxelConstants.ChunkSize;
       int baseWorldZ = chunkCoord.z * VoxelConstants.ChunkSize;
 
-      float[] densityGrid = new float[totalSamples];
-      ushort[] materialGrid = new ushort[totalSamples];
+      float[] densityGrid = ArrayPool<float>.Shared.Rent(totalSamples);
+      ushort[] materialGrid = ArrayPool<ushort>.Shared.Rent(totalSamples);
 
-      for (int sz = 0; sz < numSamplesAxis; sz++)
+      try
       {
-        int lz = sz * safeCellStep;
-
-        for (int sy = 0; sy < numSamplesAxis; sy++)
+        for (int sz = 0; sz < numSamplesAxis; sz++)
         {
-          int ly = sy * safeCellStep;
+          int lz = sz * safeCellStep;
 
-          for (int sx = 0; sx < numSamplesAxis; sx++)
+          for (int sy = 0; sy < numSamplesAxis; sy++)
           {
-            int lx = sx * safeCellStep;
-            DensityVoxel voxel;
+            int ly = sy * safeCellStep;
 
-            if (lx < VoxelConstants.ChunkSize && ly < VoxelConstants.ChunkSize && lz < VoxelConstants.ChunkSize)
+            for (int sx = 0; sx < numSamplesAxis; sx++)
             {
-              voxel = rootChunkData.GetVoxel(lx, ly, lz);
-            }
-            else
-            {
-              Vector3Int worldVoxel = new(baseWorldX + lx, baseWorldY + ly, baseWorldZ + lz);
-              voxel = SampleSnapshotOrFallback(chunkDataSnapshots, fallbackSampleVoxelAtWorld, worldVoxel);
-            }
+              int lx = sx * safeCellStep;
+              DensityVoxel voxel;
 
-            int index = ToSampleIndex(sx, sy, sz, numSamplesAxis);
-            densityGrid[index] = voxel.Density;
-            materialGrid[index] = voxel.MaterialId;
+              if (lx < VoxelConstants.ChunkSize && ly < VoxelConstants.ChunkSize && lz < VoxelConstants.ChunkSize)
+              {
+                voxel = rootChunkData.GetVoxel(lx, ly, lz);
+              }
+              else
+              {
+                Vector3Int worldVoxel = new(baseWorldX + lx, baseWorldY + ly, baseWorldZ + lz);
+                voxel = SampleSnapshotOrFallback(chunkDataSnapshots, fallbackSampleVoxelAtWorld, worldVoxel);
+              }
+
+              int index = ToSampleIndex(sx, sy, sz, numSamplesAxis);
+              densityGrid[index] = voxel.Density;
+              materialGrid[index] = voxel.MaterialId;
+            }
           }
         }
-      }
 
-      return BuildFromGrids(
-          densityGrid,
-          materialGrid,
-          numCellsAxis,
-          safeCellStep * snapshot.VoxelSize,
-          flipWinding);
+        return BuildFromGrids(
+            densityGrid,
+            materialGrid,
+            numCellsAxis,
+            safeCellStep * snapshot.VoxelSize,
+            flipWinding);
+      }
+      finally
+      {
+        ArrayPool<float>.Shared.Return(densityGrid);
+        ArrayPool<ushort>.Shared.Return(materialGrid);
+      }
     }
 
     private static DensityVoxel SampleSnapshotOrFallback(
