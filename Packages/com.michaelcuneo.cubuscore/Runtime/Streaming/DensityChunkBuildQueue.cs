@@ -143,6 +143,19 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       request.ChunkDataSnapshots ??= new Dictionary<Vector3Int, DensityChunkData>();
       request.ChunkDataSnapshots[request.ChunkCoord] = chunkData;
 
+      if (!chunkData.HasSurfaceCrossing())
+      {
+        return new DensityChunkBuildResult
+        {
+          ChunkCoord = request.ChunkCoord,
+          ChunkData = chunkData,
+          MeshData = null,
+          IsEmpty = true,
+          HasSurfaceCrossing = false,
+          GenerationId = request.GenerationId
+        };
+      }
+
       MeshData meshData = DensityMeshDataBuilder.Generate(
           request.ChunkCoord,
           request.WorldSnapshot,
