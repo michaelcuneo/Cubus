@@ -17,8 +17,27 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     private int activeTaskCount;
     private int generationId;
 
-    public int ActiveTaskCount => activeTaskCount;
-    public int GenerationId => generationId;
+    public int ActiveTaskCount
+    {
+      get
+      {
+        lock (stateLock)
+        {
+          return activeTaskCount;
+        }
+      }
+    }
+
+    public int GenerationId
+    {
+      get
+      {
+        lock (stateLock)
+        {
+          return generationId;
+        }
+      }
+    }
 
     public bool IsInFlight(Vector3Int chunkCoord)
     {
@@ -30,9 +49,12 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
     public void IncrementGeneration()
     {
-      generationId++;
-      activeTaskCount = 0;
-      inFlightChunkCoords.Clear();
+      lock (stateLock)
+      {
+        generationId++;
+        activeTaskCount = 0;
+        inFlightChunkCoords.Clear();
+      }
 
       lock (completedResults)
       {
@@ -48,13 +70,17 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         IReadOnlyDictionary<int, ushort> blockOverrides = null,
         IReadOnlyDictionary<int, DensityVoxelOverride> densityOverrides = null)
     {
+      int requestGeneration;
 
-      if (activeTaskCount >= maxActiveTasks) return false;
-      if (inFlightChunkCoords.Contains(chunkCoord)) return false;
+      lock (stateLock)
+      {
+        if (activeTaskCount >= maxActiveTasks) return false;
+        if (inFlightChunkCoords.Contains(chunkCoord)) return false;
 
-      int requestGeneration = generationId;
-      inFlightChunkCoords.Add(chunkCoord);
-      activeTaskCount++;
+        requestGeneration = generationId;
+        inFlightChunkCoords.Add(chunkCoord);
+        activeTaskCount++;
+      }
 
       _ = Task.Run(() => Load(store, worldId, chunkCoord, requestGeneration, blockOverrides, densityOverrides)).ContinueWith(task =>
       {
@@ -75,8 +101,11 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
           completedResults.Enqueue(result);
         }
 
-        activeTaskCount = Mathf.Max(0, activeTaskCount - 1);
-        inFlightChunkCoords.Remove(chunkCoord);
+        lock (stateLock)
+        {
+          activeTaskCount = Mathf.Max(0, activeTaskCount - 1);
+          inFlightChunkCoords.Remove(chunkCoord);
+        }
       });
 
       return true;
@@ -105,31 +134,36 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         IReadOnlyDictionary<int, ushort> blockOverrides,
         IReadOnlyDictionary<int, DensityVoxelOverride> densityOverrides)
     {
+      bool hasGenerationContext = StreamingGenerationContext.TryGet(out TerrainSystem mode, out WorldGenerationSnapshot snapshot);
+
       if (store != null && !string.IsNullOrWhiteSpace(worldId) && store.TryLoadChunk(worldId, chunkCoord, out WorldChunkRecord record))
       {
-        ChunkLoadResult loaded = new() { ChunkCoord = chunkCoord, GenerationId = generationId, Loaded = true, TerrainSystem = record.TerrainSystem };
-
-        switch (record.TerrainSystem)
+        if (!hasGenerationContext || record.TerrainSystem == mode)
         {
-          case TerrainSystem.Block:
-            loaded.BlockChunkData = CubusChunkPayloadCodec.DecodeBlockChunk(record);
-            // Player edits are stored as a sparse override layer, not baked into the
-            // saved record, so re-apply them on top of the stored chunk.
-            BlockChunkBuilder.ApplyOverrides(loaded.BlockChunkData, blockOverrides);
-            break;
-          case TerrainSystem.SmoothDensity:
-            loaded.DensityChunkData = CubusChunkPayloadCodec.DecodeDensityChunk(record);
-            DensityChunkBuilder.ApplyOverrides(loaded.DensityChunkData, densityOverrides);
-            break;
-          default:
-            loaded.Loaded = false;
-            break;
-        }
+          ChunkLoadResult loaded = new() { ChunkCoord = chunkCoord, GenerationId = generationId, Loaded = true, TerrainSystem = record.TerrainSystem };
 
-        return loaded;
+          switch (record.TerrainSystem)
+          {
+            case TerrainSystem.Block:
+              loaded.BlockChunkData = CubusChunkPayloadCodec.DecodeBlockChunk(record);
+              // Player edits are stored as a sparse override layer, not baked into the
+              // saved record, so re-apply them on top of the stored chunk.
+              BlockChunkBuilder.ApplyOverrides(loaded.BlockChunkData, blockOverrides);
+              break;
+            case TerrainSystem.SmoothDensity:
+              loaded.DensityChunkData = CubusChunkPayloadCodec.DecodeDensityChunk(record);
+              DensityChunkBuilder.ApplyOverrides(loaded.DensityChunkData, densityOverrides);
+              break;
+            default:
+              loaded.Loaded = false;
+              break;
+          }
+
+          return loaded;
+        }
       }
 
-      if (StreamingGenerationContext.TryGet(out TerrainSystem mode, out WorldGenerationSnapshot snapshot))
+      if (hasGenerationContext)
       {
         ChunkLoadResult result = new()
         {

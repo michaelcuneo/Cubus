@@ -14,11 +14,21 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
   {
     private readonly Queue<DensityChunkBuildResult> completedResults = new();
     private readonly HashSet<Vector3Int> inFlightChunkCoords = new();
+    private readonly object stateLock = new();
 
     private int activeTaskCount;
     private int generationId;
 
-    public int ActiveTaskCount => activeTaskCount;
+    public int ActiveTaskCount
+    {
+      get
+      {
+        lock (stateLock)
+        {
+          return activeTaskCount;
+        }
+      }
+    }
 
     public int CompletedCount
     {
@@ -31,18 +41,33 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       }
     }
 
-    public int GenerationId => generationId;
+    public int GenerationId
+    {
+      get
+      {
+        lock (stateLock)
+        {
+          return generationId;
+        }
+      }
+    }
 
     public bool IsInFlight(Vector3Int chunkCoord)
     {
-      return inFlightChunkCoords.Contains(chunkCoord);
+      lock (stateLock)
+      {
+        return inFlightChunkCoords.Contains(chunkCoord);
+      }
     }
 
     public void IncrementGeneration()
     {
-      generationId++;
-      activeTaskCount = 0;
-      inFlightChunkCoords.Clear();
+      lock (stateLock)
+      {
+        generationId++;
+        activeTaskCount = 0;
+        inFlightChunkCoords.Clear();
+      }
 
       lock (completedResults)
       {
@@ -57,18 +82,21 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         return false;
       }
 
-      if (activeTaskCount >= maxActiveTasks)
+      lock (stateLock)
       {
-        return false;
-      }
+        if (activeTaskCount >= maxActiveTasks)
+        {
+          return false;
+        }
 
-      if (inFlightChunkCoords.Contains(request.ChunkCoord))
-      {
-        return false;
-      }
+        if (inFlightChunkCoords.Contains(request.ChunkCoord))
+        {
+          return false;
+        }
 
-      inFlightChunkCoords.Add(request.ChunkCoord);
-      activeTaskCount++;
+        inFlightChunkCoords.Add(request.ChunkCoord);
+        activeTaskCount++;
+      }
 
       _ = Task.Run(() => Build(request)).ContinueWith(task =>
       {
@@ -96,6 +124,12 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
             GenerationId = request.GenerationId
           });
         }
+
+        lock (stateLock)
+        {
+          activeTaskCount = Mathf.Max(0, activeTaskCount - 1);
+          inFlightChunkCoords.Remove(request.ChunkCoord);
+        }
       });
 
       return true;
@@ -108,8 +142,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         if (completedResults.Count > 0)
         {
           result = completedResults.Dequeue();
-          activeTaskCount = Mathf.Max(0, activeTaskCount - 1);
-          inFlightChunkCoords.Remove(result.ChunkCoord);
           return true;
         }
       }
@@ -143,11 +175,26 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       request.ChunkDataSnapshots ??= new Dictionary<Vector3Int, DensityChunkData>();
       request.ChunkDataSnapshots[request.ChunkCoord] = chunkData;
 
-      MeshData meshData = DensityMeshDataBuilder.Generate(
+      if (!chunkData.HasSurfaceCrossing())
+      {
+        return new DensityChunkBuildResult
+        {
+          ChunkCoord = request.ChunkCoord,
+          ChunkData = chunkData,
+          MeshData = null,
+          IsEmpty = true,
+          HasSurfaceCrossing = false,
+          GenerationId = request.GenerationId
+        };
+      }
+
+      MeshData meshData = DensityMeshDataBuilder.GenerateFromChunkSnapshots(
           request.ChunkCoord,
           request.WorldSnapshot,
           request.CellStep,
           request.FlipWinding,
+          chunkData,
+          request.ChunkDataSnapshots,
           worldVoxel => SampleVoxelForBuild(worldVoxel, request)
       );
 

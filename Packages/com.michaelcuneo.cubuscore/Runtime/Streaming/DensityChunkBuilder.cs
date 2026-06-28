@@ -16,7 +16,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         WorldGenerationSnapshot snapshot,
         IReadOnlyDictionary<int, DensityVoxelOverride> overrides)
     {
-      DensityChunkData chunkData = new(chunkCoord);
+      DensityChunkData chunkData = new(chunkCoord, false);
       float scale = Mathf.Max(0.001f, snapshot.DensitySampleScale);
 
       const int size = VoxelConstants.ChunkSize;
