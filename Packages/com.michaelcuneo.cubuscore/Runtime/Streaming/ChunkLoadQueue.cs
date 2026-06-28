@@ -174,7 +174,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
           TerrainSystem = mode
         };
 
-        if (mode == TerrainSystem.Block)
+        if (mode == TerrainSystem.Block || mode == TerrainSystem.Hybrid)
         {
           // Generate on this background worker with the MANAGED column sampler.
           // The Burst job path (GenerateChunkDataJob -> job.Run) must NOT be used
@@ -185,12 +185,15 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
           // column sampler, biome resolved once per column, columns fully above
           // the surface skipped) and is the fast pre-Burst streaming path.
           result.BlockChunkData = BlockChunkBuilder.GenerateChunkData(chunkCoord, snapshot, blockOverrides, out _);
-          return result;
         }
 
-        if (mode == TerrainSystem.SmoothDensity)
+        if (mode == TerrainSystem.SmoothDensity || mode == TerrainSystem.Hybrid)
         {
           result.DensityChunkData = DensityChunkBuilder.GenerateChunkData(chunkCoord, snapshot, densityOverrides);
+        }
+
+        if (result.BlockChunkData != null || result.DensityChunkData != null)
+        {
           return result;
         }
       }
