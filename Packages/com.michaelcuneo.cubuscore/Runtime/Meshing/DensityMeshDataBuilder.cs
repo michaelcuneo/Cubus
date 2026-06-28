@@ -51,13 +51,15 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
     {
       if (rootChunkData == null) return Generate(chunkCoord, snapshot, cellStep, flipWinding, fallbackSampleVoxelAtWorld);
 
+      const int chunkSize = VoxelConstants.ChunkSize;
       int safeCellStep = Mathf.Clamp(cellStep, 1, 4);
-      int numCellsAxis = Mathf.CeilToInt((float)VoxelConstants.ChunkSize / safeCellStep);
+      int numCellsAxis = Mathf.CeilToInt((float)chunkSize / safeCellStep);
       int numSamplesAxis = numCellsAxis + 1;
       int totalSamples = numSamplesAxis * numSamplesAxis * numSamplesAxis;
-      int baseWorldX = chunkCoord.x * VoxelConstants.ChunkSize;
-      int baseWorldY = chunkCoord.y * VoxelConstants.ChunkSize;
-      int baseWorldZ = chunkCoord.z * VoxelConstants.ChunkSize;
+      int baseWorldX = chunkCoord.x * chunkSize;
+      int baseWorldY = chunkCoord.y * chunkSize;
+      int baseWorldZ = chunkCoord.z * chunkSize;
+      DensityVoxel[] rootVoxels = rootChunkData.GetRawVoxelArray();
       float[] densityGrid = ArrayPool<float>.Shared.Rent(totalSamples);
       ushort[] materialGrid = ArrayPool<ushort>.Shared.Rent(totalSamples);
 
@@ -73,9 +75,9 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
             {
               int lx = sx * safeCellStep;
               DensityVoxel voxel;
-              if (lx < VoxelConstants.ChunkSize && ly < VoxelConstants.ChunkSize && lz < VoxelConstants.ChunkSize)
+              if (lx < chunkSize && ly < chunkSize && lz < chunkSize)
               {
-                voxel = rootChunkData.GetVoxel(lx, ly, lz);
+                voxel = rootVoxels[lx + chunkSize * (ly + chunkSize * lz)];
               }
               else
               {
