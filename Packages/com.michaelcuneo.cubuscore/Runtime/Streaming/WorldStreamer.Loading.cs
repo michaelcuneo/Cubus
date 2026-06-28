@@ -48,7 +48,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
           continue;
         }
 
-        if (HasChunkData(c))
+        if (HasRequiredChunkData(c))
         {
           if (desiredChunkCoords.Contains(c))
           {
@@ -116,7 +116,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
             // which otherwise leaves stale boundary walls at the load frontier.
             RequeueSettledBlockNeighbors(c);
           }
-          else if (IsDensityTerrainEnabled && result.DensityChunkData != null) world.Data.DensityChunks[c] = result.DensityChunkData;
+
+          if (IsDensityTerrainEnabled && result.DensityChunkData != null) world.Data.DensityChunks[c] = result.DensityChunkData;
 
           // Chunks that were just generated on the streaming worker (no record on
           // disk yet) are written back so subsequent visits load them from storage
@@ -124,12 +125,12 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
           // ChunkLoadResult.IsMissingFromStorage. Skipped when the store is hidden
           // for a terrain-system mismatch (ActiveStore == null), so we never
           // overwrite a world saved in the other terrain mode.
-          if (result.IsMissingFromStorage && persistStreamedChunks && storage != null && storage.ActiveStore != null && HasChunkData(c))
+          if (result.IsMissingFromStorage && persistStreamedChunks && storage != null && storage.ActiveStore != null && HasRequiredChunkData(c))
           {
             storage.SaveChunk(c);
           }
 
-          if (desiredChunkCoords.Contains(c) && HasChunkData(c))
+          if (desiredChunkCoords.Contains(c) && HasRequiredChunkData(c))
           {
             QueueRender(c);
           }
@@ -143,11 +144,25 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       }
     }
 
-    private bool HasChunkData(Vector3Int c) => world.Settings.TerrainSystem switch
+    private bool HasRequiredChunkData(Vector3Int c)
     {
-      TerrainSystem.Block => world.Data.BlockChunks.ContainsKey(c),
-      TerrainSystem.SmoothDensity => world.Data.DensityChunks.ContainsKey(c),
-      _ => false
-    };
+      if (IsBlockTerrainEnabled && !world.Data.BlockChunks.ContainsKey(c))
+      {
+        return false;
+      }
+
+      if (IsDensityTerrainEnabled && !world.Data.DensityChunks.ContainsKey(c))
+      {
+        return false;
+      }
+
+      return IsAnyTerrainEnabled;
+    }
+
+    private bool HasBlockChunkData(Vector3Int c) =>
+      world.Data.BlockChunks.ContainsKey(c);
+
+    private bool HasDensityChunkData(Vector3Int c) =>
+      world.Data.DensityChunks.ContainsKey(c);
   }
 }
