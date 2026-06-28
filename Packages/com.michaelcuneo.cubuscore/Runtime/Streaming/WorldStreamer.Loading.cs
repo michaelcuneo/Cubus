@@ -121,11 +121,10 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
           // Chunks that were just generated on the streaming worker (no record on
           // disk yet) are written back so subsequent visits load them from storage
-          // instead of regenerating. This is the wired-up counterpart to
-          // ChunkLoadResult.IsMissingFromStorage. Skipped when the store is hidden
-          // for a terrain-system mismatch (ActiveStore == null), so we never
-          // overwrite a world saved in the other terrain mode.
-          if (result.IsMissingFromStorage && persistStreamedChunks && storage != null && storage.ActiveStore != null && HasRequiredChunkData(c))
+          // instead of regenerating. Hybrid persistence is intentionally skipped
+          // until the storage layer can write/read block and density payloads for
+          // the same chunk coord without one overwriting the other.
+          if (!IsHybridTerrainEnabled && result.IsMissingFromStorage && persistStreamedChunks && storage != null && storage.ActiveStore != null && HasRequiredChunkData(c))
           {
             storage.SaveChunk(c);
           }
