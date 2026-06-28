@@ -8,6 +8,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Chunks
   public sealed class DensityChunkData
   {
     private readonly DensityVoxel[] voxels;
+    private bool surfaceCrossingKnown;
+    private bool cachedSurfaceCrossing;
 
     public Vector3Int ChunkCoord { get; }
 
@@ -30,6 +32,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Chunks
       {
         voxels[i] = DensityVoxel.Empty;
       }
+
+      MarkSurfaceCrossingKnown(false);
     }
 
     private DensityChunkData(Vector3Int chunkCoord, DensityVoxel[] voxelData)
@@ -45,12 +49,14 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Chunks
 
     public ref DensityVoxel GetVoxelMutable(int x, int y, int z)
     {
+      InvalidateSurfaceCrossingCache();
       return ref voxels[GetIndex(x, y, z)];
     }
 
     public void SetVoxel(int x, int y, int z, DensityVoxel voxel)
     {
       voxels[GetIndex(x, y, z)] = voxel;
+      InvalidateSurfaceCrossingCache();
     }
 
     public int GetIndex(int x, int y, int z)
@@ -87,6 +93,11 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Chunks
 
     public bool HasSurfaceCrossing()
     {
+      if (surfaceCrossingKnown)
+      {
+        return cachedSurfaceCrossing;
+      }
+
       bool hasSolid = false;
       bool hasAir = false;
 
@@ -103,11 +114,24 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Chunks
 
         if (hasSolid && hasAir)
         {
+          MarkSurfaceCrossingKnown(true);
           return true;
         }
       }
 
+      MarkSurfaceCrossingKnown(false);
       return false;
+    }
+
+    internal void MarkSurfaceCrossingKnown(bool hasSurfaceCrossing)
+    {
+      cachedSurfaceCrossing = hasSurfaceCrossing;
+      surfaceCrossingKnown = true;
+    }
+
+    internal void InvalidateSurfaceCrossingCache()
+    {
+      surfaceCrossingKnown = false;
     }
 
     public void FillFromDensityFunction(
@@ -115,6 +139,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Chunks
         ushort solidMaterialId)
     {
       const int size = VoxelConstants.ChunkSize;
+      bool hasSolid = false;
+      bool hasAir = false;
 
       for (int z = 0; z < size; z++)
       {
@@ -131,16 +157,15 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Chunks
 
             float density = densityFunction(worldVoxelPosition);
             ushort materialId = density > 0.0f ? solidMaterialId : (ushort)0;
+            if (density > 0.0f) hasSolid = true;
+            else hasAir = true;
 
-            SetVoxel(
-                x,
-                y,
-                z,
-                new DensityVoxel(density, materialId)
-            );
+            voxels[GetIndex(x, y, z)] = new DensityVoxel(density, materialId);
           }
         }
       }
+
+      MarkSurfaceCrossingKnown(hasSolid && hasAir);
     }
 
     public DensityVoxel[] GetRawVoxelArray()
@@ -152,7 +177,12 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Chunks
     {
       DensityVoxel[] copiedVoxels = new DensityVoxel[voxels.Length];
       System.Array.Copy(voxels, copiedVoxels, voxels.Length);
-      return new DensityChunkData(ChunkCoord, copiedVoxels);
+      DensityChunkData clone = new(ChunkCoord, copiedVoxels);
+      if (surfaceCrossingKnown)
+      {
+        clone.MarkSurfaceCrossingKnown(cachedSurfaceCrossing);
+      }
+      return clone;
     }
   }
 }
