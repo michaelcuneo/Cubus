@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Chunks;
 using UnityEngine;
 
@@ -22,13 +23,13 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     {
       int count = 0;
       int scanned = 0;
-      int maxScans = Mathf.Max(renderBudget * 4, pendingRenderQueue.Count + pendingRenderRetryQueue.Count);
+      int maxScans = Mathf.Max(renderBudget * 4, pendingBlockRenderQueue.Count + pendingBlockRenderRetryQueue.Count);
 
-      while ((pendingRenderQueue.Count > 0 || pendingRenderRetryQueue.Count > 0) && count < renderBudget && scanned < maxScans)
+      while ((pendingBlockRenderQueue.Count > 0 || pendingBlockRenderRetryQueue.Count > 0) && count < renderBudget && scanned < maxScans)
       {
         scanned++;
 
-        if (!TryDequeueRenderCandidate(out Vector3Int c))
+        if (!TryDequeueRenderCandidate(pendingBlockRenderQueue, pendingBlockRenderSet, pendingBlockRenderRetryQueue, pendingBlockRenderRetrySet, out Vector3Int c))
         {
           break;
         }
@@ -59,7 +60,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
       if (buildQueue.IsInFlight(c))
       {
-        QueueRender(c, false);
+        QueueBlockRender(c, false);
         return false;
       }
 
@@ -67,7 +68,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
       if (buildQueue.ActiveTaskCount >= MaxBlockAsyncTasks || totalActiveTasks >= MaxTotalAsyncTasks)
       {
-        QueueRenderRetry(c);
+        QueueBlockRenderRetry(c);
         return false;
       }
 
@@ -76,7 +77,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         return true;
       }
 
-      QueueRender(c, false);
+      QueueBlockRender(c, false);
       return false;
     }
 
@@ -84,13 +85,13 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     {
       int count = 0;
       int scanned = 0;
-      int maxScans = Mathf.Max(renderBudget * 4, pendingRenderQueue.Count + pendingRenderRetryQueue.Count);
+      int maxScans = Mathf.Max(renderBudget * 4, pendingDensityRenderQueue.Count + pendingDensityRenderRetryQueue.Count);
 
-      while ((pendingRenderRetryQueue.Count > 0 || pendingRenderQueue.Count > 0) && count < renderBudget && scanned < maxScans)
+      while ((pendingDensityRenderRetryQueue.Count > 0 || pendingDensityRenderQueue.Count > 0) && count < renderBudget && scanned < maxScans)
       {
         scanned++;
 
-        if (!TryDequeueRenderCandidate(out Vector3Int c))
+        if (!TryDequeueRenderCandidate(pendingDensityRenderQueue, pendingDensityRenderSet, pendingDensityRenderRetryQueue, pendingDensityRenderRetrySet, out Vector3Int c))
         {
           break;
         }
@@ -117,13 +118,13 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
       if (densityBuildQueue.IsInFlight(c))
       {
-        QueueRender(c, false);
+        QueueDensityRender(c, false);
         return false;
       }
 
       if (!EnsureDensitySampleChunksAvailableForMesh(c))
       {
-        QueueRender(c, false);
+        QueueDensityRender(c, false);
         return false;
       }
 
@@ -131,7 +132,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
       if (densityBuildQueue.ActiveTaskCount >= MaxDensityAsyncTasks || totalActiveTasks >= MaxTotalAsyncTasks)
       {
-        QueueRenderRetry(c);
+        QueueDensityRenderRetry(c);
         return false;
       }
 
@@ -140,38 +141,54 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         return true;
       }
 
-      QueueRender(c, false);
+      QueueDensityRender(c, false);
       return false;
     }
 
-    private void QueueRenderRetry(Vector3Int chunkCoord)
+    private void QueueBlockRenderRetry(Vector3Int chunkCoord)
     {
-      if (pendingRenderSet.Contains(chunkCoord) || pendingRenderRetrySet.Contains(chunkCoord))
+      if (pendingBlockRenderSet.Contains(chunkCoord) || pendingBlockRenderRetrySet.Contains(chunkCoord))
       {
         return;
       }
 
-      pendingRenderRetrySet.Add(chunkCoord);
-      pendingRenderRetryQueue.Enqueue(chunkCoord);
+      pendingBlockRenderRetrySet.Add(chunkCoord);
+      pendingBlockRenderRetryQueue.Enqueue(chunkCoord);
     }
 
-    private bool TryDequeueRenderCandidate(out Vector3Int chunkCoord)
+    private void QueueDensityRenderRetry(Vector3Int chunkCoord)
     {
-      while (pendingRenderRetryQueue.Count > 0)
+      if (pendingDensityRenderSet.Contains(chunkCoord) || pendingDensityRenderRetrySet.Contains(chunkCoord))
       {
-        chunkCoord = pendingRenderRetryQueue.Dequeue();
+        return;
+      }
 
-        if (pendingRenderRetrySet.Remove(chunkCoord))
+      pendingDensityRenderRetrySet.Add(chunkCoord);
+      pendingDensityRenderRetryQueue.Enqueue(chunkCoord);
+    }
+
+    private bool TryDequeueRenderCandidate(
+      Queue<Vector3Int> queue,
+      HashSet<Vector3Int> membership,
+      Queue<Vector3Int> retryQueue,
+      HashSet<Vector3Int> retryMembership,
+      out Vector3Int chunkCoord)
+    {
+      while (retryQueue.Count > 0)
+      {
+        chunkCoord = retryQueue.Dequeue();
+
+        if (retryMembership.Remove(chunkCoord))
         {
           return true;
         }
       }
 
-      while (pendingRenderQueue.Count > 0)
+      while (queue.Count > 0)
       {
-        chunkCoord = pendingRenderQueue.Dequeue();
+        chunkCoord = queue.Dequeue();
 
-        if (pendingRenderSet.Remove(chunkCoord))
+        if (membership.Remove(chunkCoord))
         {
           return true;
         }
