@@ -1,5 +1,4 @@
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Chunks;
-using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain;
 using UnityEngine;
 
 namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
@@ -8,13 +7,12 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
   {
     private void ProcessRenderQueue(int renderBudget)
     {
-      if (world.Settings.TerrainSystem == TerrainSystem.Block)
+      if (IsBlockTerrainEnabled)
       {
         ProcessBlockRenderQueue(renderBudget);
-        return;
       }
 
-      if (world.Settings.TerrainSystem == TerrainSystem.SmoothDensity)
+      if (IsDensityTerrainEnabled)
       {
         ProcessDensityRenderQueue(renderBudget);
       }

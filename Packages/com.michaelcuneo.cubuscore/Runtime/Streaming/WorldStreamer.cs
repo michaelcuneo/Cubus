@@ -43,7 +43,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     private readonly List<Vector3Int> candidateChunksBuffer = new();
     private readonly List<Vector3Int> queueSortBuffer = new();
     private readonly List<Vector3Int> unloadChunksBuffer = new();
-
+    private readonly HashSet<Vector3Int> editedChunkSet = new();
+    private readonly List<Vector3Int> editedChunksBuffer = new();
     private readonly BlockChunkBuildQueue buildQueue = new();
     private readonly DensityChunkBuildQueue densityBuildQueue = new();
     private readonly ChunkLoadQueue chunkLoadQueue = new();
@@ -302,7 +303,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     {
       if (!EnsureRuntimeReferences()) return;
       if (bootstrapCoroutine != null) return;
-      if (world.Settings.TerrainSystem != TerrainSystem.Block && world.Settings.TerrainSystem != TerrainSystem.SmoothDensity) return;
+      if (!IsAnyTerrainEnabled) return;
 
       float frameMs = Time.unscaledDeltaTime * 1000.0f;
       if (frameMs >= AdaptiveThrottleTriggerFrameMs)

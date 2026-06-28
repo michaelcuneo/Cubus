@@ -31,26 +31,32 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
     private void HandleBlockChunksEdited(IReadOnlyCollection<Vector3Int> dirtyChunks)
     {
+      editedChunkSet.Clear();
+      editedChunksBuffer.Clear();
+
       foreach (Vector3Int dirtyChunk in dirtyChunks)
       {
-        QueueEditedBlockChunk(dirtyChunk);
-        QueueEditedBlockChunk(dirtyChunk + Vector3Int.left);
-        QueueEditedBlockChunk(dirtyChunk + Vector3Int.right);
-        QueueEditedBlockChunk(dirtyChunk + Vector3Int.down);
-        QueueEditedBlockChunk(dirtyChunk + Vector3Int.up);
-        QueueEditedBlockChunk(dirtyChunk + new Vector3Int(0, 0, -1));
-        QueueEditedBlockChunk(dirtyChunk + new Vector3Int(0, 0, 1));
+        AddEditedBlockChunkCandidate(dirtyChunk);
+        AddEditedBlockChunkCandidate(dirtyChunk + Vector3Int.left);
+        AddEditedBlockChunkCandidate(dirtyChunk + Vector3Int.right);
+        AddEditedBlockChunkCandidate(dirtyChunk + Vector3Int.down);
+        AddEditedBlockChunkCandidate(dirtyChunk + Vector3Int.up);
+        AddEditedBlockChunkCandidate(dirtyChunk + new Vector3Int(0, 0, -1));
+        AddEditedBlockChunkCandidate(dirtyChunk + new Vector3Int(0, 0, 1));
 
-        // Write the edited chunk straight to the store so the change survives
-        // eviction/quit and reloads fast. The edit also lives in the sparse
-        // override layer (re-applied on every streamed load). SaveEditedChunk
-        // writes an explicit empty record when the edit erased the whole chunk,
-        // so a fully-cleared chunk doesn't reload its stale pre-edit terrain.
         if (persistStreamedChunks && storage != null && storage.ActiveStore != null)
         {
           storage.SaveEditedChunk(dirtyChunk);
         }
       }
+
+      for (int i = 0; i < editedChunksBuffer.Count; i++)
+      {
+        QueueEditedBlockChunk(editedChunksBuffer[i]);
+      }
+
+      editedChunkSet.Clear();
+      editedChunksBuffer.Clear();
     }
 
     private void QueueEditedBlockChunk(Vector3Int chunkCoord)
@@ -67,6 +73,14 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
       knownEmptyChunks.Remove(chunkCoord);
       QueueRender(chunkCoord);
+    }
+
+    private void AddEditedBlockChunkCandidate(Vector3Int chunkCoord)
+    {
+      if (editedChunkSet.Add(chunkCoord))
+      {
+        editedChunksBuffer.Add(chunkCoord);
+      }
     }
   }
 }
