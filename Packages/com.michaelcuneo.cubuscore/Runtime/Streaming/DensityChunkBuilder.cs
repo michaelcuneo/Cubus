@@ -18,6 +18,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     {
       DensityChunkData chunkData = new(chunkCoord, false);
       DensityVoxel[] voxels = chunkData.GetRawVoxelArray();
+      TerrainColumnSampler columnSampler = new();
       float scale = Mathf.Max(0.001f, snapshot.DensitySampleScale);
 
       const int size = VoxelConstants.ChunkSize;
@@ -33,18 +34,12 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         for (int x = 0; x < size; x++)
         {
           int worldX = baseWorldX + x;
-          BiomeBlendSample blend = snapshot.ResolveBiomeBlendAtWorldXZ(worldX, worldZ);
+          columnSampler.Prepare(snapshot, worldX, worldZ, scale);
 
           for (int y = 0; y < size; y++)
           {
             Vector3Int worldVoxel = new(worldX, baseWorldY + y, worldZ);
-
-            TerrainSample sample = BiomeTerrainSampler.Sample(
-                snapshot,
-                blend,
-                worldVoxel,
-                scale
-            );
+            TerrainSample sample = columnSampler.SampleAt(worldVoxel, scale);
 
             ushort materialId = sample.Density > 0.0f
                 ? (ushort)Mathf.Clamp(sample.SolidMaterialId, 1, 65535)
