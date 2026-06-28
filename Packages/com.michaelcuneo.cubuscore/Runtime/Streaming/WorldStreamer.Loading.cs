@@ -10,7 +10,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     private void ProcessLoadQueue(int loadBudget, int renderBudget)
     {
       int maxLoadsThisFrame = loadBudget;
-      if (pendingRenderQueue.Count > renderBudget * 2)
+      if (PendingRenderCount > renderBudget * 2)
       {
         // When render backlog is high, throttle loading so mesh generation can catch up.
         maxLoadsThisFrame = Mathf.Max(1, loadBudget / 2);
