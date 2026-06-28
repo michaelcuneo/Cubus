@@ -184,8 +184,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Validation
         $"Streaming coverage report. " +
         $"HasLastViewerChunk={sourceStreamer.HasLastViewerChunkCoord}, " +
         $"LastViewerChunk={sourceStreamer.LastViewerChunkCoord}, " +
-        $"SpawnTargetChunk={sourceStreamer.SpawnTargetChunkCoord}, " +
-        $"InitialTerrainReady={sourceStreamer.HasBroadcastInitialTerrainReady}, " +
         $"DesiredChunks={desiredChunks}, " +
         $"KeepChunks={keepChunks}, " +
         $"DesiredChunksWithData={desiredChunksWithData}, " +

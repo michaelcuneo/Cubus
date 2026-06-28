@@ -20,6 +20,11 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
     private void QueueRender(Vector3Int chunkCoord, bool requestPrioritization = true)
     {
+      if (pendingRenderRetrySet.Contains(chunkCoord))
+      {
+        return;
+      }
+
       if (pendingRenderSet.Add(chunkCoord))
       {
         pendingRenderQueue.Enqueue(chunkCoord);
