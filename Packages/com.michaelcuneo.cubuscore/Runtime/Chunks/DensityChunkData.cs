@@ -12,9 +12,19 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Chunks
     public Vector3Int ChunkCoord { get; }
 
     public DensityChunkData(Vector3Int chunkCoord)
+        : this(chunkCoord, true)
+    {
+    }
+
+    internal DensityChunkData(Vector3Int chunkCoord, bool initializeEmpty)
     {
       ChunkCoord = chunkCoord;
       voxels = new DensityVoxel[VoxelConstants.ChunkVolume];
+
+      if (!initializeEmpty)
+      {
+        return;
+      }
 
       for (int i = 0; i < voxels.Length; i++)
       {
