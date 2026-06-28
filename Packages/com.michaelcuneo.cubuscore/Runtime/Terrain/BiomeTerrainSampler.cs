@@ -272,10 +272,15 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain
 
     public TerrainSample SampleAt(Vector3Int worldVoxel, float densityScale)
     {
+      return SampleAt(worldVoxel.x, worldVoxel.y, worldVoxel.z, densityScale);
+    }
+
+    public TerrainSample SampleAt(int worldX, int worldY, int worldZ, float densityScale)
+    {
       Vector3 samplePosition = new(
-          worldVoxel.x * densityScale,
-          worldVoxel.y * densityScale,
-          worldVoxel.z * densityScale
+          worldX * densityScale,
+          worldY * densityScale,
+          worldZ * densityScale
       );
 
       if (!blendValid)
