@@ -18,25 +18,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       return c;
     }
 
-    private int GetSurfaceChunkYForColumn(int x, int z, int fallbackVoxelY)
-    {
-      if (generator == null)
-      {
-        return VoxelMath.FloorDiv(fallbackVoxelY, VoxelConstants.ChunkSize);
-      }
-
-      Vector2Int column = new(x, z);
-
-      if (surfaceChunkYCache.TryGetValue(column, out int cached))
-      {
-        return cached;
-      }
-
-      int y = generator.GetSurfaceChunkYForChunkColumn(column);
-      surfaceChunkYCache[column] = y;
-      return y;
-    }
-
     private void TryBroadcastInitialTerrainReady()
     {
       if (hasBroadcastInitialTerrainReady)

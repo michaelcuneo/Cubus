@@ -1032,16 +1032,5 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       keepChunkCoords.Add(chunkCoord);
       QueueRender(chunkCoord);
     }
-
-    private Vector3Int WorldToChunkCoord(Vector3 worldPos)
-    {
-      Vector3 local = transform.InverseTransformPoint(worldPos);
-      Vector3 voxel = local / Mathf.Max(0.0001f, world.Settings.VoxelSize);
-      return new Vector3Int(
-        VoxelMath.FloorDiv(Mathf.FloorToInt(voxel.x), VoxelConstants.ChunkSize),
-        VoxelMath.FloorDiv(Mathf.FloorToInt(voxel.y), VoxelConstants.ChunkSize),
-        VoxelMath.FloorDiv(Mathf.FloorToInt(voxel.z), VoxelConstants.ChunkSize)
-      );
-    }
   }
 }
