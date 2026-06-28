@@ -9,11 +9,6 @@ using Assets.Demo.Scripts.Multiplayer;
 
 namespace Assets.Demo.Scripts.UI
 {
-  /// <summary>
-  /// Simple in-game world setup menu for the demo. This is intentionally IMGUI so
-  /// it can be dropped into the scene without building a Canvas yet. A polished
-  /// main menu can call the same public methods later.
-  /// </summary>
   [DefaultExecutionOrder(-425)]
   public sealed class DemoWorldSetupUI : MonoBehaviour
   {
@@ -209,6 +204,10 @@ namespace Assets.Demo.Scripts.UI
       if (GUILayout.Toggle(terrainSystem == TerrainSystem.SmoothDensity, "Smooth", GUI.skin.button))
       {
         terrainSystem = TerrainSystem.SmoothDensity;
+      }
+      if (GUILayout.Toggle(terrainSystem == TerrainSystem.Hybrid, "Hybrid", GUI.skin.button))
+      {
+        terrainSystem = TerrainSystem.Hybrid;
       }
       GUILayout.EndHorizontal();
 
