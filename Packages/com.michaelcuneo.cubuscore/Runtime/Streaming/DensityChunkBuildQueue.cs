@@ -188,11 +188,13 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         };
       }
 
-      MeshData meshData = DensityMeshDataBuilder.Generate(
+      MeshData meshData = DensityMeshDataBuilder.GenerateFromChunkSnapshots(
           request.ChunkCoord,
           request.WorldSnapshot,
           request.CellStep,
           request.FlipWinding,
+          chunkData,
+          request.ChunkDataSnapshots,
           worldVoxel => SampleVoxelForBuild(worldVoxel, request)
       );
 
