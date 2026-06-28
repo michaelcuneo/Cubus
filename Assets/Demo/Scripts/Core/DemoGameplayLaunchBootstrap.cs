@@ -6,9 +6,7 @@ using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using Assets.Demo.Scripts.Multiplayer;
-using Assets.Demo.Scripts.UI;
-using Assets.Demo.Scripts.Persistence;
-using Assets.Demo.Scripts.Core;
+using Assets.Demo.Scripts.Spawn;
 
 namespace Assets.Demo.Scripts.Core
 {
@@ -19,6 +17,7 @@ namespace Assets.Demo.Scripts.Core
     [SerializeField] private CubusWorldStorage storage;
     [SerializeField] private DemoNetworkManager network;
     [SerializeField] private bool requireLauncherSelection = true;
+    [SerializeField] private DemoInitialTerrainSpawnGate spawnGate;
     [SerializeField] private string launcherSceneName = "DemoLauncher";
     [SerializeField] private float connectedWorldReadyTimeoutSeconds = 30.0f;
     [SerializeField] private bool logLoadingDiagnostics = true;
@@ -145,7 +144,14 @@ namespace Assets.Demo.Scripts.Core
         yield return EnableStreamerForBootstrap(streamer);
         streamer.ClearStreamingState();
         streamer.RegenerateStreamedWorld();
-        yield return WaitForInitialTerrainReady("local streamed world", 0.0f);
+        if (spawnGate != null)
+        {
+          yield return spawnGate.WaitAndRelease();
+        }
+        else
+        {
+          yield return WaitForInitialTerrainReady("local streamed world", 0.0f);
+        }
       }
       else
       {
@@ -286,7 +292,7 @@ namespace Assets.Demo.Scripts.Core
       WorldStreamer streamer = GetStreamer();
       string streamerSummary = streamer == null
           ? "Streamer=none"
-          : $"Streamer enabled={streamer.enabled}, heldByBootstrap={disabledStreamerAutoStartForLaunch}, initialStage={streamer.IsInitialStreamingStageActive}, broadcastReady={streamer.HasBroadcastInitialTerrainReady}, viewerChunk={(streamer.HasLastViewerChunkCoord ? streamer.LastViewerChunkCoord.ToString() : "none")}, spawnTarget={streamer.SpawnTargetChunkCoord}, desired={streamer.DesiredChunkCount}, keep={streamer.KeepChunkCount}, knownEmpty={streamer.KnownEmptyChunkCount}, pendingLoad={streamer.PendingLoadCount}, pendingRender={streamer.PendingRenderCount}, pendingUnload={streamer.PendingUnloadCount}, activeLoads={streamer.ActiveChunkLoadTaskCount}, activeBlockBuilds={streamer.ActiveBlockBuildTaskCount}, activeDensityBuilds={streamer.ActiveDensityBuildTaskCount}, loadedTotal={streamer.TotalChunkLoadsCompleted}, loadFailures={streamer.TotalChunkLoadFailures}, blockApplies={streamer.TotalBlockMeshApplies}, densityApplies={streamer.TotalDensityMeshApplies}";
+          : $"Streamer enabled={streamer.enabled}, heldByBootstrap={disabledStreamerAutoStartForLaunch}, initialStage={streamer.IsInitialStreamingStageActive}, viewerChunk={(streamer.HasLastViewerChunkCoord ? streamer.LastViewerChunkCoord.ToString() : "none")}, desired={streamer.DesiredChunkCount}, keep={streamer.KeepChunkCount}, knownEmpty={streamer.KnownEmptyChunkCount}, pendingLoad={streamer.PendingLoadCount}, pendingRender={streamer.PendingRenderCount}, pendingUnload={streamer.PendingUnloadCount}, activeLoads={streamer.ActiveChunkLoadTaskCount}, activeBlockBuilds={streamer.ActiveBlockBuildTaskCount}, activeDensityBuilds={streamer.ActiveDensityBuildTaskCount}, loadedTotal={streamer.TotalChunkLoadsCompleted}, loadFailures={streamer.TotalChunkLoadFailures}, blockApplies={streamer.TotalBlockMeshApplies}, densityApplies={streamer.TotalDensityMeshApplies}";
 
       string worldSummary = world == null
           ? "World=none"
@@ -328,6 +334,11 @@ namespace Assets.Demo.Scripts.Core
         network = DemoNetworkManager.Instance != null
             ? DemoNetworkManager.Instance
             : FindAnyObjectByType<DemoNetworkManager>();
+      }
+
+      if (spawnGate == null)
+      {
+        spawnGate = FindAnyObjectByType<DemoInitialTerrainSpawnGate>();
       }
     }
   }

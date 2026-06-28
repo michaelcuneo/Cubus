@@ -22,9 +22,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
   {
     [SerializeField] private Transform viewer;
     [SerializeField] private StreamingSettings settings = new();
-    [SerializeField][Min(1)] private int initialSpawnRequiredRenderedChunks = 9;
-    [SerializeField] private Vector3 desiredInitialSpawnLocation = Vector3.zero;
-    [SerializeField] private float initialSpawnClearance = 2.0f;
     [SerializeField] private bool evictCachedChunkDataOutsideKeepSet = true;
     [SerializeField] private bool generateWorldDatabaseBeforeStreaming = false;
     [SerializeField] private bool persistStreamedChunks = true;
@@ -62,7 +59,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     private bool hasLastViewerChunkCoord;
     private Vector3Int viewerHeading;
     private Vector3Int spawnTargetChunkCoord;
-    private bool hasBroadcastInitialTerrainReady;
     private bool pendingLoadQueueNeedsPrioritization;
     private bool pendingRenderQueueNeedsPrioritization;
     private bool renderReconciliationPending;
@@ -87,8 +83,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     public StreamingSettings Settings => settings;
     public Vector3Int LastViewerChunkCoord => lastViewerChunkCoord;
     public bool HasLastViewerChunkCoord => hasLastViewerChunkCoord;
-    public Vector3Int SpawnTargetChunkCoord => spawnTargetChunkCoord;
-    public bool HasBroadcastInitialTerrainReady => hasBroadcastInitialTerrainReady;
+    private Vector3Int priorityChunkCoord;
+    private bool hasPriorityChunkCoord;
     public bool IsInitialStreamingStageActive => UseInitialStreamingStageNow;
     public int DesiredChunkCount => desiredChunkCoords.Count;
     public int KeepChunkCount => keepChunkCoords.Count;
@@ -113,6 +109,9 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     public IReadOnlyCollection<Vector3Int> PendingRenderCoords => pendingRenderSet;
     public IReadOnlyCollection<Vector3Int> KnownEmptyChunks => knownEmptyChunks;
 
+    private bool hasOverrideStreamingFocusVoxel;
+    private Vector3Int overrideStreamingFocusVoxel;
+
     /// <summary>
     /// Base-chunk radius the full-detail streamer fills around the viewer (the
     /// LOD0 region). The LOD streamer reads this so both systems share a single
@@ -129,8 +128,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     /// </summary>
     public int FullDetailKeepRadius => FullDetailChunkRadius + UnloadPaddingInChunks;
 
-    private bool UseInitialStreamingStageNow => useInitialStreamingStage && !hasBroadcastInitialTerrainReady;
-
+    private bool UseInitialStreamingStageNow => useInitialStreamingStage && !world.IsInitialTerrainReady;
     private int ActiveDesiredRadiusInChunks => UseInitialStreamingStageNow ? Mathf.Max(0, initialStreamingRadiusInChunks) : Mathf.Max(1, world.Settings.ViewDistanceInChunks);
     private int ActiveKeepRadiusInChunks => ActiveDesiredRadiusInChunks + (UseInitialStreamingStageNow ? Mathf.Max(0, initialKeepPaddingInChunks) : UnloadPaddingInChunks);
 
@@ -288,11 +286,9 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       generator = new WorldGenerator(world.Settings);
       StreamingGenerationContext.Set(world.Settings);
       worldSnapshot = WorldGenerationSnapshot.FromSettings(world.Settings);
-      spawnTargetChunkCoord = WorldToSurfaceChunkCoord(GetSpawnReferencePosition());
       worldRenderer.ClearAll();
       ClearStreamingState();
       ForceRefreshStreamingSet();
-      TryBroadcastInitialTerrainReady();
       if (logRegenerateMessage) Debug.Log($"WorldStreamer refreshed. Mode={world.Settings.TerrainSystem}");
       bootstrapCoroutine = null;
     }
@@ -342,7 +338,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       ProcessUnloadQueue(unloadBudget);
       ProcessCompletedBuildResults(meshApplyBudget);
       ReconcileRenderCoverageIfSettled();
-      TryBroadcastInitialTerrainReady();
     }
 
     // QueueGeneratedChunksForRender only runs when the viewer chunk changes. If a
@@ -406,14 +401,13 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       knownEmptyChunks.Clear();
       buildQueue.IncrementGeneration(); densityBuildQueue.IncrementGeneration(); chunkLoadQueue.IncrementGeneration();
       hasLastViewerChunkCoord = false;
-      hasBroadcastInitialTerrainReady = false;
       pendingLoadQueueNeedsPrioritization = false;
       pendingRenderQueueNeedsPrioritization = false;
     }
 
     private void UpdateStreamingSetIfNeeded(bool force = false)
     {
-      Vector3Int viewerChunkCoord = WorldToChunkCoord(GetSpawnReferencePosition());
+      Vector3Int viewerChunkCoord = GetStreamingFocusChunkCoord();
       if (!force && hasLastViewerChunkCoord && viewerChunkCoord == lastViewerChunkCoord) return;
 
       // Remember which way the viewer is travelling (in chunk space) so the build
@@ -434,7 +428,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       BuildChunkSet(viewerChunkCoord, ActiveDesiredRadiusInChunks, desiredChunkCoords);
       BuildChunkSet(viewerChunkCoord, ActiveKeepRadiusInChunks, keepChunkCoords);
       PruneKnownEmptyChunksOutsideCurrentInterest(); QueueGeneratedChunksForRender(viewerChunkCoord);
-      QueueSpawnTargetForRender();
       UnloadOutsideKeepSet();
       pendingLoadQueueNeedsPrioritization = true;
       pendingRenderQueueNeedsPrioritization = true;
@@ -579,8 +572,11 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
     private int CompareChunkPriority(Vector3Int a, Vector3Int b, Vector3Int viewerChunkCoord)
     {
-      if (a == spawnTargetChunkCoord) return -1;
-      if (b == spawnTargetChunkCoord) return 1;
+      if (hasPriorityChunkCoord)
+      {
+        if (a == priorityChunkCoord) return -1;
+        if (b == priorityChunkCoord) return 1;
+      }
 
       int ad = ChunkDistanceSquared(a, viewerChunkCoord);
       int bd = ChunkDistanceSquared(b, viewerChunkCoord);
@@ -608,14 +604,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       int dx = a.x - b.x;
       int dz = a.z - b.z;
       return dx * dx + dz * dz;
-    }
-
-    private void QueueSpawnTargetForRender()
-    {
-      desiredChunkCoords.Add(spawnTargetChunkCoord);
-      keepChunkCoords.Add(spawnTargetChunkCoord);
-      if (worldRenderer.HasChunkView(spawnTargetChunkCoord) || pendingRenderSet.Contains(spawnTargetChunkCoord) || chunkLoadQueue.IsInFlight(spawnTargetChunkCoord)) return;
-      if (HasChunkData(spawnTargetChunkCoord)) QueueRender(spawnTargetChunkCoord); else QueueLoad(spawnTargetChunkCoord);
     }
 
     private void ProcessLoadQueue(int loadBudget, int renderBudget)
@@ -960,10 +948,9 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         worldRenderer.RenderDensityChunkMesh(
             r.ChunkCoord,
             mesh,
-            r.ChunkCoord == spawnTargetChunkCoord && !hasBroadcastInitialTerrainReady
-        );
+            hasPriorityChunkCoord && r.ChunkCoord == priorityChunkCoord && !world.IsInitialTerrainReady
+          );
         totalDensityMeshApplies++;
-        TryBroadcastInitialTerrainReady();
         count++;
       }
     }
