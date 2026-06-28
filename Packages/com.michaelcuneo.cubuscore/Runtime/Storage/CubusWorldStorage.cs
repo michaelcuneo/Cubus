@@ -37,18 +37,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
 
     public WorldStorageBackend Backend => backend;
 
-    /// <summary>
-    /// Optional factory used to build the chunk store for the <see cref="WorldStorageBackend.SpacetimeDb"/>
-    /// and <see cref="WorldStorageBackend.Custom"/> backends. Networking integrations (e.g. the SpacetimeDB
-    /// demo) register a factory here before the storage component's <c>Awake</c> runs so a server-backed
-    /// store is created instead of falling back to local files. Returning null falls back to local files.
-    /// </summary>
     public static Func<CubusWorldStorage, IWorldChunkStore> ExternalStoreFactory;
 
-    // The streamer uses ActiveStore for lazy chunk reads. When the saved manifest belongs
-    // to another terrain system, returning the raw store lets block mode load density
-    // records (or vice versa), after which the streamer never generates replacement chunks.
-    // Hide the store for reads until a compatible world is saved or loaded.
     public IWorldChunkStore ActiveStore => storageReadsDisabledForTerrainSystem ? null : activeStore;
 
     private void Awake()
@@ -84,7 +74,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
       EnsureStore();
       StorageTimingStats timingStats = new();
       Stopwatch totalWatch = Stopwatch.StartNew();
-      CompressionStats compressionStats = new();
       bool savedAny = false;
 
       if (world.Settings.TerrainSystem == TerrainSystem.Block || world.Settings.TerrainSystem == TerrainSystem.Hybrid)
@@ -95,7 +84,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
           WorldChunkRecord blockRecord = CubusChunkPayloadCodec.EncodeBlockChunk(WorldId, chunkCoord, blockChunk);
           encodeBlockWatch.Stop();
           timingStats.EncodeTicks += encodeBlockWatch.ElapsedTicks;
-          compressionStats.Add(blockRecord);
 
           Stopwatch writeBlockWatch = Stopwatch.StartNew();
           activeStore.SaveChunkLayer(blockRecord);
@@ -115,7 +103,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
           WorldChunkRecord densityRecord = CubusChunkPayloadCodec.EncodeDensityChunk(WorldId, chunkCoord, densityChunk);
           encodeDensityWatch.Stop();
           timingStats.EncodeTicks += encodeDensityWatch.ElapsedTicks;
-          compressionStats.Add(densityRecord);
 
           Stopwatch writeDensityWatch = Stopwatch.StartNew();
           activeStore.SaveChunkLayer(densityRecord);
@@ -138,15 +125,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
       return true;
     }
 
-    // Persists the current state of an edited chunk. The edit event also marks the
-    // edited chunk's NEIGHBOURS dirty (for remeshing), and those neighbours are
-    // usually NOT resident - especially while networked voxel_edit rows replay on
-    // connect before terrain has streamed in. We must therefore never blindly write
-    // an empty record for a non-resident chunk: that wipes real neighbour terrain to
-    // a void in both the cache and on disk, so edited areas reload as holes. Instead
-    // we reconstruct the authoritative state from seed + overrides; only chunks that
-    // were actually edited (have overrides) are persisted, and only as empty when the
-    // edits genuinely cleared them. Unedited neighbours are left untouched.
     public void SaveEditedChunk(Vector3Int chunkCoord)
     {
       EnsureStore();
@@ -156,8 +134,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
         return;
       }
 
-      // Not resident. Density erase-persistence is left to the override/edit layer
-      // (re-applied on reload) rather than risk the same neighbour-wipe.
       if (world.Settings.TerrainSystem != TerrainSystem.Block && world.Settings.TerrainSystem != TerrainSystem.Hybrid)
       {
         return;
@@ -166,7 +142,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
       BlockChunkData reconstructed = world.ReconstructEditedBlockChunkOrNull(chunkCoord);
       if (reconstructed == null)
       {
-        // Never edited -> not a real change; leave its stored terrain intact.
         return;
       }
 
@@ -266,12 +241,12 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
       {
         if (world.Settings.TerrainSystem == TerrainSystem.Block || world.Settings.TerrainSystem == TerrainSystem.Hybrid)
         {
-          LoadChunkLayerIntoWorld(chunkCoord, TerrainSystem.Block, timingStats, compressionStats);
+          LoadChunkLayerIntoWorld(chunkCoord, TerrainSystem.Block, ref timingStats, ref compressionStats);
         }
 
         if (world.Settings.TerrainSystem == TerrainSystem.SmoothDensity || world.Settings.TerrainSystem == TerrainSystem.Hybrid)
         {
-          LoadChunkLayerIntoWorld(chunkCoord, TerrainSystem.SmoothDensity, timingStats, compressionStats);
+          LoadChunkLayerIntoWorld(chunkCoord, TerrainSystem.SmoothDensity, ref timingStats, ref compressionStats);
         }
       }
 
@@ -289,7 +264,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
       return true;
     }
 
-    private bool LoadChunkLayerIntoWorld(Vector3Int chunkCoord, TerrainSystem terrainSystem, StorageTimingStats timingStats, CompressionStats compressionStats)
+    private bool LoadChunkLayerIntoWorld(Vector3Int chunkCoord, TerrainSystem terrainSystem, ref StorageTimingStats timingStats, ref CompressionStats compressionStats)
     {
       Stopwatch readWatch = Stopwatch.StartNew();
       bool loaded = activeStore.TryLoadChunkLayer(WorldId, chunkCoord, terrainSystem, out WorldChunkRecord record);
@@ -378,18 +353,18 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
       }
 
       StorageTimingStats timingStats = new();
-      Stopwatch totalWatch = Stopwatch.StartNew();
       CompressionStats compressionStats = new();
+      Stopwatch totalWatch = Stopwatch.StartNew();
       bool loadedAny = false;
 
       if (world.Settings.TerrainSystem == TerrainSystem.Block || world.Settings.TerrainSystem == TerrainSystem.Hybrid)
       {
-        loadedAny |= LoadChunkLayerIntoWorld(chunkCoord, TerrainSystem.Block, timingStats, compressionStats);
+        loadedAny |= LoadChunkLayerIntoWorld(chunkCoord, TerrainSystem.Block, ref timingStats, ref compressionStats);
       }
 
       if (world.Settings.TerrainSystem == TerrainSystem.SmoothDensity || world.Settings.TerrainSystem == TerrainSystem.Hybrid)
       {
-        loadedAny |= LoadChunkLayerIntoWorld(chunkCoord, TerrainSystem.SmoothDensity, timingStats, compressionStats);
+        loadedAny |= LoadChunkLayerIntoWorld(chunkCoord, TerrainSystem.SmoothDensity, ref timingStats, ref compressionStats);
       }
 
       if (!loadedAny)
