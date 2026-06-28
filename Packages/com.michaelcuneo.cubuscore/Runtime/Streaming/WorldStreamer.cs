@@ -169,17 +169,14 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     private int ChunksUnloadedPerFrame => Mathf.Clamp(settings != null ? settings.ChunksRenderedPerFrame / 4 : 4, 1, 8);
     private int MeshAppliesPerFrame => Mathf.Clamp(settings != null ? settings.MeshAppliesPerFrame : 32, 1, 128);
     private int MaxAsyncChunkTasks => Mathf.Clamp(settings != null ? settings.MaxAsyncChunkTasks : 8, 1, 32);
-    private bool IsSmoothDensityMode => world != null && world.Settings != null && world.Settings.TerrainSystem == TerrainSystem.SmoothDensity;
     private int MaxTotalAsyncTasks => Mathf.Clamp(MaxAsyncChunkTasks, 1, cachedMaxHardwareConcurrency);
-    // Block chunks now mesh immediately (unloaded in-bounds neighbours are drawn
-    // as solid and the chunk re-meshes once they load), so loading no longer
-    // gates meshing. Loading feeds meshing and meshing additionally re-meshes per
-    // neighbour load, so both stages carry comparable work; split the worker pool
-    // evenly between them. Both are cheap now (Burst column gen + merged-quad
-    // meshing), so the even split keeps data flowing in while meshes keep up.
+    // Loading feeds meshing and meshing additionally re-meshes per neighbour load,
+    // so both stages carry comparable work. In hybrid mode both block and density
+    // meshers need workers; neither layer should starve the other.
     private int MaxLoadAsyncTasks => Mathf.Max(1, MaxTotalAsyncTasks / 2);
-    private int MaxBlockAsyncTasks => IsSmoothDensityMode ? 0 : Mathf.Max(1, MaxTotalAsyncTasks - MaxLoadAsyncTasks);
-    private int MaxDensityAsyncTasks => IsSmoothDensityMode ? Mathf.Max(1, MaxTotalAsyncTasks - MaxLoadAsyncTasks) : 0;
+    private int MaxMeshAsyncTasks => Mathf.Max(1, MaxTotalAsyncTasks - MaxLoadAsyncTasks);
+    private int MaxBlockAsyncTasks => IsBlockTerrainEnabled ? Mathf.Max(1, IsDensityTerrainEnabled ? MaxMeshAsyncTasks / 2 : MaxMeshAsyncTasks) : 0;
+    private int MaxDensityAsyncTasks => IsDensityTerrainEnabled ? Mathf.Max(1, IsBlockTerrainEnabled ? MaxMeshAsyncTasks - Mathf.Max(1, MaxMeshAsyncTasks / 2) : MaxMeshAsyncTasks) : 0;
     private float MeshApplyTimeBudgetSeconds => Mathf.Max(0.001f, (settings != null ? settings.MeshApplyTimeBudgetMs : 2) / 1000.0f);
 
     private static readonly Vector3Int[] DensityMeshSampleChunkOffsets =
