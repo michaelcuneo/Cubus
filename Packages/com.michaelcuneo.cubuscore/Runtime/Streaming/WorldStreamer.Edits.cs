@@ -18,10 +18,12 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         {
           Vector3Int c = dirtyChunk + DensityEditAffectedChunkOffsets[i];
           if (!world.Settings.IsInsideEffectiveWorldBounds3D(c)) continue;
-          knownEmptyChunks.Remove(c);
-          desiredChunkCoords.Add(c);
-          keepChunkCoords.Add(c);
+          if (!desiredChunkCoords.Contains(c) && !keepChunkCoords.Contains(c))
+          {
+            continue;
+          }
 
+          knownEmptyChunks.Remove(c);
           QueueRender(c);
         }
       }
@@ -53,12 +55,18 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
     private void QueueEditedBlockChunk(Vector3Int chunkCoord)
     {
-      if (!world.Settings.IsInsideEffectiveWorldBounds3D(chunkCoord)) return;
+      if (!world.Settings.IsInsideEffectiveWorldBounds3D(chunkCoord))
+      {
+        return;
+      }
+
+      if (!desiredChunkCoords.Contains(chunkCoord) && !keepChunkCoords.Contains(chunkCoord))
+      {
+        return;
+      }
+
       knownEmptyChunks.Remove(chunkCoord);
-      desiredChunkCoords.Add(chunkCoord);
-      keepChunkCoords.Add(chunkCoord);
       QueueRender(chunkCoord);
     }
-
   }
 }
