@@ -20,20 +20,66 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
     private void QueueRender(Vector3Int chunkCoord, bool requestPrioritization = true)
     {
-      if (pendingRenderRetrySet.Contains(chunkCoord))
+      bool queued = false;
+
+      if (IsBlockTerrainEnabled)
       {
-        return;
+        queued |= QueueBlockRender(chunkCoord, false);
       }
 
-      if (pendingRenderSet.Add(chunkCoord))
+      if (IsDensityTerrainEnabled)
       {
-        pendingRenderQueue.Enqueue(chunkCoord);
-
-        if (requestPrioritization)
-        {
-          pendingRenderQueueNeedsPrioritization = true;
-        }
+        queued |= QueueDensityRender(chunkCoord, false);
       }
+
+      if (queued && requestPrioritization)
+      {
+        pendingRenderQueueNeedsPrioritization = true;
+      }
+    }
+
+    private bool QueueBlockRender(Vector3Int chunkCoord, bool requestPrioritization = true)
+    {
+      if (pendingBlockRenderRetrySet.Contains(chunkCoord))
+      {
+        return false;
+      }
+
+      if (!pendingBlockRenderSet.Add(chunkCoord))
+      {
+        return false;
+      }
+
+      pendingBlockRenderQueue.Enqueue(chunkCoord);
+
+      if (requestPrioritization)
+      {
+        pendingRenderQueueNeedsPrioritization = true;
+      }
+
+      return true;
+    }
+
+    private bool QueueDensityRender(Vector3Int chunkCoord, bool requestPrioritization = true)
+    {
+      if (pendingDensityRenderRetrySet.Contains(chunkCoord))
+      {
+        return false;
+      }
+
+      if (!pendingDensityRenderSet.Add(chunkCoord))
+      {
+        return false;
+      }
+
+      pendingDensityRenderQueue.Enqueue(chunkCoord);
+
+      if (requestPrioritization)
+      {
+        pendingRenderQueueNeedsPrioritization = true;
+      }
+
+      return true;
     }
 
     private void PrioritizePendingQueues()
@@ -52,6 +98,10 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       if (pendingRenderQueueNeedsPrioritization)
       {
         PrioritizeQueue(pendingRenderQueue, pendingRenderSet, false);
+        PrioritizeQueue(pendingBlockRenderQueue, pendingBlockRenderSet, false);
+        PrioritizeQueue(pendingBlockRenderRetryQueue, pendingBlockRenderRetrySet, false);
+        PrioritizeQueue(pendingDensityRenderQueue, pendingDensityRenderSet, false);
+        PrioritizeQueue(pendingDensityRenderRetryQueue, pendingDensityRenderRetrySet, false);
         pendingRenderQueueNeedsPrioritization = false;
       }
     }
