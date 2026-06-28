@@ -890,7 +890,14 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
           break;
         }
 
-        if (TryStartDensityMeshBuild(c, d)) count++;
+        if (TryStartDensityMeshBuild(c, d))
+        {
+          count++;
+          continue;
+        }
+
+        QueueRender(c, false);
+        continue;
       }
     }
 
