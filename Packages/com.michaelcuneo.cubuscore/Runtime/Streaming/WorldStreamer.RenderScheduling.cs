@@ -24,14 +24,16 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     {
       int count = 0;
       int scanned = 0;
-      int maxScans = Mathf.Max(renderBudget * 4, pendingRenderQueue.Count);
+      int maxScans = Mathf.Max(renderBudget * 4, pendingRenderQueue.Count + pendingRenderRetryQueue.Count);
 
-      while (pendingRenderQueue.Count > 0 && count < renderBudget && scanned < maxScans)
+      while ((pendingRenderQueue.Count > 0 || pendingRenderRetryQueue.Count > 0) && count < renderBudget && scanned < maxScans)
       {
         scanned++;
 
-        Vector3Int c = pendingRenderQueue.Dequeue();
-        pendingRenderSet.Remove(c);
+        if (!TryDequeueRenderCandidate(out Vector3Int c))
+        {
+          break;
+        }
 
         if (!desiredChunkCoords.Contains(c))
         {
@@ -64,9 +66,10 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       }
 
       int totalActiveTasks = chunkLoadQueue.ActiveTaskCount + buildQueue.ActiveTaskCount + densityBuildQueue.ActiveTaskCount;
+
       if (buildQueue.ActiveTaskCount >= MaxBlockAsyncTasks || totalActiveTasks >= MaxTotalAsyncTasks)
       {
-        QueueRender(c, false);
+        QueueRenderRetry(c);
         return false;
       }
 
@@ -83,14 +86,16 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     {
       int count = 0;
       int scanned = 0;
-      int maxScans = Mathf.Max(renderBudget * 4, pendingRenderQueue.Count);
+      int maxScans = Mathf.Max(renderBudget * 4, pendingRenderQueue.Count + pendingRenderRetryQueue.Count);
 
-      while (pendingRenderQueue.Count > 0 && count < renderBudget && scanned < maxScans)
+      while ((pendingRenderRetryQueue.Count > 0 || pendingRenderQueue.Count > 0) && count < renderBudget && scanned < maxScans)
       {
         scanned++;
 
-        Vector3Int c = pendingRenderQueue.Dequeue();
-        pendingRenderSet.Remove(c);
+        if (!TryDequeueRenderCandidate(out Vector3Int c))
+        {
+          break;
+        }
 
         if (!desiredChunkCoords.Contains(c))
         {
@@ -125,9 +130,10 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       }
 
       int totalActiveTasks = chunkLoadQueue.ActiveTaskCount + buildQueue.ActiveTaskCount + densityBuildQueue.ActiveTaskCount;
+
       if (densityBuildQueue.ActiveTaskCount >= MaxDensityAsyncTasks || totalActiveTasks >= MaxTotalAsyncTasks)
       {
-        QueueRender(c, false);
+        QueueRenderRetry(c);
         return false;
       }
 
@@ -137,6 +143,43 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       }
 
       QueueRender(c, false);
+      return false;
+    }
+
+    private void QueueRenderRetry(Vector3Int chunkCoord)
+    {
+      if (pendingRenderSet.Contains(chunkCoord) || pendingRenderRetrySet.Contains(chunkCoord))
+      {
+        return;
+      }
+
+      pendingRenderRetrySet.Add(chunkCoord);
+      pendingRenderRetryQueue.Enqueue(chunkCoord);
+    }
+
+    private bool TryDequeueRenderCandidate(out Vector3Int chunkCoord)
+    {
+      while (pendingRenderRetryQueue.Count > 0)
+      {
+        chunkCoord = pendingRenderRetryQueue.Dequeue();
+
+        if (pendingRenderRetrySet.Remove(chunkCoord))
+        {
+          return true;
+        }
+      }
+
+      while (pendingRenderQueue.Count > 0)
+      {
+        chunkCoord = pendingRenderQueue.Dequeue();
+
+        if (pendingRenderSet.Remove(chunkCoord))
+        {
+          return true;
+        }
+      }
+
+      chunkCoord = default;
       return false;
     }
   }

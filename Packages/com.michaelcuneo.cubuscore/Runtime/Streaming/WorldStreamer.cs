@@ -36,6 +36,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     private readonly Queue<Vector3Int> pendingRenderQueue = new();
     private readonly HashSet<Vector3Int> pendingRenderSet = new();
     private readonly WorldStreamingQueueSet pendingUnload = new();
+    private readonly Queue<Vector3Int> pendingRenderRetryQueue = new();
+    private readonly HashSet<Vector3Int> pendingRenderRetrySet = new();
     private readonly HashSet<Vector3Int> knownEmptyChunks = new();
     private readonly Dictionary<Vector2Int, int> surfaceChunkYCache = new();
     private readonly List<Vector3Int> candidateChunksBuffer = new();
@@ -382,6 +384,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       chunkLoadQueue.IncrementGeneration();
       pendingLoadQueue.Clear(); pendingLoadSet.Clear();
       pendingRenderQueue.Clear(); pendingRenderSet.Clear();
+      pendingRenderRetryQueue.Clear(); pendingRenderRetrySet.Clear();
       pendingUnload.Clear();
       hasLastViewerChunkCoord = false;
       pendingLoadQueueNeedsPrioritization = false;
@@ -394,6 +397,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       desiredChunkCoords.Clear(); keepChunkCoords.Clear();
       pendingLoadQueue.Clear(); pendingLoadSet.Clear();
       pendingRenderQueue.Clear(); pendingRenderSet.Clear();
+      pendingRenderRetryQueue.Clear(); pendingRenderRetrySet.Clear();
       pendingUnload.Clear();
       knownEmptyChunks.Clear();
       buildQueue.IncrementGeneration(); densityBuildQueue.IncrementGeneration(); chunkLoadQueue.IncrementGeneration();
