@@ -5,6 +5,7 @@ using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World;
 using UnityEngine;
+using Assets.Demo.Scripts.Core;
 
 namespace Assets.Demo.Scripts.Persistence
 {
@@ -28,7 +29,7 @@ namespace Assets.Demo.Scripts.Persistence
 
     private void Update()
     {
-      if (hasSaved || !CubusGameLaunchContext.HasLaunch || CubusGameLaunchContext.Mode != CubusGameLaunchMode.Local)
+      if (hasSaved || !DemoGameLaunchContext.HasLaunch || DemoGameLaunchContext.Mode != DemoGameLaunchMode.Local)
       {
         return;
       }
@@ -45,9 +46,9 @@ namespace Assets.Demo.Scripts.Persistence
 
     private void SaveLocalWorld()
     {
-      string worldId = string.IsNullOrWhiteSpace(CubusGameLaunchContext.WorldId)
+      string worldId = string.IsNullOrWhiteSpace(DemoGameLaunchContext.WorldId)
           ? "demo_world"
-          : CubusGameLaunchContext.WorldId.Trim();
+          : DemoGameLaunchContext.WorldId.Trim();
 
       string root = Path.Combine(Application.persistentDataPath, "CubusCore", "Worlds");
       FileWorldChunkStore store = new(root);

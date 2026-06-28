@@ -7,7 +7,7 @@ namespace Assets.Demo.Scripts.UI
   /// Gameplay input that reads devices directly checks this and stands down so UI
   /// keystrokes and mouse input do not leak into the player or other overlays.
   /// </summary>
-  public static class DemoUIInput
+  public static class DemoUiInput
   {
     /// <summary>True while the chat input field is focused for typing.</summary>
     public static bool ChatComposing;

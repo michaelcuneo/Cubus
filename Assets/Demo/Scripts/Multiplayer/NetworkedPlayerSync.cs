@@ -43,7 +43,7 @@ namespace Assets.Demo.Scripts.Multiplayer
 
     private readonly Dictionary<Identity, RemoteAvatar> avatars = new();
 
-    private CubusNetworkManager net;
+    private DemoNetworkManager net;
     private float sendTimer;
     private Vector3 lastSentPosition;
     private float lastSentYaw;
@@ -69,7 +69,7 @@ namespace Assets.Demo.Scripts.Multiplayer
 
     private void OnEnable()
     {
-      net = CubusNetworkManager.Instance;
+      net = DemoNetworkManager.Instance;
       if (net != null)
       {
         net.Connected += HandleConnected;

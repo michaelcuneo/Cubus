@@ -3,6 +3,8 @@ using SpacetimeDB;
 using SpacetimeDB.Types;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using Assets.Demo.Scripts.Multiplayer;
+using Assets.Demo.Scripts.UI;
 
 namespace Assets.Demo.Scripts.UI
 {
@@ -11,7 +13,7 @@ namespace Assets.Demo.Scripts.UI
   /// Press Enter to start typing, Enter again to send, or Escape to cancel.
   /// The chat panel stays hidden until the player is composing a message.
   /// </summary>
-  public sealed class DemoChatUI : MonoBehaviour
+  public sealed class DemoChatUi : MonoBehaviour
   {
     [SerializeField] private int maxVisibleMessages = 12;
     [SerializeField] private KeyCode openKey = KeyCode.Return;
@@ -109,7 +111,7 @@ namespace Assets.Demo.Scripts.UI
 
     private void OnGUI()
     {
-      if (CubusUiInput.ConsoleOpen)
+      if (DemoUiInput.ConsoleOpen)
       {
         if (composing)
         {
@@ -199,7 +201,7 @@ namespace Assets.Demo.Scripts.UI
     private void BeginComposing()
     {
       composing = true;
-      CubusUiInput.ChatComposing = true;
+      DemoUiInput.ChatComposing = true;
 
       Keyboard keyboard = Keyboard.current;
       if (keyboard != null)
@@ -222,12 +224,12 @@ namespace Assets.Demo.Scripts.UI
       }
 
       composing = false;
-      CubusUiInput.ChatComposing = false;
+      DemoUiInput.ChatComposing = false;
     }
 
     private void HandleTextInput(char character)
     {
-      if (!composing || CubusUiInput.ConsoleOpen)
+      if (!composing || DemoUiInput.ConsoleOpen)
       {
         return;
       }

@@ -8,6 +8,8 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 using Random = UnityEngine.Random;
+using Assets.Demo.Scripts.Core;
+using Assets.Demo.Scripts.UI;
 
 namespace Assets.Demo.Scripts.Multiplayer
 {
@@ -16,7 +18,7 @@ namespace Assets.Demo.Scripts.Multiplayer
   /// This intentionally uses Unity UI Text/InputField instead of TextMeshPro so the
   /// first screen does not depend on TMP font asset state.
   /// </summary>
-  public sealed class CubusLoadingLauncherMenu : MonoBehaviour
+  public sealed class DemoLoadingLauncherMenu : MonoBehaviour
   {
     private sealed class LocalWorldEntry
     {
@@ -31,9 +33,9 @@ namespace Assets.Demo.Scripts.Multiplayer
       Connected,
     }
 
-    [SerializeField] private string loadingSceneName = "CubusLoading";
+    [SerializeField] private string loadingSceneName = "DemoLoading";
     [SerializeField] private string defaultServerUri = "http://cubus.michaelcuneo.com.au";
-    [SerializeField] private string defaultModuleName = "cubus";
+    [SerializeField] private string defaultModuleName = "demo";
     [SerializeField] private string defaultWorldId = "demo_world";
     [SerializeField] private int sortingOrder = 1000;
 
@@ -126,7 +128,7 @@ namespace Assets.Demo.Scripts.Multiplayer
 
     private void Update()
     {
-      if (lastDeveloperMode != CubusDeveloperMode.IsEnabled)
+      if (lastDeveloperMode != DemoDeveloperMode.IsEnabled)
       {
         RebuildControls();
       }
@@ -136,9 +138,9 @@ namespace Assets.Demo.Scripts.Multiplayer
 
     private void BuildUi()
     {
-      CubusInputSystemUiGuard.EnsureEventSystem();
+      DemoInputSystemUiGuard.EnsureEventSystem();
 
-      GameObject canvasObject = new("Cubus Launcher Canvas");
+      GameObject canvasObject = new("Demo Launcher Canvas");
       canvasObject.transform.SetParent(transform, false);
 
       Canvas canvas = canvasObject.AddComponent<Canvas>();
@@ -261,10 +263,10 @@ namespace Assets.Demo.Scripts.Multiplayer
       serverUriInput = null;
       moduleNameInput = null;
 
-      lastDeveloperMode = CubusDeveloperMode.IsEnabled;
+      lastDeveloperMode = DemoDeveloperMode.IsEnabled;
 
-      AddText(contentRoot, "CUBUS", 34, FontStyle.Bold, TextAnchor.MiddleCenter, new Color(0.88f, 0.96f, 1.0f, 1.0f), 42.0f);
-      AddText(contentRoot, "Create a local world, or connect to a hosted Cubus world.", 14, FontStyle.Bold, TextAnchor.MiddleCenter, new Color(0.62f, 0.74f, 0.84f, 1.0f), 24.0f);
+      AddText(contentRoot, "DEMO", 34, FontStyle.Bold, TextAnchor.MiddleCenter, new Color(0.88f, 0.96f, 1.0f, 1.0f), 42.0f);
+      AddText(contentRoot, "Create a local world, or connect to a hosted Demo world.", 14, FontStyle.Bold, TextAnchor.MiddleCenter, new Color(0.62f, 0.74f, 0.84f, 1.0f), 24.0f);
 
       RectTransform modeRow = AddRow(contentRoot, 36.0f, 10.0f);
       localModeButton = AddButton(modeRow, "Local Game", () => SetMode(SetupMode.Local));
@@ -298,7 +300,7 @@ namespace Assets.Demo.Scripts.Multiplayer
         moduleNameInput = AddInputRow("Module", moduleName, value => moduleName = value);
       }
 
-      if (CubusDeveloperMode.IsEnabled)
+      if (DemoDeveloperMode.IsEnabled)
       {
         AddSection("Developer World Tools");
 
@@ -537,9 +539,9 @@ namespace Assets.Demo.Scripts.Multiplayer
     {
       if (canvasGroup != null)
       {
-        canvasGroup.alpha = CubusUiInput.ConsoleOpen ? 0.0f : 1.0f;
-        canvasGroup.interactable = !CubusUiInput.ConsoleOpen;
-        canvasGroup.blocksRaycasts = !CubusUiInput.ConsoleOpen;
+        canvasGroup.alpha = DemoUiInput.ConsoleOpen ? 0.0f : 1.0f;
+        canvasGroup.interactable = !DemoUiInput.ConsoleOpen;
+        canvasGroup.blocksRaycasts = !DemoUiInput.ConsoleOpen;
       }
 
       UpdateInput(worldIdInput, worldId, forceText);
@@ -564,7 +566,7 @@ namespace Assets.Demo.Scripts.Multiplayer
 
       if (startButton != null)
       {
-        startButton.interactable = !isLoading && !CubusUiInput.ConsoleOpen;
+        startButton.interactable = !isLoading && !DemoUiInput.ConsoleOpen;
       }
 
       if (statusText != null)
@@ -690,8 +692,8 @@ namespace Assets.Demo.Scripts.Multiplayer
         }
       }
 
-      CubusGameLaunchContext.Set(
-          mode == SetupMode.Local ? CubusGameLaunchMode.Local : CubusGameLaunchMode.Connected,
+      DemoGameLaunchContext.Set(
+          mode == SetupMode.Local ? DemoGameLaunchMode.Local : DemoGameLaunchMode.Connected,
           serverUri,
           moduleName,
           worldId,
