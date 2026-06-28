@@ -84,56 +84,58 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
       EnsureStore();
       StorageTimingStats timingStats = new();
       Stopwatch totalWatch = Stopwatch.StartNew();
+      CompressionStats compressionStats = new();
+      bool savedAny = false;
 
-      switch (world.Settings.TerrainSystem)
+      if (world.Settings.TerrainSystem == TerrainSystem.Block || world.Settings.TerrainSystem == TerrainSystem.Hybrid)
       {
-        case TerrainSystem.Block:
-          if (!world.Data.BlockChunks.TryGetValue(chunkCoord, out BlockChunkData blockChunk) || blockChunk == null)
-          {
-            return false;
-          }
-
+        if (world.Data.BlockChunks.TryGetValue(chunkCoord, out BlockChunkData blockChunk) && blockChunk != null)
+        {
           Stopwatch encodeBlockWatch = Stopwatch.StartNew();
           WorldChunkRecord blockRecord = CubusChunkPayloadCodec.EncodeBlockChunk(WorldId, chunkCoord, blockChunk);
           encodeBlockWatch.Stop();
           timingStats.EncodeTicks += encodeBlockWatch.ElapsedTicks;
+          compressionStats.Add(blockRecord);
 
           Stopwatch writeBlockWatch = Stopwatch.StartNew();
-          activeStore.SaveChunk(blockRecord);
+          activeStore.SaveChunkLayer(blockRecord);
           writeBlockWatch.Stop();
           timingStats.WriteTicks += writeBlockWatch.ElapsedTicks;
-          timingStats.Chunks = 1;
-
-          storageReadsDisabledForTerrainSystem = false;
-          totalWatch.Stop();
-          timingStats.TotalTicks = totalWatch.ElapsedTicks;
+          timingStats.Chunks++;
+          savedAny = true;
           LogSingleChunkCompressionIfEnabled("Saved", blockRecord);
-          return true;
+        }
+      }
 
-        case TerrainSystem.SmoothDensity:
-        default:
-          if (!world.Data.DensityChunks.TryGetValue(chunkCoord, out DensityChunkData densityChunk) || densityChunk == null)
-          {
-            return false;
-          }
-
+      if (world.Settings.TerrainSystem == TerrainSystem.SmoothDensity || world.Settings.TerrainSystem == TerrainSystem.Hybrid)
+      {
+        if (world.Data.DensityChunks.TryGetValue(chunkCoord, out DensityChunkData densityChunk) && densityChunk != null)
+        {
           Stopwatch encodeDensityWatch = Stopwatch.StartNew();
           WorldChunkRecord densityRecord = CubusChunkPayloadCodec.EncodeDensityChunk(WorldId, chunkCoord, densityChunk);
           encodeDensityWatch.Stop();
           timingStats.EncodeTicks += encodeDensityWatch.ElapsedTicks;
+          compressionStats.Add(densityRecord);
 
           Stopwatch writeDensityWatch = Stopwatch.StartNew();
-          activeStore.SaveChunk(densityRecord);
+          activeStore.SaveChunkLayer(densityRecord);
           writeDensityWatch.Stop();
           timingStats.WriteTicks += writeDensityWatch.ElapsedTicks;
-          timingStats.Chunks = 1;
-
-          storageReadsDisabledForTerrainSystem = false;
-          totalWatch.Stop();
-          timingStats.TotalTicks = totalWatch.ElapsedTicks;
+          timingStats.Chunks++;
+          savedAny = true;
           LogSingleChunkCompressionIfEnabled("Saved", densityRecord);
-          return true;
+        }
       }
+
+      if (!savedAny)
+      {
+        return false;
+      }
+
+      storageReadsDisabledForTerrainSystem = false;
+      totalWatch.Stop();
+      timingStats.TotalTicks = totalWatch.ElapsedTicks;
+      return true;
     }
 
     // Persists the current state of an edited chunk. The edit event also marks the
@@ -156,7 +158,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
 
       // Not resident. Density erase-persistence is left to the override/edit layer
       // (re-applied on reload) rather than risk the same neighbour-wipe.
-      if (world.Settings.TerrainSystem != TerrainSystem.Block)
+      if (world.Settings.TerrainSystem != TerrainSystem.Block && world.Settings.TerrainSystem != TerrainSystem.Hybrid)
       {
         return;
       }
@@ -169,7 +171,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
       }
 
       WorldChunkRecord record = CubusChunkPayloadCodec.EncodeBlockChunk(WorldId, chunkCoord, reconstructed);
-      activeStore.SaveChunk(record);
+      activeStore.SaveChunkLayer(record);
       storageReadsDisabledForTerrainSystem = false;
     }
 
@@ -187,42 +189,40 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
 
       CompressionStats compressionStats = new();
 
-      switch (world.Settings.TerrainSystem)
+      if (world.Settings.TerrainSystem == TerrainSystem.Block || world.Settings.TerrainSystem == TerrainSystem.Hybrid)
       {
-        case TerrainSystem.Block:
-          foreach (var pair in world.Data.BlockChunks)
-          {
-            Stopwatch encodeWatch = Stopwatch.StartNew();
-            WorldChunkRecord record = CubusChunkPayloadCodec.EncodeBlockChunk(WorldId, pair.Key, pair.Value);
-            encodeWatch.Stop();
-            timingStats.EncodeTicks += encodeWatch.ElapsedTicks;
-            compressionStats.Add(record);
+        foreach (var pair in world.Data.BlockChunks)
+        {
+          Stopwatch encodeWatch = Stopwatch.StartNew();
+          WorldChunkRecord record = CubusChunkPayloadCodec.EncodeBlockChunk(WorldId, pair.Key, pair.Value);
+          encodeWatch.Stop();
+          timingStats.EncodeTicks += encodeWatch.ElapsedTicks;
+          compressionStats.Add(record);
 
-            Stopwatch writeWatch = Stopwatch.StartNew();
-            activeStore.SaveChunk(record);
-            writeWatch.Stop();
-            timingStats.WriteTicks += writeWatch.ElapsedTicks;
-            timingStats.Chunks++;
-          }
-          break;
+          Stopwatch writeWatch = Stopwatch.StartNew();
+          activeStore.SaveChunkLayer(record);
+          writeWatch.Stop();
+          timingStats.WriteTicks += writeWatch.ElapsedTicks;
+          timingStats.Chunks++;
+        }
+      }
 
-        case TerrainSystem.SmoothDensity:
-        default:
-          foreach (var pair in world.Data.DensityChunks)
-          {
-            Stopwatch encodeWatch = Stopwatch.StartNew();
-            WorldChunkRecord record = CubusChunkPayloadCodec.EncodeDensityChunk(WorldId, pair.Key, pair.Value);
-            encodeWatch.Stop();
-            timingStats.EncodeTicks += encodeWatch.ElapsedTicks;
-            compressionStats.Add(record);
+      if (world.Settings.TerrainSystem == TerrainSystem.SmoothDensity || world.Settings.TerrainSystem == TerrainSystem.Hybrid)
+      {
+        foreach (var pair in world.Data.DensityChunks)
+        {
+          Stopwatch encodeWatch = Stopwatch.StartNew();
+          WorldChunkRecord record = CubusChunkPayloadCodec.EncodeDensityChunk(WorldId, pair.Key, pair.Value);
+          encodeWatch.Stop();
+          timingStats.EncodeTicks += encodeWatch.ElapsedTicks;
+          compressionStats.Add(record);
 
-            Stopwatch writeWatch = Stopwatch.StartNew();
-            activeStore.SaveChunk(record);
-            writeWatch.Stop();
-            timingStats.WriteTicks += writeWatch.ElapsedTicks;
-            timingStats.Chunks++;
-          }
-          break;
+          Stopwatch writeWatch = Stopwatch.StartNew();
+          activeStore.SaveChunkLayer(record);
+          writeWatch.Stop();
+          timingStats.WriteTicks += writeWatch.ElapsedTicks;
+          timingStats.Chunks++;
+        }
       }
 
       storageReadsDisabledForTerrainSystem = false;
@@ -264,44 +264,14 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
 
       foreach (Vector3Int chunkCoord in activeStore.EnumerateChunkCoords(WorldId))
       {
-        Stopwatch readWatch = Stopwatch.StartNew();
-        bool loaded = activeStore.TryLoadChunk(WorldId, chunkCoord, out WorldChunkRecord record);
-        readWatch.Stop();
-        timingStats.ReadTicks += readWatch.ElapsedTicks;
-
-        if (!loaded || record.TerrainSystem != world.Settings.TerrainSystem)
+        if (world.Settings.TerrainSystem == TerrainSystem.Block || world.Settings.TerrainSystem == TerrainSystem.Hybrid)
         {
-          continue;
+          LoadChunkLayerIntoWorld(chunkCoord, TerrainSystem.Block, timingStats, compressionStats);
         }
 
-        compressionStats.Add(record);
-        timingStats.Chunks++;
-
-        try
+        if (world.Settings.TerrainSystem == TerrainSystem.SmoothDensity || world.Settings.TerrainSystem == TerrainSystem.Hybrid)
         {
-          Stopwatch decodeWatch = Stopwatch.StartNew();
-
-          switch (record.TerrainSystem)
-          {
-            case TerrainSystem.Block:
-              world.Data.BlockChunks[chunkCoord] = CubusChunkPayloadCodec.DecodeBlockChunk(record);
-              break;
-
-            case TerrainSystem.SmoothDensity:
-              world.Data.DensityChunks[chunkCoord] = CubusChunkPayloadCodec.DecodeDensityChunk(record);
-              break;
-
-            default:
-              Debug.LogWarning($"Unsupported terrain system in chunk record. Chunk={chunkCoord}, Terrain={record.TerrainSystem}");
-              break;
-          }
-
-          decodeWatch.Stop();
-          timingStats.DecodeTicks += decodeWatch.ElapsedTicks;
-        }
-        catch (Exception ex)
-        {
-          Debug.LogWarning($"Failed to decode Cubus chunk during full load. WorldId={WorldId}, Chunk={chunkCoord}, Error={ex.Message}");
+          LoadChunkLayerIntoWorld(chunkCoord, TerrainSystem.SmoothDensity, timingStats, compressionStats);
         }
       }
 
@@ -317,6 +287,51 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
       LogCompressionStatsIfEnabled("Loaded", compressionStats);
       LogTimingStatsIfEnabled("Loaded", timingStats);
       return true;
+    }
+
+    private bool LoadChunkLayerIntoWorld(Vector3Int chunkCoord, TerrainSystem terrainSystem, StorageTimingStats timingStats, CompressionStats compressionStats)
+    {
+      Stopwatch readWatch = Stopwatch.StartNew();
+      bool loaded = activeStore.TryLoadChunkLayer(WorldId, chunkCoord, terrainSystem, out WorldChunkRecord record);
+      readWatch.Stop();
+      timingStats.ReadTicks += readWatch.ElapsedTicks;
+
+      if (!loaded || record.TerrainSystem != terrainSystem)
+      {
+        return false;
+      }
+
+      compressionStats.Add(record);
+      timingStats.Chunks++;
+
+      try
+      {
+        Stopwatch decodeWatch = Stopwatch.StartNew();
+
+        switch (record.TerrainSystem)
+        {
+          case TerrainSystem.Block:
+            world.Data.BlockChunks[chunkCoord] = CubusChunkPayloadCodec.DecodeBlockChunk(record);
+            break;
+
+          case TerrainSystem.SmoothDensity:
+            world.Data.DensityChunks[chunkCoord] = CubusChunkPayloadCodec.DecodeDensityChunk(record);
+            break;
+
+          default:
+            Debug.LogWarning($"Unsupported terrain system in chunk record. Chunk={chunkCoord}, Terrain={record.TerrainSystem}");
+            return false;
+        }
+
+        decodeWatch.Stop();
+        timingStats.DecodeTicks += decodeWatch.ElapsedTicks;
+        return true;
+      }
+      catch (Exception ex)
+      {
+        Debug.LogWarning($"Failed to decode Cubus chunk during full load. WorldId={WorldId}, Chunk={chunkCoord}, Terrain={terrainSystem}, Error={ex.Message}");
+        return false;
+      }
     }
 
     public bool LoadWorldManifestOnly()
@@ -364,50 +379,27 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
 
       StorageTimingStats timingStats = new();
       Stopwatch totalWatch = Stopwatch.StartNew();
+      CompressionStats compressionStats = new();
+      bool loadedAny = false;
 
-      Stopwatch readWatch = Stopwatch.StartNew();
-      bool loaded = activeStore.TryLoadChunk(WorldId, chunkCoord, out WorldChunkRecord record);
-      readWatch.Stop();
-      timingStats.ReadTicks += readWatch.ElapsedTicks;
+      if (world.Settings.TerrainSystem == TerrainSystem.Block || world.Settings.TerrainSystem == TerrainSystem.Hybrid)
+      {
+        loadedAny |= LoadChunkLayerIntoWorld(chunkCoord, TerrainSystem.Block, timingStats, compressionStats);
+      }
 
-      if (!loaded || record.TerrainSystem != world.Settings.TerrainSystem)
+      if (world.Settings.TerrainSystem == TerrainSystem.SmoothDensity || world.Settings.TerrainSystem == TerrainSystem.Hybrid)
+      {
+        loadedAny |= LoadChunkLayerIntoWorld(chunkCoord, TerrainSystem.SmoothDensity, timingStats, compressionStats);
+      }
+
+      if (!loadedAny)
       {
         return false;
       }
 
-      timingStats.Chunks = 1;
-      LogSingleChunkCompressionIfEnabled("Loaded", record);
-
-      try
-      {
-        Stopwatch decodeWatch = Stopwatch.StartNew();
-
-        switch (record.TerrainSystem)
-        {
-          case TerrainSystem.Block:
-            world.Data.BlockChunks[chunkCoord] = CubusChunkPayloadCodec.DecodeBlockChunk(record);
-            break;
-
-          case TerrainSystem.SmoothDensity:
-            world.Data.DensityChunks[chunkCoord] = CubusChunkPayloadCodec.DecodeDensityChunk(record);
-            break;
-
-          default:
-            Debug.LogWarning($"Unsupported terrain system in chunk record. Chunk={chunkCoord}, Terrain={record.TerrainSystem}");
-            return false;
-        }
-
-        decodeWatch.Stop();
-        timingStats.DecodeTicks += decodeWatch.ElapsedTicks;
-        totalWatch.Stop();
-        timingStats.TotalTicks = totalWatch.ElapsedTicks;
-        return true;
-      }
-      catch (Exception ex)
-      {
-        Debug.LogWarning($"Failed to decode Cubus chunk. WorldId={WorldId}, Chunk={chunkCoord}, Error={ex.Message}");
-        return false;
-      }
+      totalWatch.Stop();
+      timingStats.TotalTicks = totalWatch.ElapsedTicks;
+      return true;
     }
 
     public void DeleteWorldDatabase()
@@ -494,9 +486,20 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
         MaxChunkY = maxChunkY,
         MinChunkZ = minChunkZ,
         MaxChunkZ = maxChunkZ,
-        ChunkCount = settings.TerrainSystem == TerrainSystem.Block ? world.Data.BlockChunks.Count : world.Data.DensityChunks.Count,
+        ChunkCount = GetCurrentStoredChunkCount(settings.TerrainSystem),
         UpdatedUnixTime = now,
         CreatedUnixTime = now
+      };
+    }
+
+    private int GetCurrentStoredChunkCount(TerrainSystem terrainSystem)
+    {
+      return terrainSystem switch
+      {
+        TerrainSystem.Block => world.Data.BlockChunks.Count,
+        TerrainSystem.SmoothDensity => world.Data.DensityChunks.Count,
+        TerrainSystem.Hybrid => world.Data.BlockChunks.Count + world.Data.DensityChunks.Count,
+        _ => 0
       };
     }
 
@@ -569,6 +572,11 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
       );
 
       expectedChunkCount = CountChunks(minChunkX, maxChunkX, minChunkY, maxChunkY, minChunkZ, maxChunkZ);
+
+      if (world.Settings.TerrainSystem == TerrainSystem.Hybrid)
+      {
+        expectedChunkCount *= 2L;
+      }
 
       return manifest.MinChunkX == minChunkX &&
              manifest.MaxChunkX == maxChunkX &&
