@@ -31,7 +31,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         bool isDesiredChunk = desiredChunkCoords.Contains(c);
         bool isKeepChunk = keepChunkCoords.Contains(c);
 
-        if (world.Settings.TerrainSystem == TerrainSystem.Block)
+        if (IsBlockTerrainEnabled)
         {
           if (!isDesiredChunk)
           {
@@ -78,8 +78,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
               storage != null ? storage.WorldId : null,
               c,
               MaxLoadAsyncTasks,
-              world.Settings.TerrainSystem == TerrainSystem.Block ? world.CreateBlockOverrideSnapshot(c) : null,
-              world.Settings.TerrainSystem == TerrainSystem.SmoothDensity ? world.CreateDensityOverrideSnapshot(c) : null))
+              IsBlockTerrainEnabled ? world.CreateBlockOverrideSnapshot(c) : null,
+              IsDensityTerrainEnabled ? world.CreateDensityOverrideSnapshot(c) : null))
         {
           totalChunkLoadRequestsStarted++;
           count++;
@@ -104,7 +104,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         if (result.Loaded)
         {
           totalChunkLoadsCompleted++;
-          if (result.TerrainSystem == TerrainSystem.Block && result.BlockChunkData != null)
+          if (IsBlockTerrainEnabled && result.BlockChunkData != null)
           {
             world.Data.BlockChunks[c] = result.BlockChunkData;
             // Avoid scanning the full voxel array on the main thread; emptiness is resolved by mesh build results.
@@ -116,7 +116,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
             // which otherwise leaves stale boundary walls at the load frontier.
             RequeueSettledBlockNeighbors(c);
           }
-          else if (result.TerrainSystem == TerrainSystem.SmoothDensity && result.DensityChunkData != null) world.Data.DensityChunks[c] = result.DensityChunkData;
+          else if (IsDensityTerrainEnabled && result.DensityChunkData != null) world.Data.DensityChunks[c] = result.DensityChunkData;
 
           // Chunks that were just generated on the streaming worker (no record on
           // disk yet) are written back so subsequent visits load them from storage
