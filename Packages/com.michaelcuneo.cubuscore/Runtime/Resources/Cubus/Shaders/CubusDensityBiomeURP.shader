@@ -66,6 +66,7 @@ Shader "Cubus/DensityBiomeURP"
         float3 positionWS : TEXCOORD0;
         float3 normalWS : TEXCOORD1;
         float4 color : TEXCOORD2;
+        float2 materialBlend : TEXCOORD3;
       };
 
       CBUFFER_START(UnityPerMaterial)
@@ -228,28 +229,47 @@ Shader "Cubus/DensityBiomeURP"
         OUT.positionWS = pos.positionWS;
         OUT.normalWS = nrm.normalWS;
         OUT.color = IN.color;
+        OUT.materialBlend = IN.uv;
 
         return OUT;
       }
 
       half4 frag(Varyings IN) : SV_Target
       {
-        float materialId = DecodeMaterialId(IN.color);
-        float tileId = SampleDensityTileId(materialId);
-        float renderCategory = SampleRenderCategory(materialId);
+        float primaryMaterialId = DecodeMaterialId(IN.color);
+        float secondaryMaterialId = max(1.0, round(IN.materialBlend.x));
+        float blendWeight = saturate(IN.materialBlend.y);
 
-        half4 albedo = SampleTriplanar(
-            tileId,
+        if (abs(secondaryMaterialId - primaryMaterialId) < 0.5)
+        {
+          blendWeight = 0.0;
+        }
+
+        float primaryTileId = SampleDensityTileId(primaryMaterialId);
+        float secondaryTileId = SampleDensityTileId(secondaryMaterialId);
+        float renderCategory = SampleRenderCategory(primaryMaterialId);
+        float3 normalWS = normalize(IN.normalWS);
+
+        half4 primaryAlbedo = SampleTriplanar(
+            primaryTileId,
             IN.positionWS,
-            normalize(IN.normalWS)
+            normalWS
         );
+
+        half4 secondaryAlbedo = SampleTriplanar(
+            secondaryTileId,
+            IN.positionWS,
+            normalWS
+        );
+
+        half4 albedo = lerp(primaryAlbedo, secondaryAlbedo, blendWeight);
 
         if (renderCategory == 1.0 && albedo.a < 0.5)
         {
           discard;
         }
 
-        float3 lit = ApplyLighting(albedo.rgb * _Tint.rgb, IN.normalWS);
+        float3 lit = ApplyLighting(albedo.rgb * _Tint.rgb, normalWS);
         return half4(lit, 1.0);
       }
 
