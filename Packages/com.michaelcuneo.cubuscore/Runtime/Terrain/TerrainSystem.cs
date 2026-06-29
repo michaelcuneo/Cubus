@@ -6,4 +6,10 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain
     SmoothDensity,
     Hybrid
   }
+
+  public enum HybridTerrainLayerGenerationMode
+  {
+    ProceduralTerrain,
+    SparseOnly
+  }
 }
