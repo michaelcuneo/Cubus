@@ -10,6 +10,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     private static bool hasContext;
     private static TerrainSystem terrainSystem;
     private static WorldGenerationSnapshot worldSnapshot;
+    private static HybridTerrainLayerGenerationMode hybridBlockLayerMode = HybridTerrainLayerGenerationMode.ProceduralTerrain;
+    private static HybridTerrainLayerGenerationMode hybridDensityLayerMode = HybridTerrainLayerGenerationMode.ProceduralTerrain;
 
     public static void Set(WorldSettings settings)
     {
@@ -29,7 +31,27 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       }
     }
 
+    public static void SetHybridLayerGenerationModes(
+        HybridTerrainLayerGenerationMode blockLayerMode,
+        HybridTerrainLayerGenerationMode densityLayerMode)
+    {
+      lock (SyncRoot)
+      {
+        hybridBlockLayerMode = blockLayerMode;
+        hybridDensityLayerMode = densityLayerMode;
+      }
+    }
+
     public static bool TryGet(out TerrainSystem activeTerrainSystem, out WorldGenerationSnapshot snapshot)
+    {
+      return TryGet(out activeTerrainSystem, out snapshot, out _, out _);
+    }
+
+    public static bool TryGet(
+        out TerrainSystem activeTerrainSystem,
+        out WorldGenerationSnapshot snapshot,
+        out HybridTerrainLayerGenerationMode blockLayerMode,
+        out HybridTerrainLayerGenerationMode densityLayerMode)
     {
       lock (SyncRoot)
       {
@@ -37,12 +59,16 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         {
           activeTerrainSystem = terrainSystem;
           snapshot = worldSnapshot;
+          blockLayerMode = hybridBlockLayerMode;
+          densityLayerMode = hybridDensityLayerMode;
           return true;
         }
       }
 
       activeTerrainSystem = default;
       snapshot = default;
+      blockLayerMode = HybridTerrainLayerGenerationMode.ProceduralTerrain;
+      densityLayerMode = HybridTerrainLayerGenerationMode.ProceduralTerrain;
       return false;
     }
 
