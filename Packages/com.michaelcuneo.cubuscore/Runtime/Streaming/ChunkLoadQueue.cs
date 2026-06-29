@@ -134,7 +134,11 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         IReadOnlyDictionary<int, ushort> blockOverrides,
         IReadOnlyDictionary<int, DensityVoxelOverride> densityOverrides)
     {
-      bool hasGenerationContext = StreamingGenerationContext.TryGet(out TerrainSystem mode, out WorldGenerationSnapshot snapshot);
+      bool hasGenerationContext = StreamingGenerationContext.TryGet(
+        out TerrainSystem mode,
+        out WorldGenerationSnapshot snapshot,
+        out HybridTerrainLayerGenerationMode blockLayerMode,
+        out HybridTerrainLayerGenerationMode densityLayerMode);
 
       if (hasGenerationContext && store != null && !string.IsNullOrWhiteSpace(worldId))
       {
@@ -150,8 +154,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
             store.TryLoadChunkLayer(worldId, chunkCoord, TerrainSystem.Block, out WorldChunkRecord blockRecord))
         {
           loaded.BlockChunkData = CubusChunkPayloadCodec.DecodeBlockChunk(blockRecord);
-          // Player edits are stored as a sparse override layer, not baked into the
-          // saved record, so re-apply them on top of the stored chunk.
           BlockChunkBuilder.ApplyOverrides(loaded.BlockChunkData, blockOverrides);
         }
 
@@ -161,6 +163,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
           loaded.DensityChunkData = CubusChunkPayloadCodec.DecodeDensityChunk(densityRecord);
           DensityChunkBuilder.ApplyOverrides(loaded.DensityChunkData, densityOverrides);
         }
+
+        FillMissingSparseHybridLayers(mode, blockLayerMode, densityLayerMode, loaded, chunkCoord, blockOverrides, densityOverrides);
 
         if (HasRequiredLoadedLayers(mode, loaded))
         {
@@ -200,22 +204,26 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
           TerrainSystem = mode
         };
 
-        if (mode == TerrainSystem.Block || mode == TerrainSystem.Hybrid)
+        if (mode == TerrainSystem.Block)
         {
-          // Generate on this background worker with the MANAGED column sampler.
-          // The Burst job path (GenerateChunkDataJob -> job.Run) must NOT be used
-          // here: Unity's Job System only permits running/scheduling jobs from the
-          // main thread, so calling it from this Task.Run worker throws every time
-          // (chunk load fails -> re-queued -> retries forever => ~1 chunk/minute).
-          // The managed sampler is thread-safe, allocation-light (one reusable
-          // column sampler, biome resolved once per column, columns fully above
-          // the surface skipped) and is the fast pre-Burst streaming path.
           result.BlockChunkData = BlockChunkBuilder.GenerateChunkData(chunkCoord, snapshot, blockOverrides, out _);
         }
+        else if (mode == TerrainSystem.Hybrid)
+        {
+          result.BlockChunkData = blockLayerMode == HybridTerrainLayerGenerationMode.ProceduralTerrain
+            ? BlockChunkBuilder.GenerateChunkData(chunkCoord, snapshot, blockOverrides, out _)
+            : CreateSparseBlockChunk(chunkCoord, blockOverrides);
+        }
 
-        if (mode == TerrainSystem.SmoothDensity || mode == TerrainSystem.Hybrid)
+        if (mode == TerrainSystem.SmoothDensity)
         {
           result.DensityChunkData = DensityChunkBuilder.GenerateChunkData(chunkCoord, snapshot, densityOverrides);
+        }
+        else if (mode == TerrainSystem.Hybrid)
+        {
+          result.DensityChunkData = densityLayerMode == HybridTerrainLayerGenerationMode.ProceduralTerrain
+            ? DensityChunkBuilder.GenerateChunkData(chunkCoord, snapshot, densityOverrides)
+            : CreateSparseDensityChunk(chunkCoord, densityOverrides);
         }
 
         if (result.BlockChunkData != null || result.DensityChunkData != null)
@@ -225,6 +233,46 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       }
 
       return new ChunkLoadResult { ChunkCoord = chunkCoord, GenerationId = generationId, Loaded = false, IsMissingFromStorage = true };
+    }
+
+    private static void FillMissingSparseHybridLayers(
+        TerrainSystem mode,
+        HybridTerrainLayerGenerationMode blockLayerMode,
+        HybridTerrainLayerGenerationMode densityLayerMode,
+        ChunkLoadResult loaded,
+        Vector3Int chunkCoord,
+        IReadOnlyDictionary<int, ushort> blockOverrides,
+        IReadOnlyDictionary<int, DensityVoxelOverride> densityOverrides)
+    {
+      if (mode != TerrainSystem.Hybrid || loaded == null)
+      {
+        return;
+      }
+
+      if (loaded.BlockChunkData == null && blockLayerMode == HybridTerrainLayerGenerationMode.SparseOnly)
+      {
+        loaded.BlockChunkData = CreateSparseBlockChunk(chunkCoord, blockOverrides);
+      }
+
+      if (loaded.DensityChunkData == null && densityLayerMode == HybridTerrainLayerGenerationMode.SparseOnly)
+      {
+        loaded.DensityChunkData = CreateSparseDensityChunk(chunkCoord, densityOverrides);
+      }
+    }
+
+    private static BlockChunkData CreateSparseBlockChunk(Vector3Int chunkCoord, IReadOnlyDictionary<int, ushort> blockOverrides)
+    {
+      BlockChunkData chunkData = new(chunkCoord);
+      BlockChunkBuilder.ApplyOverrides(chunkData, blockOverrides);
+      chunkData.SetKnownHasAnySolidVoxel(chunkData.HasAnySolidVoxel());
+      return chunkData;
+    }
+
+    private static DensityChunkData CreateSparseDensityChunk(Vector3Int chunkCoord, IReadOnlyDictionary<int, DensityVoxelOverride> densityOverrides)
+    {
+      DensityChunkData chunkData = new(chunkCoord);
+      DensityChunkBuilder.ApplyOverrides(chunkData, densityOverrides);
+      return chunkData;
     }
 
     private static bool HasRequiredLoadedLayers(TerrainSystem mode, ChunkLoadResult loaded)
