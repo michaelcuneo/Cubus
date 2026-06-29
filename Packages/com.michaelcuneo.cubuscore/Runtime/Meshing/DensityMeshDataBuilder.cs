@@ -11,6 +11,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
 {
   public static class DensityMeshDataBuilder
   {
+    private const float MixedMaterialBlendWeight = 0.35f;
+
     public static MeshData Generate(Vector3Int chunkCoord, WorldGenerationSnapshot snapshot, int cellStep, bool flipWinding, Func<Vector3Int, DensityVoxel> sampleVoxelAtWorld)
     {
       if (sampleVoxelAtWorld == null) return null;
@@ -225,8 +227,11 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
           normals[7] = SampleNormalCached(densityGrid, normalCache, normalComputed, numSamplesAxis, 0, 1, i011);
 
           for (int i = 0; i < 12; i++) edgeIndices[i] = -1;
-          ushort materialId = ChooseMaterial(densities, materials);
-          Color32 color = MaterialToColor(materialId);
+
+          ushort primaryMaterialId = ChooseMaterial(densities, materials);
+          ushort secondaryMaterialId = ChooseSecondaryMaterial(densities, materials, primaryMaterialId);
+          Color32 color = MaterialToColor(primaryMaterialId);
+          Vector2 materialBlend = MaterialBlendToUv(primaryMaterialId, secondaryMaterialId);
 
           for (int t = 0; t < 16; t += 3)
           {
@@ -236,9 +241,9 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
             int e2 = MarchingCubesTables.TriangleTable[cubeIndex, t + 2];
             if (e1 < 0 || e2 < 0 || e0 >= 12 || e1 >= 12 || e2 >= 12) break;
 
-            int v0 = AddOrGetEdgeVertex(mesh, e0, positions, densities, normals, edgeVertices, edgeNormals, edgeIndices, color);
-            int v1 = AddOrGetEdgeVertex(mesh, e1, positions, densities, normals, edgeVertices, edgeNormals, edgeIndices, color);
-            int v2 = AddOrGetEdgeVertex(mesh, e2, positions, densities, normals, edgeVertices, edgeNormals, edgeIndices, color);
+            int v0 = AddOrGetEdgeVertex(mesh, e0, positions, densities, normals, edgeVertices, edgeNormals, edgeIndices, color, materialBlend);
+            int v1 = AddOrGetEdgeVertex(mesh, e1, positions, densities, normals, edgeVertices, edgeNormals, edgeIndices, color, materialBlend);
+            int v2 = AddOrGetEdgeVertex(mesh, e2, positions, densities, normals, edgeVertices, edgeNormals, edgeIndices, color, materialBlend);
             if (v0 < 0 || v1 < 0 || v2 < 0 || v0 == v1 || v1 == v2 || v0 == v2) continue;
 
             if (flipWinding)
@@ -271,8 +276,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
       }
     }
 
-    private static int ToSampleIndex(int sx, int sy, int sz, int samplesAxis) => sx + samplesAxis * (sy + samplesAxis * sz);
-
     private static Vector3 SampleNormalCached(float[] densities, Vector3[] normalCache, bool[] normalComputed, int samplesAxis, int xOffset, int yOffset, int index)
     {
       if (normalComputed[index]) return normalCache[index];
@@ -302,7 +305,17 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
       return normal.sqrMagnitude > 0.000001f ? normal.normalized : Vector3.up;
     }
 
-    private static int AddOrGetEdgeVertex(MeshData mesh, int edgeIndex, Span<Vector3> positions, Span<float> densities, Span<Vector3> normals, Span<Vector3> edgeVertices, Span<Vector3> edgeNormals, Span<int> edgeIndices, Color32 color)
+    private static int AddOrGetEdgeVertex(
+      MeshData mesh,
+      int edgeIndex,
+      Span<Vector3> positions,
+      Span<float> densities,
+      Span<Vector3> normals,
+      Span<Vector3> edgeVertices,
+      Span<Vector3> edgeNormals,
+      Span<int> edgeIndices,
+      Color32 color,
+      Vector2 materialBlend)
     {
       if (edgeIndices[edgeIndex] >= 0) return edgeIndices[edgeIndex];
       int cornerA = MarchingCubesTables.EdgeConnection[edgeIndex, 0];
@@ -313,7 +326,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
       int index = mesh.Vertices.Count;
       mesh.Vertices.Add(position);
       mesh.Normals.Add(normal);
-      mesh.UVs.Add(ProjectUv(position, normal));
+      mesh.UVs.Add(materialBlend);
       mesh.Colors.Add(color);
       edgeVertices[edgeIndex] = position;
       edgeNormals[edgeIndex] = normal;
@@ -337,14 +350,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
       return Vector3.Lerp(a, b, t);
     }
 
-    private static Vector2 ProjectUv(Vector3 position, Vector3 normal)
-    {
-      Vector3 abs = new(Mathf.Abs(normal.x), Mathf.Abs(normal.y), Mathf.Abs(normal.z));
-      if (abs.y >= abs.x && abs.y >= abs.z) return new Vector2(position.x, position.z);
-      if (abs.x >= abs.y && abs.x >= abs.z) return new Vector2(position.z, position.y);
-      return new Vector2(position.x, position.y);
-    }
-
     private static ushort ChooseMaterial(Span<float> densities, Span<ushort> materials)
     {
       ushort selected = 0;
@@ -359,6 +364,30 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
         }
       }
       return selected == 0 ? (ushort)1 : selected;
+    }
+
+    private static ushort ChooseSecondaryMaterial(Span<float> densities, Span<ushort> materials, ushort primaryMaterialId)
+    {
+      ushort selected = 0;
+      float bestDensity = float.NegativeInfinity;
+      for (int i = 0; i < 8; i++)
+      {
+        ushort materialId = materials[i];
+        if (densities[i] <= 0.0f || materialId == 0 || materialId == primaryMaterialId) continue;
+        if (densities[i] > bestDensity)
+        {
+          bestDensity = densities[i];
+          selected = materialId;
+        }
+      }
+
+      return selected == 0 ? primaryMaterialId : selected;
+    }
+
+    private static Vector2 MaterialBlendToUv(ushort primaryMaterialId, ushort secondaryMaterialId)
+    {
+      float blendWeight = secondaryMaterialId != 0 && secondaryMaterialId != primaryMaterialId ? MixedMaterialBlendWeight : 0.0f;
+      return new Vector2(secondaryMaterialId == 0 ? primaryMaterialId : secondaryMaterialId, blendWeight);
     }
 
     private static Color32 MaterialToColor(ushort materialId)
