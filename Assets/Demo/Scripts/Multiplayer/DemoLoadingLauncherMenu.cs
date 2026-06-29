@@ -13,8 +13,8 @@ namespace Assets.Demo.Scripts.Multiplayer
 {
   /// <summary>
   /// Runtime Canvas launcher UI for the dedicated loading-scene flow.
-  /// This intentionally uses Unity UI Text/InputField instead of TextMeshPro so the
-  /// first screen does not depend on TMP font asset state.
+  /// The game demo always launches as smooth-density terrain with a sparse block layer.
+  /// Engine users can still use other TerrainSystem combinations outside this launcher.
   /// </summary>
   public sealed class DemoLoadingLauncherMenu : MonoBehaviour
   {
@@ -30,7 +30,8 @@ namespace Assets.Demo.Scripts.Multiplayer
     [SerializeField] private string defaultWorldId = "demo_world";
     [SerializeField] private int sortingOrder = 1000;
 
-    private static readonly Vector2 RuntimePanelSize = new(760.0f, 840.0f);
+    private static readonly Vector2 RuntimePanelSize = new(760.0f, 780.0f);
+    private const TerrainSystem GameTerrainSystem = TerrainSystem.Hybrid;
 
     private SetupMode mode = SetupMode.Connected;
     private string serverUri;
@@ -44,13 +45,11 @@ namespace Assets.Demo.Scripts.Multiplayer
     private string minChunkZ = "-8";
     private string maxChunkX = "8";
     private string maxChunkZ = "8";
-    private TerrainSystem terrainSystem = TerrainSystem.Block;
     private string status = "Choose how to start Cubus.";
     private bool isLoading;
     private float loadingProgress;
     private float loadingStartedAt;
     private string loadingScenePath;
-    private bool deleteLocalWorldBeforeLaunch;
     private bool resetConnectedWorldOnLaunch;
 
     private CanvasGroup canvasGroup;
@@ -60,11 +59,7 @@ namespace Assets.Demo.Scripts.Multiplayer
     private Image loadingFill;
     private Button localModeButton;
     private Button connectedModeButton;
-    private Button blockTerrainButton;
-    private Button smoothTerrainButton;
-    private Button hybridTerrainButton;
     private Button startButton;
-    private Button deleteToggleButton;
     private Button resetConnectedToggleButton;
     private InputField worldIdInput;
     private InputField seedInput;
@@ -227,11 +222,7 @@ namespace Assets.Demo.Scripts.Multiplayer
 
       localModeButton = null;
       connectedModeButton = null;
-      blockTerrainButton = null;
-      smoothTerrainButton = null;
-      hybridTerrainButton = null;
       startButton = null;
-      deleteToggleButton = null;
       resetConnectedToggleButton = null;
       worldIdInput = null;
       seedInput = null;
@@ -246,7 +237,7 @@ namespace Assets.Demo.Scripts.Multiplayer
       moduleNameInput = null;
 
       AddText(contentRoot, "DEMO", 34, FontStyle.Bold, TextAnchor.MiddleCenter, new Color(0.88f, 0.96f, 1.0f, 1.0f), 42.0f);
-      AddText(contentRoot, "Create a local world, or connect to a hosted Demo world.", 14, FontStyle.Bold, TextAnchor.MiddleCenter, new Color(0.62f, 0.74f, 0.84f, 1.0f), 24.0f);
+      AddText(contentRoot, "Smooth terrain with sparse buildable block voxels.", 14, FontStyle.Bold, TextAnchor.MiddleCenter, new Color(0.62f, 0.74f, 0.84f, 1.0f), 24.0f);
 
       RectTransform modeRow = AddRow(contentRoot, 36.0f, 10.0f);
       localModeButton = AddButton(modeRow, "Local Game", () => SetMode(SetupMode.Local));
@@ -254,12 +245,7 @@ namespace Assets.Demo.Scripts.Multiplayer
 
       AddSection("World");
       worldIdInput = AddInputRow("World ID", worldId, value => worldId = value);
-
-      RectTransform terrainRow = AddRow(contentRoot, 32.0f, 10.0f);
-      AddFixedText(terrainRow, "Terrain", 140.0f, 14, FontStyle.Bold, TextAnchor.MiddleLeft);
-      blockTerrainButton = AddButton(terrainRow, "Block", () => SetTerrain(TerrainSystem.Block));
-      smoothTerrainButton = AddButton(terrainRow, "Smooth", () => SetTerrain(TerrainSystem.SmoothDensity));
-      hybridTerrainButton = AddButton(terrainRow, "Hybrid", () => SetTerrain(TerrainSystem.Hybrid));
+      AddText(contentRoot, "Terrain: Smooth density world + sparse block layer", 13, FontStyle.Bold, TextAnchor.MiddleLeft, new Color(0.62f, 0.74f, 0.84f, 1.0f), 24.0f);
 
       RectTransform seedRow = AddRow(contentRoot, 32.0f, 8.0f);
       AddFixedText(seedRow, "Seed", 140.0f, 14, FontStyle.Bold, TextAnchor.MiddleLeft);
@@ -283,7 +269,7 @@ namespace Assets.Demo.Scripts.Multiplayer
       }
       else
       {
-        deleteToggleButton = AddButton(contentRoot, string.Empty, () => { deleteLocalWorldBeforeLaunch = !deleteLocalWorldBeforeLaunch; UpdateUiState(false); }, -1.0f, 30.0f);
+        AddText(contentRoot, "Local cache for this World ID is regenerated on launch.", 13, FontStyle.Bold, TextAnchor.MiddleLeft, new Color(0.62f, 0.74f, 0.84f, 1.0f), 24.0f);
       }
 
       AddSpacer(contentRoot, 6.0f);
@@ -495,11 +481,7 @@ namespace Assets.Demo.Scripts.Multiplayer
 
       SetButtonLabel(localModeButton, mode == SetupMode.Local ? "LOCAL GAME" : "Local Game");
       SetButtonLabel(connectedModeButton, mode == SetupMode.Connected ? "CONNECTED GAME" : "Connected Game");
-      SetButtonLabel(blockTerrainButton, terrainSystem == TerrainSystem.Block ? "BLOCK" : "Block");
-      SetButtonLabel(smoothTerrainButton, terrainSystem == TerrainSystem.SmoothDensity ? "SMOOTH" : "Smooth");
-      SetButtonLabel(hybridTerrainButton, terrainSystem == TerrainSystem.Hybrid ? "HYBRID" : "Hybrid");
       SetButtonLabel(startButton, mode == SetupMode.Local ? "Start Local Game" : "Start Connected Game");
-      SetButtonLabel(deleteToggleButton, deleteLocalWorldBeforeLaunch ? "[x] Delete/regenerate current local World ID before launch" : "[ ] Delete/regenerate current local World ID before launch");
       SetButtonLabel(resetConnectedToggleButton, resetConnectedWorldOnLaunch ? "[x] Reset/regenerate connected world on launch" : "[ ] Reset/regenerate connected world on launch");
 
       if (startButton != null)
@@ -561,7 +543,7 @@ namespace Assets.Demo.Scripts.Multiplayer
         return;
       }
 
-      if (mode == SetupMode.Local && deleteLocalWorldBeforeLaunch)
+      if (mode == SetupMode.Local)
       {
         DeleteLocalWorldById(worldId);
       }
@@ -628,14 +610,14 @@ namespace Assets.Demo.Scripts.Multiplayer
         serverUri,
         moduleName,
         worldId,
-        terrainSystem,
+        GameTerrainSystem,
         parsedSeed,
         parsedVoxelSize,
         parsedMinY,
         parsedMaxY,
         new Vector2Int(parsedMinX, parsedMinZ),
         new Vector2Int(parsedMaxX, parsedMaxZ),
-        deleteLocalWorldBeforeLaunch && mode == SetupMode.Local,
+        mode == SetupMode.Local,
         resetConnectedWorldOnLaunch && mode == SetupMode.Connected);
 
       return true;
@@ -651,12 +633,6 @@ namespace Assets.Demo.Scripts.Multiplayer
       mode = nextMode;
       RebuildControls();
       UpdateUiState(true);
-    }
-
-    private void SetTerrain(TerrainSystem nextTerrain)
-    {
-      terrainSystem = nextTerrain;
-      UpdateUiState(false);
     }
 
     private void RandomizeSeed()
