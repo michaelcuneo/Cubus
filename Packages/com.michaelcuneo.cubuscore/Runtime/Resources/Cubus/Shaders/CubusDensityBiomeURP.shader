@@ -10,6 +10,9 @@ Shader "Cubus/DensityBiomeURP"
     _Tint("Tint", Color) = (1, 1, 1, 1)
     _TextureScale("Texture Scale", Float) = 0.25
     _TriplanarSharpness("Triplanar Sharpness", Float) = 4.0
+    _MaterialBlendWidth("Material Blend Width", Range(0.01, 1)) = 0.35
+    _MaterialBlendNoiseScale("Material Blend Noise Scale", Float) = 0.14
+    _MaterialBlendNoiseStrength("Material Blend Noise Strength", Range(0, 1)) = 0.45
   }
 
   SubShader
@@ -75,6 +78,9 @@ Shader "Cubus/DensityBiomeURP"
       float4 _Atlas_TexelSize;
       float _TextureScale;
       float _TriplanarSharpness;
+      float _MaterialBlendWidth;
+      float _MaterialBlendNoiseScale;
+      float _MaterialBlendNoiseStrength;
       CBUFFER_END
 
       float DecodeU16(float2 rg)
@@ -207,6 +213,66 @@ Shader "Cubus/DensityBiomeURP"
         return sampleX * n.x + sampleY * n.y + sampleZ * n.z;
       }
 
+      float Hash31(float3 p)
+      {
+        p = frac(p * 0.1031);
+        p += dot(p, p.yzx + 33.33);
+        return frac((p.x + p.y) * p.z);
+      }
+
+      float ValueNoise(float3 p)
+      {
+        float3 i = floor(p);
+        float3 f = frac(p);
+
+        f = f * f * (3.0 - 2.0 * f);
+
+        float n000 = Hash31(i + float3(0, 0, 0));
+        float n100 = Hash31(i + float3(1, 0, 0));
+        float n010 = Hash31(i + float3(0, 1, 0));
+        float n110 = Hash31(i + float3(1, 1, 0));
+        float n001 = Hash31(i + float3(0, 0, 1));
+        float n101 = Hash31(i + float3(1, 0, 1));
+        float n011 = Hash31(i + float3(0, 1, 1));
+        float n111 = Hash31(i + float3(1, 1, 1));
+
+        float nx00 = lerp(n000, n100, f.x);
+        float nx10 = lerp(n010, n110, f.x);
+        float nx01 = lerp(n001, n101, f.x);
+        float nx11 = lerp(n011, n111, f.x);
+
+        float nxy0 = lerp(nx00, nx10, f.y);
+        float nxy1 = lerp(nx01, nx11, f.y);
+
+        return lerp(nxy0, nxy1, f.z);
+      }
+
+      float TerrainBlendMask(float rawBlend, float3 positionWS)
+      {
+        rawBlend = saturate(rawBlend);
+
+        if (rawBlend <= 0.0001 || rawBlend >= 0.9999)
+        {
+          return rawBlend;
+        }
+
+        float noiseScale = max(0.0001, _MaterialBlendNoiseScale);
+
+        float n1 = ValueNoise(positionWS * noiseScale);
+        float n2 = ValueNoise(positionWS * noiseScale * 2.37 + 19.17);
+
+        float noise = (n1 * 0.65 + n2 * 0.35) - 0.5;
+
+        float blendWidth = max(0.001, _MaterialBlendWidth);
+        float noisyBlend = rawBlend + noise * _MaterialBlendNoiseStrength;
+
+        return smoothstep(
+          0.5 - blendWidth,
+          0.5 + blendWidth,
+          noisyBlend
+        );
+      }
+
       float3 ApplyLighting(float3 albedoRgb, float3 normalWS)
       {
         float3 n = normalize(normalWS);
@@ -238,12 +304,14 @@ Shader "Cubus/DensityBiomeURP"
       {
         float primaryMaterialId = DecodeMaterialId(IN.color);
         float secondaryMaterialId = max(1.0, round(IN.materialBlend.x));
-        float blendWeight = saturate(IN.materialBlend.y);
+        float rawBlendWeight = saturate(IN.materialBlend.y);
 
         if (abs(secondaryMaterialId - primaryMaterialId) < 0.5)
         {
-          blendWeight = 0.0;
+          rawBlendWeight = 0.0;
         }
+
+        float blendWeight = TerrainBlendMask(rawBlendWeight, IN.positionWS);
 
         float primaryTileId = SampleDensityTileId(primaryMaterialId);
         float secondaryTileId = SampleDensityTileId(secondaryMaterialId);
