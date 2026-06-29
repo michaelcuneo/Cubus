@@ -14,7 +14,7 @@ namespace Assets.Demo.Scripts.Multiplayer
   /// <summary>
   /// Runtime Canvas launcher UI for the dedicated loading-scene flow.
   /// The game demo always launches as smooth-density terrain with a sparse block layer.
-  /// Engine users can still use other TerrainSystem combinations outside this launcher.
+  /// Engine/dev terrain options belong in editor/debug tooling, not this player entry screen.
   /// </summary>
   public sealed class DemoLoadingLauncherMenu : MonoBehaviour
   {
@@ -30,22 +30,20 @@ namespace Assets.Demo.Scripts.Multiplayer
     [SerializeField] private string defaultWorldId = "demo_world";
     [SerializeField] private int sortingOrder = 1000;
 
-    private static readonly Vector2 RuntimePanelSize = new(760.0f, 780.0f);
+    private static readonly Vector2 RuntimePanelSize = new(680.0f, 560.0f);
     private const TerrainSystem GameTerrainSystem = TerrainSystem.Hybrid;
+    private const float GameVoxelSize = 1.0f;
+    private const int GameMinChunkY = -1;
+    private const int GameMaxChunkY = 2;
+    private static readonly Vector2Int GameWorldMinChunkXZ = new(-8, -8);
+    private static readonly Vector2Int GameWorldMaxChunkXZ = new(8, 8);
 
     private SetupMode mode = SetupMode.Connected;
     private string serverUri;
     private string moduleName;
     private string worldId;
     private string seed;
-    private string voxelSize = "1";
-    private string minChunkY = "-1";
-    private string maxChunkY = "2";
-    private string minChunkX = "-8";
-    private string minChunkZ = "-8";
-    private string maxChunkX = "8";
-    private string maxChunkZ = "8";
-    private string status = "Choose how to start Cubus.";
+    private string status = "Choose how to start.";
     private bool isLoading;
     private float loadingProgress;
     private float loadingStartedAt;
@@ -63,13 +61,6 @@ namespace Assets.Demo.Scripts.Multiplayer
     private Button resetConnectedToggleButton;
     private InputField worldIdInput;
     private InputField seedInput;
-    private InputField voxelSizeInput;
-    private InputField minChunkYInput;
-    private InputField maxChunkYInput;
-    private InputField minChunkXInput;
-    private InputField minChunkZInput;
-    private InputField maxChunkXInput;
-    private InputField maxChunkZInput;
     private InputField serverUriInput;
     private InputField moduleNameInput;
 
@@ -150,14 +141,6 @@ namespace Assets.Demo.Scripts.Multiplayer
       glowRect.offsetMax = Vector2.zero;
       upperGlow.raycastTarget = false;
 
-      Image horizon = CreateImage(root, "Horizon Band", new Color(0.10f, 0.32f, 0.43f, 0.26f));
-      RectTransform horizonRect = horizon.rectTransform;
-      horizonRect.anchorMin = new Vector2(0.0f, 0.46f);
-      horizonRect.anchorMax = new Vector2(1.0f, 0.52f);
-      horizonRect.offsetMin = Vector2.zero;
-      horizonRect.offsetMax = Vector2.zero;
-      horizon.raycastTarget = false;
-
       Image shadow = CreateImage(root, "Launcher Panel Shadow", new Color(0.0f, 0.0f, 0.0f, 0.35f));
       RectTransform shadowRect = shadow.rectTransform;
       shadowRect.anchorMin = new Vector2(0.5f, 0.5f);
@@ -186,7 +169,6 @@ namespace Assets.Demo.Scripts.Multiplayer
       accentRect.anchorMin = new Vector2(0.0f, 1.0f);
       accentRect.anchorMax = new Vector2(1.0f, 1.0f);
       accentRect.pivot = new Vector2(0.5f, 1.0f);
-      accentRect.anchoredPosition = Vector2.zero;
       accentRect.sizeDelta = new Vector2(0.0f, 4.0f);
       accent.raycastTarget = false;
 
@@ -195,8 +177,8 @@ namespace Assets.Demo.Scripts.Multiplayer
       contentRoot = contentObject.AddComponent<RectTransform>();
       contentRoot.anchorMin = Vector2.zero;
       contentRoot.anchorMax = Vector2.one;
-      contentRoot.offsetMin = new Vector2(34.0f, 30.0f);
-      contentRoot.offsetMax = new Vector2(-34.0f, -30.0f);
+      contentRoot.offsetMin = new Vector2(34.0f, 24.0f);
+      contentRoot.offsetMax = new Vector2(-34.0f, -24.0f);
 
       VerticalLayoutGroup layout = contentObject.AddComponent<VerticalLayoutGroup>();
       layout.childAlignment = TextAnchor.UpperCenter;
@@ -205,7 +187,7 @@ namespace Assets.Demo.Scripts.Multiplayer
       layout.childForceExpandWidth = true;
       layout.childForceExpandHeight = false;
       layout.spacing = 8.0f;
-      layout.padding = new RectOffset(0, 0, 6, 0);
+      layout.padding = new RectOffset(0, 0, 4, 0);
     }
 
     private void RebuildControls()
@@ -226,13 +208,6 @@ namespace Assets.Demo.Scripts.Multiplayer
       resetConnectedToggleButton = null;
       worldIdInput = null;
       seedInput = null;
-      voxelSizeInput = null;
-      minChunkYInput = null;
-      maxChunkYInput = null;
-      minChunkXInput = null;
-      minChunkZInput = null;
-      maxChunkXInput = null;
-      maxChunkZInput = null;
       serverUriInput = null;
       moduleNameInput = null;
 
@@ -248,17 +223,9 @@ namespace Assets.Demo.Scripts.Multiplayer
       AddText(contentRoot, "Terrain: Smooth density world + sparse block layer", 13, FontStyle.Bold, TextAnchor.MiddleLeft, new Color(0.62f, 0.74f, 0.84f, 1.0f), 24.0f);
 
       RectTransform seedRow = AddRow(contentRoot, 32.0f, 8.0f);
-      AddFixedText(seedRow, "Seed", 140.0f, 14, FontStyle.Bold, TextAnchor.MiddleLeft);
+      AddFixedText(seedRow, "Seed", 120.0f, 14, FontStyle.Bold, TextAnchor.MiddleLeft);
       seedInput = AddInput(seedRow, seed, value => seed = value);
-      AddButton(seedRow, "Random", RandomizeSeed, 108.0f);
-
-      voxelSizeInput = AddInputRow("Voxel Size", voxelSize, value => voxelSize = value);
-      minChunkYInput = AddInputRow("Min Chunk Y", minChunkY, value => minChunkY = value);
-      maxChunkYInput = AddInputRow("Max Chunk Y", maxChunkY, value => maxChunkY = value);
-      minChunkXInput = AddInputRow("Min Chunk X", minChunkX, value => minChunkX = value);
-      minChunkZInput = AddInputRow("Min Chunk Z", minChunkZ, value => minChunkZ = value);
-      maxChunkXInput = AddInputRow("Max Chunk X", maxChunkX, value => maxChunkX = value);
-      maxChunkZInput = AddInputRow("Max Chunk Z", maxChunkZ, value => maxChunkZ = value);
+      AddButton(seedRow, "Random", RandomizeSeed, 100.0f);
 
       if (mode == SetupMode.Connected)
       {
@@ -272,7 +239,7 @@ namespace Assets.Demo.Scripts.Multiplayer
         AddText(contentRoot, "Local cache for this World ID is regenerated on launch.", 13, FontStyle.Bold, TextAnchor.MiddleLeft, new Color(0.62f, 0.74f, 0.84f, 1.0f), 24.0f);
       }
 
-      AddSpacer(contentRoot, 6.0f);
+      AddSpacer(contentRoot, 4.0f);
       startButton = AddButton(contentRoot, mode == SetupMode.Local ? "Start Local Game" : "Start Connected Game", StartSelectedGame, -1.0f, 42.0f, true);
       statusText = AddText(contentRoot, string.Empty, 14, FontStyle.Bold, TextAnchor.MiddleLeft, new Color(0.88f, 0.96f, 1.0f, 1.0f), 28.0f);
       loadingText = AddText(contentRoot, string.Empty, 12, FontStyle.Normal, TextAnchor.MiddleLeft, new Color(0.65f, 0.76f, 0.86f, 1.0f), 24.0f);
@@ -283,8 +250,8 @@ namespace Assets.Demo.Scripts.Multiplayer
 
     private void AddSection(string label)
     {
-      AddSpacer(contentRoot, 6.0f);
-      AddText(contentRoot, label, 18, FontStyle.Bold, TextAnchor.MiddleLeft, new Color(0.88f, 0.96f, 1.0f, 1.0f), 28.0f);
+      AddSpacer(contentRoot, 4.0f);
+      AddText(contentRoot, label, 18, FontStyle.Bold, TextAnchor.MiddleLeft, new Color(0.88f, 0.96f, 1.0f, 1.0f), 26.0f);
       Image rule = CreateImage(contentRoot, label + " Rule", new Color(0.12f, 0.55f, 0.80f, 0.32f));
       LayoutElement ruleLayout = rule.gameObject.AddComponent<LayoutElement>();
       ruleLayout.preferredHeight = 1.0f;
@@ -295,7 +262,7 @@ namespace Assets.Demo.Scripts.Multiplayer
     private InputField AddInputRow(string label, string value, Action<string> onChanged)
     {
       RectTransform row = AddRow(contentRoot, 32.0f, 8.0f);
-      AddFixedText(row, label, 140.0f, 14, FontStyle.Bold, TextAnchor.MiddleLeft);
+      AddFixedText(row, label, 120.0f, 14, FontStyle.Bold, TextAnchor.MiddleLeft);
       return AddInput(row, value, onChanged);
     }
 
@@ -469,13 +436,6 @@ namespace Assets.Demo.Scripts.Multiplayer
 
       UpdateInput(worldIdInput, worldId, forceText);
       UpdateInput(seedInput, seed, forceText);
-      UpdateInput(voxelSizeInput, voxelSize, forceText);
-      UpdateInput(minChunkYInput, minChunkY, forceText);
-      UpdateInput(maxChunkYInput, maxChunkY, forceText);
-      UpdateInput(minChunkXInput, minChunkX, forceText);
-      UpdateInput(minChunkZInput, minChunkZ, forceText);
-      UpdateInput(maxChunkXInput, maxChunkX, forceText);
-      UpdateInput(maxChunkZInput, maxChunkZ, forceText);
       UpdateInput(serverUriInput, serverUri, forceText);
       UpdateInput(moduleNameInput, moduleName, forceText);
 
@@ -497,7 +457,7 @@ namespace Assets.Demo.Scripts.Multiplayer
       if (loadingText != null)
       {
         loadingText.text = isLoading
-          ? $"Loading CubusLoading | Scene: {loadingScenePath} | Elapsed: {Time.realtimeSinceStartup - loadingStartedAt:0.0}s | Progress: {loadingProgress * 100.0f:0}%"
+          ? $"Loading {loadingScenePath} | Elapsed: {Time.realtimeSinceStartup - loadingStartedAt:0.0}s | Progress: {loadingProgress * 100.0f:0}%"
           : string.Empty;
       }
 
@@ -588,21 +548,10 @@ namespace Assets.Demo.Scripts.Multiplayer
 
     private bool TryBuildLaunchContext()
     {
-      if (!int.TryParse(seed, out int parsedSeed)) { status = "Seed must be an integer."; return false; }
-      if (!float.TryParse(voxelSize, out float parsedVoxelSize) || parsedVoxelSize <= 0.0f) { status = "Voxel Size must be a positive number."; return false; }
-      if (!int.TryParse(minChunkY, out int parsedMinY) || !int.TryParse(maxChunkY, out int parsedMaxY)) { status = "Chunk Y bounds must be integers."; return false; }
-      if (!int.TryParse(minChunkX, out int parsedMinX) || !int.TryParse(minChunkZ, out int parsedMinZ) || !int.TryParse(maxChunkX, out int parsedMaxX) || !int.TryParse(maxChunkZ, out int parsedMaxZ)) { status = "World X/Z bounds must be integers."; return false; }
-      if (parsedMinY > parsedMaxY || parsedMinX > parsedMaxX || parsedMinZ > parsedMaxZ) { status = "Minimum bounds must be <= maximum bounds."; return false; }
-
-      if (mode == SetupMode.Local)
+      if (!int.TryParse(seed, out int parsedSeed))
       {
-        int chunkWidthX = parsedMaxX - parsedMinX + 1;
-        int chunkWidthZ = parsedMaxZ - parsedMinZ + 1;
-        if (chunkWidthX * chunkWidthZ > 1024)
-        {
-          status = "Local world bounds are too large for starter generation. Use roughly -8..8 first.";
-          return false;
-        }
+        status = "Seed must be an integer.";
+        return false;
       }
 
       DemoGameLaunchContext.Set(
@@ -612,11 +561,11 @@ namespace Assets.Demo.Scripts.Multiplayer
         worldId,
         GameTerrainSystem,
         parsedSeed,
-        parsedVoxelSize,
-        parsedMinY,
-        parsedMaxY,
-        new Vector2Int(parsedMinX, parsedMinZ),
-        new Vector2Int(parsedMaxX, parsedMaxZ),
+        GameVoxelSize,
+        GameMinChunkY,
+        GameMaxChunkY,
+        GameWorldMinChunkXZ,
+        GameWorldMaxChunkXZ,
         mode == SetupMode.Local,
         resetConnectedWorldOnLaunch && mode == SetupMode.Connected);
 
