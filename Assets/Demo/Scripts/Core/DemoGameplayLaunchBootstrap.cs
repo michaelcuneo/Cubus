@@ -2,6 +2,7 @@ using System.Collections;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Persistence;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming;
+using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -115,6 +116,19 @@ namespace Assets.Demo.Scripts.Core
       settings.DensityMinChunkY = DemoGameLaunchContext.MinChunkY;
       settings.DensityMaxChunkY = DemoGameLaunchContext.MaxChunkY;
       settings.InvalidateBiomeVariableCache();
+
+      if (DemoGameLaunchContext.TerrainSystem == TerrainSystem.Hybrid)
+      {
+        StreamingGenerationContext.SetHybridLayerGenerationModes(
+          HybridTerrainLayerGenerationMode.SparseOnly,
+          HybridTerrainLayerGenerationMode.ProceduralTerrain);
+      }
+      else
+      {
+        StreamingGenerationContext.SetHybridLayerGenerationModes(
+          HybridTerrainLayerGenerationMode.ProceduralTerrain,
+          HybridTerrainLayerGenerationMode.ProceduralTerrain);
+      }
 
       if (network != null)
       {
@@ -260,58 +274,19 @@ namespace Assets.Demo.Scripts.Core
       }
     }
 
-    private string DescribeLaunchSettings()
-    {
-      return $"Mode={DemoGameLaunchContext.Mode}, WorldId={DemoGameLaunchContext.WorldId}, Terrain={DemoGameLaunchContext.TerrainSystem}, Seed={DemoGameLaunchContext.WorldSeed}, Bounds={DemoGameLaunchContext.WorldMinChunkXZ}..{DemoGameLaunchContext.WorldMaxChunkXZ}, Y={DemoGameLaunchContext.MinChunkY}..{DemoGameLaunchContext.MaxChunkY}";
-    }
-
-    private void SetStage(string stage, string detail)
-    {
-      loadingStage = stage;
-      loadingDetail = detail;
-
-      if (logLoadingDiagnostics)
-      {
-        Debug.Log($"[CubusLaunch] {stage}. {detail}");
-      }
-    }
-
-    private void LogDiagnosticsSnapshot(string reason)
-    {
-      if (!logLoadingDiagnostics)
-      {
-        return;
-      }
-
-      float elapsed = Time.realtimeSinceStartup - loadingStartedAt;
-      Debug.Log($"[CubusLaunch] {reason}. Stage={loadingStage}; Detail={loadingDetail}; Elapsed={elapsed:0.0}s; Preparing={isPreparingWorld}; {BuildDebugSummary()}");
-    }
-
-    private string BuildDebugSummary()
-    {
-      WorldStreamer streamer = GetStreamer();
-      string streamerSummary = streamer == null
-          ? "Streamer=none"
-          : $"Streamer enabled={streamer.enabled}, heldByBootstrap={disabledStreamerAutoStartForLaunch}, initialStage={streamer.IsInitialStreamingStageActive}, viewerChunk={(streamer.HasLastViewerChunkCoord ? streamer.LastViewerChunkCoord.ToString() : "none")}, desired={streamer.DesiredChunkCount}, keep={streamer.KeepChunkCount}, knownEmpty={streamer.KnownEmptyChunkCount}, pendingLoad={streamer.PendingLoadCount}, pendingRender={streamer.PendingRenderCount}, pendingUnload={streamer.PendingUnloadCount}, activeLoads={streamer.ActiveChunkLoadTaskCount}, activeBlockBuilds={streamer.ActiveBlockBuildTaskCount}, activeDensityBuilds={streamer.ActiveDensityBuildTaskCount}, loadedTotal={streamer.TotalChunkLoadsCompleted}, loadFailures={streamer.TotalChunkLoadFailures}, blockApplies={streamer.TotalBlockMeshApplies}, densityApplies={streamer.TotalDensityMeshApplies}";
-
-      string worldSummary = world == null
-          ? "World=none"
-          : $"WorldReady={world.IsWorldReady}, InitialReady={world.IsInitialTerrainReady}, Generating={world.IsGeneratingWorld}, Progress={world.GenerationProgress:0.00}, Status={world.GenerationStatus}, Spawn={world.SuggestedSpawnLocation}";
-
-      string networkSummary = network == null
-          ? "Network=none"
-          : $"Network worldId={network.WorldId}, connected={network.IsConnected}, hasConn={network.Conn != null}, subscriptionApplied={network.IsSubscriptionApplied}";
-
-      return $"{worldSummary}; {streamerSummary}; {networkSummary}";
-    }
-
     private WorldStreamer GetStreamer()
     {
-      if (cachedStreamer == null && world != null)
+      if (cachedStreamer != null)
       {
-        cachedStreamer = world.GetComponent<WorldStreamer>();
+        return cachedStreamer;
       }
 
+      if (world == null)
+      {
+        FindReferences();
+      }
+
+      cachedStreamer = world != null ? world.GetComponent<WorldStreamer>() : null;
       return cachedStreamer;
     }
 
@@ -327,8 +302,6 @@ namespace Assets.Demo.Scripts.Core
         storage = world.GetComponent<CubusWorldStorage>();
       }
 
-      cachedStreamer = world != null ? world.GetComponent<WorldStreamer>() : null;
-
       if (network == null)
       {
         network = DemoNetworkManager.Instance != null
@@ -340,6 +313,51 @@ namespace Assets.Demo.Scripts.Core
       {
         spawnGate = FindAnyObjectByType<DemoInitialTerrainSpawnGate>();
       }
+    }
+
+    private void SetStage(string stage, string detail)
+    {
+      loadingStage = stage;
+      loadingDetail = detail ?? string.Empty;
+      if (logLoadingDiagnostics)
+      {
+        Debug.Log($"[DemoLaunch] {loadingStage}: {loadingDetail}");
+      }
+    }
+
+    private string DescribeLaunchSettings()
+    {
+      return $"Mode={DemoGameLaunchContext.Mode}, Terrain={DemoGameLaunchContext.TerrainSystem}, " +
+             $"WorldId={DemoGameLaunchContext.WorldId}, Seed={DemoGameLaunchContext.WorldSeed}, " +
+             $"Y={DemoGameLaunchContext.MinChunkY}..{DemoGameLaunchContext.MaxChunkY}, " +
+             $"XZ={DemoGameLaunchContext.WorldMinChunkXZ}..{DemoGameLaunchContext.WorldMaxChunkXZ}";
+    }
+
+    private void LogDiagnosticsSnapshot(string reason)
+    {
+      if (!logLoadingDiagnostics)
+      {
+        return;
+      }
+
+      Debug.Log($"[DemoLaunch] {reason}. {BuildDebugSummary()}");
+    }
+
+    private string BuildDebugSummary()
+    {
+      WorldStreamer streamer = GetStreamer();
+      if (streamer == null)
+      {
+        return $"Stage={loadingStage}, Detail={loadingDetail}, Warning={lastWarning}, Streamer=None";
+      }
+
+      return $"Stage={loadingStage}, Detail={loadingDetail}, Warning={lastWarning}, " +
+             $"Desired={streamer.DesiredChunkCount}, Keep={streamer.KeepChunkCount}, " +
+             $"PendingLoad={streamer.PendingLoadCount}/{streamer.PendingLoadSetCount}, " +
+             $"PendingRender={streamer.PendingRenderCount}/{streamer.PendingRenderSetCount}, " +
+             $"ActiveLoad={streamer.ActiveChunkLoadTaskCount}, ActiveBlock={streamer.ActiveBlockBuildTaskCount}, ActiveDensity={streamer.ActiveDensityBuildTaskCount}, " +
+             $"KnownEmpty={streamer.KnownEmptyChunkCount}, LastViewer={streamer.LastViewerChunkCoord}, HasLastViewer={streamer.HasLastViewerChunkCoord}, " +
+             $"InitialReady={(world != null && world.IsInitialTerrainReady)}, Finished={hasFinishedPreparation}, DisabledAutoStart={disabledStreamerAutoStartForLaunch}";
     }
   }
 }
