@@ -57,10 +57,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
         if (r.Failed)
         {
-          // The background build threw (typically transient). The chunk is NOT
-          // genuinely empty, so it must not be marked known-empty: that would
-          // leave a permanent hole that only a voxel edit could clear. The
-          // chunk data is still present, so requeue it to retry the mesh build.
           if (world.Data.BlockChunks.ContainsKey(r.ChunkCoord))
           {
             QueueRender(r.ChunkCoord, false);
@@ -72,20 +68,12 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
         if (r.IsEmpty || r.MeshData == null || r.MeshData.IsEmpty)
         {
-          // Only TRUST an empty mesh - and blacklist the chunk as known-empty -
-          // when it is genuinely empty: either it has no solid voxels at all, or
-          // it has solids but every in-bounds face neighbour was loaded at build
-          // time (a real buried/air chunk). A chunk that HAS solids and meshed
-          // empty while a face neighbour was still unloaded had that neighbour
-          // treated as SOLID, hiding its only visible face - a FALSE empty. Don't
-          // blacklist that, or it becomes a permanent hole; the neighbour is
-          // queued to load and a re-mesh (or settled reconciliation) fills it in.
           bool hasSolids = world.Data.BlockChunks.TryGetValue(r.ChunkCoord, out BlockChunkData rb) && rb != null && rb.HasAnySolidVoxel();
           if (!hasSolids || HasAllInBoundsBlockNeighborsLoaded(r.ChunkCoord))
           {
             knownEmptyChunks.Add(r.ChunkCoord);
           }
-          worldRenderer.RemoveChunk(r.ChunkCoord);
+          worldRenderer.RemoveBlockChunkMesh(r.ChunkCoord);
           ReturnMeshData(r.MeshData);
           blockCount++;
           continue;
@@ -97,8 +85,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         r.MeshData = null;
         blockCount++;
       }
-
-      return;
     }
 
     private void ProcessCompletedDensityBuildResults(int meshApplyBudget, float applyStartTime)
@@ -121,8 +107,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
         if (r.Failed)
         {
-          // Transient background-build exception. Requeue to retry instead of
-          // dropping the chunk and waiting on a later reconciliation pass.
           if (world.Data.DensityChunks.ContainsKey(r.ChunkCoord))
           {
             QueueRender(r.ChunkCoord, false);
@@ -134,7 +118,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
         if (r.MeshData == null || r.MeshData.IsEmpty)
         {
-          worldRenderer.RemoveChunk(r.ChunkCoord);
+          worldRenderer.RemoveDensityChunkMesh(r.ChunkCoord);
           ReturnMeshData(r);
           count++;
           continue;
