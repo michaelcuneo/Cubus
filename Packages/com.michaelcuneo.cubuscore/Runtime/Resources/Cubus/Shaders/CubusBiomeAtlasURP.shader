@@ -9,6 +9,7 @@ Shader "Cubus/BiomeAtlasURP"
     _PropsLookup("Props Lookup", 2D) = "black" {}
     _NormalAtlas("Biome Normal Atlas", 2D) = "bump" {}
     _AtlasGrid("Atlas Grid (X Columns, Y Rows)", Vector) = (4, 4, 0, 0)
+    _UseSceneFog("Use Scene Fog", Range(0, 1)) = 0
     _Tint("Tint", Color) = (1, 1, 1, 1)
     _NormalStrength("Normal Strength", Range(0, 2)) = 1.0
     _DetailBumpStrength("Detail Bump From Albedo", Range(0, 4)) = 0.0
@@ -86,6 +87,7 @@ Shader "Cubus/BiomeAtlasURP"
       float4 _Tint;
       float4 _Atlas_TexelSize;
       float _NormalStrength;
+      float _UseSceneFog;
       float _DetailBumpStrength;
       float _Smoothness;
       float _SpecularStrength;
@@ -292,7 +294,12 @@ Shader "Cubus/BiomeAtlasURP"
 
         float3 perturbedNormalWS = PerturbNormal(normalWS, IN.positionWS, unwrappedTileUv, tangentNormal);
         float3 lit = ApplyLighting(albedo.rgb * _Tint.rgb, IN.positionWS, perturbedNormalWS);
-        lit = MixFog(lit, IN.fogCoord);
+
+        if (_UseSceneFog > 0.5)
+        {
+          lit = MixFog(lit, IN.fogCoord);
+        }
+
         return half4(lit, 1.0);
       }
 
