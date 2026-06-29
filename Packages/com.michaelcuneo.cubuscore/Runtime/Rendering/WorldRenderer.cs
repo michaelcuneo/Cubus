@@ -47,6 +47,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
 
     private Material runtimeBlockMaterial;
     private Material runtimeDensityMaterial;
+    private Texture2D generatedFallbackAtlas;
     private Texture2D topLookupTexture;
     private Texture2D sideLookupTexture;
     private Texture2D bottomLookupTexture;
@@ -61,14 +62,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
     private float timeSinceLastCollisionUpdate;
 
     private const int LookupTextureSize = 256;
-
-    private enum MaterialAtlasSide
-    {
-      Top,
-      Side,
-      Bottom,
-      Props
-    }
 
     public IReadOnlyDictionary<Vector3Int, ChunkView> ActiveChunkViews => activeChunkViews;
 
@@ -488,7 +481,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
     {
       if (runtimeBlockMaterial != null)
       {
-        ConfigureTerrainMaterial(runtimeBlockMaterial);
+        ConfigureBlockMaterial(runtimeBlockMaterial);
         return;
       }
 
@@ -496,14 +489,14 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
         blockWorldMaterial,
         useBlockBiomeAtlasShader ? blockBiomeAtlasShaderName : null,
         "Cubus Runtime Block Material");
-      ConfigureTerrainMaterial(runtimeBlockMaterial);
+      ConfigureBlockMaterial(runtimeBlockMaterial);
     }
 
     private void EnsureDensityWorldMaterial()
     {
       if (runtimeDensityMaterial != null)
       {
-        ConfigureTerrainMaterial(runtimeDensityMaterial);
+        ConfigureDensityMaterial(runtimeDensityMaterial);
         return;
       }
 
@@ -511,137 +504,287 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
         densityWorldMaterial,
         useDensityBiomeShader ? densityBiomeShaderName : null,
         "Cubus Runtime Density Material");
-      ConfigureTerrainMaterial(runtimeDensityMaterial);
+      ConfigureDensityMaterial(runtimeDensityMaterial);
     }
 
     private static Material CreateRuntimeTerrainMaterial(Material assignedMaterial, string preferredShaderName, string runtimeName)
     {
       if (assignedMaterial != null)
       {
-        Material clone = new(assignedMaterial)
-        {
-          name = runtimeName + " (Instance)"
-        };
-        return clone;
+        return new Material(assignedMaterial) { name = runtimeName + " (Instance)" };
       }
 
       Shader shader = !string.IsNullOrWhiteSpace(preferredShaderName) ? Shader.Find(preferredShaderName) : null;
-      shader ??= Shader.Find("Universal Render Pipeline/Lit");
-      shader ??= Shader.Find("Standard");
+      shader = IsUsableShader(shader) ? shader : Shader.Find("Universal Render Pipeline/Lit");
+      shader = IsUsableShader(shader) ? shader : Shader.Find("Standard");
       return new Material(shader) { name = runtimeName };
     }
 
-    private void ConfigureTerrainMaterial(Material material)
+    private static bool IsUsableShader(Shader shader)
     {
-      if (material == null)
-      {
-        return;
-      }
+      if (shader == null || !shader.isSupported || shader.passCount <= 0) return false;
+      string shaderName = shader.name;
+      return !string.IsNullOrEmpty(shaderName) && !shaderName.Contains("InternalErrorShader") && !shaderName.Contains("FallbackError");
+    }
 
-      Texture mainTexture = biomeTextureAtlas != null ? biomeTextureAtlas : material.mainTexture;
-      if (mainTexture != null)
-      {
-        SetTextureIfPropertyExists(material, "_BiomeAtlas", mainTexture);
-        SetTextureIfPropertyExists(material, "_BaseMap", mainTexture);
-        SetTextureIfPropertyExists(material, "_MainTex", mainTexture);
-        material.mainTexture = mainTexture;
-      }
+    private void ConfigureBlockMaterial(Material material)
+    {
+      ApplyCommonAtlasProperties(material);
+      ApplyBlockMaterialLookups(material);
+    }
 
-      if (biomeNormalAtlas != null)
-      {
-        SetTextureIfPropertyExists(material, "_BiomeNormalAtlas", biomeNormalAtlas);
-        SetTextureIfPropertyExists(material, "_NormalAtlas", biomeNormalAtlas);
-        SetTextureIfPropertyExists(material, "_BumpMap", biomeNormalAtlas);
-        material.EnableKeyword("_NORMALMAP");
-      }
+    private void ConfigureDensityMaterial(Material material)
+    {
+      ApplyCommonAtlasProperties(material);
+      ApplyDensityMaterialLookups(material);
+    }
 
+    private void ApplyCommonAtlasProperties(Material material)
+    {
+      if (material == null) return;
+
+      Texture2D atlas = biomeTextureAtlas != null ? biomeTextureAtlas : GetOrCreateFallbackAtlas();
+
+      SetTextureIfPropertyExists(material, "_Atlas", atlas);
+      SetTextureIfPropertyExists(material, "_BiomeAtlas", atlas);
+      SetTextureIfPropertyExists(material, "_BaseMap", atlas);
+      SetTextureIfPropertyExists(material, "_MainTex", atlas);
+      material.mainTexture = atlas;
+
+      SetColorIfPropertyExists(material, "_Tint", biomeTint);
       SetColorIfPropertyExists(material, "_BiomeTint", biomeTint);
       SetColorIfPropertyExists(material, "_BaseColor", biomeTint);
       SetColorIfPropertyExists(material, "_Color", biomeTint);
 
       SetVectorIfPropertyExists(material, "_AtlasGrid", new Vector4(Mathf.Max(1, biomeAtlasGrid.x), Mathf.Max(1, biomeAtlasGrid.y), 0, 0));
-      SetFloatIfPropertyExists(material, "_NormalStrength", normalStrength);
-      SetFloatIfPropertyExists(material, "_DetailBumpStrength", detailBumpStrength);
-      SetFloatIfPropertyExists(material, "_SurfaceSmoothness", surfaceSmoothness);
-      SetFloatIfPropertyExists(material, "_Smoothness", surfaceSmoothness);
-      SetFloatIfPropertyExists(material, "_SpecularStrength", specularStrength);
-      SetFloatIfPropertyExists(material, "_FresnelStrength", fresnelStrength);
+      SetFloatIfPropertyExists(material, "_TextureScale", 0.25f);
+      SetFloatIfPropertyExists(material, "_TriplanarSharpness", 4.0f);
 
-      ConfigureMaterialLookupTextures(material);
-    }
-
-    private void ConfigureMaterialLookupTextures(Material material)
-    {
-      if (material == null || blockMaterialDatabase == null || blockMaterialDatabase.Definitions == null)
+      if (biomeNormalAtlas != null)
       {
-        return;
+        SetTextureIfPropertyExists(material, "_NormalAtlas", biomeNormalAtlas);
+        SetTextureIfPropertyExists(material, "_BiomeNormalAtlas", biomeNormalAtlas);
+        SetTextureIfPropertyExists(material, "_BumpMap", biomeNormalAtlas);
+        material.EnableKeyword("_NORMALMAP");
       }
 
+      SetFloatIfPropertyExists(material, "_NormalStrength", normalStrength);
+      SetFloatIfPropertyExists(material, "_DetailBumpStrength", detailBumpStrength);
+      SetFloatIfPropertyExists(material, "_Smoothness", surfaceSmoothness);
+      SetFloatIfPropertyExists(material, "_SurfaceSmoothness", surfaceSmoothness);
+      SetFloatIfPropertyExists(material, "_SpecularStrength", specularStrength);
+      SetFloatIfPropertyExists(material, "_FresnelStrength", fresnelStrength);
+    }
+
+    private void ApplyBlockMaterialLookups(Material material)
+    {
+      if (material == null) return;
       EnsureLookupTextures();
+
+      int texelCount = LookupTextureSize * LookupTextureSize;
+      Color32[] topPixels = new Color32[texelCount];
+      Color32[] sidePixels = new Color32[texelCount];
+      Color32[] bottomPixels = new Color32[texelCount];
+      Color32[] propsPixels = new Color32[texelCount];
+
+      for (int id = 0; id < texelCount; id++)
+      {
+        ushort fallbackTileId = (ushort)Mathf.Clamp(id == 0 ? 1 : id, 1, 64);
+        Color32 encodedFallbackTile = EncodeU16(fallbackTileId);
+        topPixels[id] = encodedFallbackTile;
+        sidePixels[id] = encodedFallbackTile;
+        bottomPixels[id] = encodedFallbackTile;
+        propsPixels[id] = new Color32((byte)BlockRenderCategory.Opaque, (byte)BlockLightingCategory.Lit, 0, 255);
+      }
+
+      ApplyDefaultMaterialMapping(topPixels, sidePixels, bottomPixels, propsPixels);
+
+      if (blockMaterialDatabase != null && blockMaterialDatabase.Definitions != null)
+      {
+        for (int i = 0; i < blockMaterialDatabase.Definitions.Count; i++)
+        {
+          BlockMaterialDefinition def = blockMaterialDatabase.Definitions[i];
+          if (def == null) continue;
+
+          int materialId = Mathf.Clamp(def.MaterialId, 1, 65535);
+          topPixels[materialId] = EncodeU16((ushort)Mathf.Clamp(def.TopTileId, 1, 64));
+          sidePixels[materialId] = EncodeU16((ushort)Mathf.Clamp(def.SideTileId, 1, 64));
+          bottomPixels[materialId] = EncodeU16((ushort)Mathf.Clamp(def.BottomTileId, 1, 64));
+          propsPixels[materialId] = new Color32(
+            (byte)def.RenderCategory,
+            (byte)def.LightingCategory,
+            (byte)Mathf.Clamp(Mathf.RoundToInt(def.EmissionIntensity * 31.875f), 0, 255),
+            255);
+        }
+      }
+
+      topLookupTexture.SetPixels32(topPixels);
+      sideLookupTexture.SetPixels32(sidePixels);
+      bottomLookupTexture.SetPixels32(bottomPixels);
+      propsLookupTexture.SetPixels32(propsPixels);
+      topLookupTexture.Apply(false, false);
+      sideLookupTexture.Apply(false, false);
+      bottomLookupTexture.Apply(false, false);
+      propsLookupTexture.Apply(false, false);
+
+      SetTextureIfPropertyExists(material, "_TopLookup", topLookupTexture);
+      SetTextureIfPropertyExists(material, "_SideLookup", sideLookupTexture);
+      SetTextureIfPropertyExists(material, "_BottomLookup", bottomLookupTexture);
+      SetTextureIfPropertyExists(material, "_PropsLookup", propsLookupTexture);
       SetTextureIfPropertyExists(material, "_TopAtlasLookup", topLookupTexture);
       SetTextureIfPropertyExists(material, "_SideAtlasLookup", sideLookupTexture);
       SetTextureIfPropertyExists(material, "_BottomAtlasLookup", bottomLookupTexture);
       SetTextureIfPropertyExists(material, "_PropsAtlasLookup", propsLookupTexture);
     }
 
+    private void ApplyDensityMaterialLookups(Material material)
+    {
+      if (material == null) return;
+      EnsureLookupTextures();
+
+      int texelCount = LookupTextureSize * LookupTextureSize;
+      Color32[] densityPixels = new Color32[texelCount];
+      Color32[] propsPixels = new Color32[texelCount];
+
+      for (int id = 0; id < texelCount; id++)
+      {
+        ushort fallbackTileId = (ushort)Mathf.Clamp(id == 0 ? 1 : id, 1, 64);
+        densityPixels[id] = EncodeU16(fallbackTileId);
+        propsPixels[id] = new Color32((byte)BlockRenderCategory.Opaque, (byte)BlockLightingCategory.Lit, 0, 255);
+      }
+
+      ApplyDefaultDensityMaterialMapping(densityPixels, propsPixels);
+
+      if (blockMaterialDatabase != null && blockMaterialDatabase.Definitions != null)
+      {
+        for (int i = 0; i < blockMaterialDatabase.Definitions.Count; i++)
+        {
+          BlockMaterialDefinition def = blockMaterialDatabase.Definitions[i];
+          if (def == null) continue;
+
+          int materialId = Mathf.Clamp(def.MaterialId, 1, 65535);
+          densityPixels[materialId] = EncodeU16((ushort)Mathf.Clamp(def.SideTileId, 1, 64));
+          propsPixels[materialId] = new Color32(
+            (byte)def.RenderCategory,
+            (byte)def.LightingCategory,
+            (byte)Mathf.Clamp(Mathf.RoundToInt(def.EmissionIntensity * 31.875f), 0, 255),
+            255);
+        }
+      }
+
+      topLookupTexture.SetPixels32(densityPixels);
+      propsLookupTexture.SetPixels32(propsPixels);
+      topLookupTexture.Apply(false, false);
+      propsLookupTexture.Apply(false, false);
+
+      SetTextureIfPropertyExists(material, "_DensityLookup", topLookupTexture);
+      SetTextureIfPropertyExists(material, "_TopLookup", topLookupTexture);
+      SetTextureIfPropertyExists(material, "_PropsLookup", propsLookupTexture);
+      SetTextureIfPropertyExists(material, "_TopAtlasLookup", topLookupTexture);
+      SetTextureIfPropertyExists(material, "_PropsAtlasLookup", propsLookupTexture);
+    }
+
+    private static void ApplyDefaultDensityMaterialMapping(Color32[] densityPixels, Color32[] propsPixels)
+    {
+      for (int materialId = 1; materialId <= 20; materialId++)
+      {
+        densityPixels[materialId] = EncodeU16((ushort)Mathf.Clamp(materialId, 1, 64));
+        propsPixels[materialId] = new Color32((byte)BlockRenderCategory.Opaque, (byte)BlockLightingCategory.Lit, 0, 255);
+      }
+    }
+
+    private static void ApplyDefaultMaterialMapping(Color32[] topPixels, Color32[] sidePixels, Color32[] bottomPixels, Color32[] propsPixels)
+    {
+      SetMaterialLookup(topPixels, sidePixels, bottomPixels, propsPixels, 1, 1, 2, 3, BlockRenderCategory.Opaque, BlockLightingCategory.Lit, 0.0f);
+      SetMaterialLookup(topPixels, sidePixels, bottomPixels, propsPixels, 2, 2, 2, 3, BlockRenderCategory.Opaque, BlockLightingCategory.Lit, 0.0f);
+      for (int materialId = 3; materialId <= 20; materialId++)
+      {
+        SetMaterialLookup(topPixels, sidePixels, bottomPixels, propsPixels, materialId, materialId, materialId, materialId, BlockRenderCategory.Opaque, BlockLightingCategory.Lit, 0.0f);
+      }
+    }
+
+    private static void SetMaterialLookup(
+      Color32[] topPixels,
+      Color32[] sidePixels,
+      Color32[] bottomPixels,
+      Color32[] propsPixels,
+      int materialId,
+      int topTileId,
+      int sideTileId,
+      int bottomTileId,
+      BlockRenderCategory renderCategory,
+      BlockLightingCategory lightingCategory,
+      float emissionIntensity)
+    {
+      int safeMaterialId = Mathf.Clamp(materialId, 1, 65535);
+      topPixels[safeMaterialId] = EncodeU16((ushort)Mathf.Clamp(topTileId, 1, 64));
+      sidePixels[safeMaterialId] = EncodeU16((ushort)Mathf.Clamp(sideTileId, 1, 64));
+      bottomPixels[safeMaterialId] = EncodeU16((ushort)Mathf.Clamp(bottomTileId, 1, 64));
+      propsPixels[safeMaterialId] = new Color32(
+        (byte)renderCategory,
+        (byte)lightingCategory,
+        (byte)Mathf.Clamp(Mathf.RoundToInt(emissionIntensity * 31.875f), 0, 255),
+        255);
+    }
+
     private void EnsureLookupTextures()
     {
-      topLookupTexture ??= CreateLookupTexture("Cubus Top Atlas Lookup");
-      sideLookupTexture ??= CreateLookupTexture("Cubus Side Atlas Lookup");
-      bottomLookupTexture ??= CreateLookupTexture("Cubus Bottom Atlas Lookup");
-      propsLookupTexture ??= CreateLookupTexture("Cubus Props Atlas Lookup");
-      PopulateLookupTexture(topLookupTexture, MaterialAtlasSide.Top);
-      PopulateLookupTexture(sideLookupTexture, MaterialAtlasSide.Side);
-      PopulateLookupTexture(bottomLookupTexture, MaterialAtlasSide.Bottom);
-      PopulateLookupTexture(propsLookupTexture, MaterialAtlasSide.Props);
+      topLookupTexture ??= CreateLookupTexture("Cubus Top Lookup");
+      sideLookupTexture ??= CreateLookupTexture("Cubus Side Lookup");
+      bottomLookupTexture ??= CreateLookupTexture("Cubus Bottom Lookup");
+      propsLookupTexture ??= CreateLookupTexture("Cubus Props Lookup");
     }
 
     private static Texture2D CreateLookupTexture(string textureName)
     {
-      Texture2D texture = new(LookupTextureSize, 1, TextureFormat.RGBA32, false, true)
+      return new Texture2D(LookupTextureSize, LookupTextureSize, TextureFormat.RGBA32, false)
       {
         name = textureName,
-        filterMode = FilterMode.Point,
-        wrapMode = TextureWrapMode.Clamp
+        wrapMode = TextureWrapMode.Clamp,
+        filterMode = FilterMode.Point
       };
-      return texture;
     }
 
-    private void PopulateLookupTexture(Texture2D texture, MaterialAtlasSide side)
+    private static Color32 EncodeU16(ushort value)
     {
-      if (texture == null || blockMaterialDatabase == null || blockMaterialDatabase.Definitions == null)
+      return new Color32((byte)(value & 0xFF), (byte)((value >> 8) & 0xFF), 0, 255);
+    }
+
+    private Texture2D GetOrCreateFallbackAtlas()
+    {
+      if (generatedFallbackAtlas != null)
       {
-        return;
+        return generatedFallbackAtlas;
       }
 
-      Color[] pixels = new Color[LookupTextureSize];
-      int atlasColumns = Mathf.Max(1, biomeAtlasGrid.x);
-      int atlasRows = Mathf.Max(1, biomeAtlasGrid.y);
-      int atlasTileCount = Mathf.Max(1, atlasColumns * atlasRows);
+      const int tilesPerAxis = 4;
+      const int tileSize = 32;
+      int size = tilesPerAxis * tileSize;
 
-      for (int i = 0; i < blockMaterialDatabase.Definitions.Count; i++)
+      generatedFallbackAtlas = new Texture2D(size, size, TextureFormat.RGBA32, false)
       {
-        BlockMaterialDefinition definition = blockMaterialDatabase.Definitions[i];
-        if (definition == null) continue;
+        name = "Cubus Fallback Material Atlas",
+        wrapMode = TextureWrapMode.Repeat,
+        filterMode = FilterMode.Point
+      };
 
-        int materialId = Mathf.Clamp(definition.MaterialId, 0, LookupTextureSize - 1);
-        int tileId = side switch
+      for (int y = 0; y < size; y++)
+      {
+        for (int x = 0; x < size; x++)
         {
-          MaterialAtlasSide.Top => definition.TopTileId,
-          MaterialAtlasSide.Side => definition.SideTileId,
-          MaterialAtlasSide.Bottom => definition.BottomTileId,
-          MaterialAtlasSide.Props => definition.SideTileId,
-          _ => definition.SideTileId
-        };
-
-        int zeroBasedTileId = Mathf.Clamp(tileId - 1, 0, atlasTileCount - 1);
-        int atlasX = zeroBasedTileId % atlasColumns;
-        int atlasY = zeroBasedTileId / atlasColumns;
-        pixels[materialId] = new Color(atlasX / 255.0f, atlasY / 255.0f, 0, 1);
+          int tileX = x / tileSize;
+          int tileY = y / tileSize;
+          int tileIndex = tileY * tilesPerAxis + tileX;
+          float hue = (tileIndex % (tilesPerAxis * tilesPerAxis)) / (float)(tilesPerAxis * tilesPerAxis);
+          Color baseColor = Color.HSVToRGB(hue, 0.65f, 0.9f);
+          bool checker = ((x + y) & 4) == 0;
+          Color shaded = checker ? baseColor : Color.Lerp(baseColor, Color.black, 0.2f);
+          generatedFallbackAtlas.SetPixel(x, y, shaded);
+        }
       }
 
-      texture.SetPixels(pixels);
-      texture.Apply(false, false);
+      generatedFallbackAtlas.Apply(false, false);
+      return generatedFallbackAtlas;
     }
 
     private static void SetTextureIfPropertyExists(Material material, string propertyName, Texture texture)
@@ -681,10 +824,11 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
       ClearAll();
       DestroyRuntimeMaterial(ref runtimeBlockMaterial, blockWorldMaterial);
       DestroyRuntimeMaterial(ref runtimeDensityMaterial, densityWorldMaterial);
-      DestroyLookupTexture(ref topLookupTexture);
-      DestroyLookupTexture(ref sideLookupTexture);
-      DestroyLookupTexture(ref bottomLookupTexture);
-      DestroyLookupTexture(ref propsLookupTexture);
+      DestroyTexture(ref generatedFallbackAtlas);
+      DestroyTexture(ref topLookupTexture);
+      DestroyTexture(ref sideLookupTexture);
+      DestroyTexture(ref bottomLookupTexture);
+      DestroyTexture(ref propsLookupTexture);
 
       if (chunkPool != null)
       {
@@ -697,6 +841,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
     {
       if (runtimeMaterial == null || runtimeMaterial == assignedMaterial)
       {
+        runtimeMaterial = null;
         return;
       }
 
@@ -705,7 +850,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
       runtimeMaterial = null;
     }
 
-    private static void DestroyLookupTexture(ref Texture2D texture)
+    private static void DestroyTexture(ref Texture2D texture)
     {
       if (texture == null) return;
       if (Application.isPlaying) Destroy(texture);
