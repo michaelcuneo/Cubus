@@ -57,6 +57,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
     private void QueueGeneratedChunksForRender(Vector3Int viewerChunkCoord)
     {
+      ResolveVisibilityCamera();
       candidateChunksBuffer.Clear();
       foreach (Vector3Int chunkCoord in desiredChunkCoords)
       {
@@ -71,6 +72,11 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         bool densityNeedsRender = NeedsDensityRenderOrLoad(chunkCoord);
 
         if (!blockNeedsRender && !densityNeedsRender)
+        {
+          continue;
+        }
+
+        if (!ShouldQueueMeshWorkForChunk(chunkCoord))
         {
           continue;
         }
@@ -157,17 +163,34 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
     private Vector3Int ComputeSortPivot()
     {
+      Camera camera = cachedVisibilityCamera != null ? cachedVisibilityCamera : ResolveVisibilityCamera();
+      if (camera != null)
+      {
+        Vector3 forward = camera.transform.forward;
+        forward.y = 0.0f;
+
+        if (forward.sqrMagnitude > 0.0001f)
+        {
+          forward.Normalize();
+          int lead = Mathf.Max(2, ActiveDesiredRadiusInChunks / 2);
+          return new Vector3Int(
+            lastViewerChunkCoord.x + Mathf.RoundToInt(forward.x * lead),
+            lastViewerChunkCoord.y,
+            lastViewerChunkCoord.z + Mathf.RoundToInt(forward.z * lead));
+        }
+      }
+
       if (!hasLastViewerChunkCoord) return lastViewerChunkCoord;
 
-      int lead = Mathf.Max(2, ActiveDesiredRadiusInChunks / 2);
+      int fallbackLead = Mathf.Max(2, ActiveDesiredRadiusInChunks / 2);
       Vector3 heading = new(viewerHeading.x, 0.0f, viewerHeading.z);
       if (heading.sqrMagnitude < 0.0001f) return lastViewerChunkCoord;
 
       heading.Normalize();
       return new Vector3Int(
-        lastViewerChunkCoord.x + Mathf.RoundToInt(heading.x * lead),
+        lastViewerChunkCoord.x + Mathf.RoundToInt(heading.x * fallbackLead),
         lastViewerChunkCoord.y,
-        lastViewerChunkCoord.z + Mathf.RoundToInt(heading.z * lead));
+        lastViewerChunkCoord.z + Mathf.RoundToInt(heading.z * fallbackLead));
     }
 
     private int CompareChunkPriorityByPivot(Vector3Int a, Vector3Int b) => CompareChunkPriority(a, b, sortPivotChunkCoord);
