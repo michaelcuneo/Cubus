@@ -10,21 +10,9 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
   {
     private bool EnsureDensitySampleChunksAvailableForMesh(Vector3Int root)
     {
-      for (int i = 0; i < DensityMeshSampleDependencyPlanner.SampleChunkOffsets.Length; i++)
-      {
-        Vector3Int sampleCoord = root + DensityMeshSampleDependencyPlanner.SampleChunkOffsets[i];
-        if (!world.Settings.IsInsideEffectiveWorldBounds3D(sampleCoord)) continue;
-        if (world.Data.DensityChunks.ContainsKey(sampleCoord)) continue;
-
-        bool cacheHit = DensitySampleChunkCache.TryGet(sampleCoord, out DensityChunkData cachedChunk);
-        if (cacheHit && cachedChunk != null) continue;
-
-        DensitySampleChunkCache.GetOrCreate(
-          sampleCoord,
-          worldSnapshot,
-          world.CreateDensityOverrideSnapshot(sampleCoord));
-      }
-
+      // Edge/sample chunks are populated inside DensityChunkBuildQueue.Build on
+      // the worker thread. Do not generate sample cache data here; this method
+      // runs during render scheduling on the main thread.
       return true;
     }
 
