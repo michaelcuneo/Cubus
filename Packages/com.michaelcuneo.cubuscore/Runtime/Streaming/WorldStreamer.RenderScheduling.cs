@@ -136,6 +136,12 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         return false;
       }
 
+      if (!EnsureDensitySampleChunksAvailableForMesh(c))
+      {
+        QueueDensityRender(c, false);
+        return false;
+      }
+
       int totalActiveTasks = chunkLoadQueue.ActiveTaskCount + buildQueue.ActiveTaskCount + densityBuildQueue.ActiveTaskCount;
 
       if (densityBuildQueue.ActiveTaskCount >= MaxDensityAsyncTasks || totalActiveTasks >= MaxTotalAsyncTasks)
