@@ -1,7 +1,5 @@
-using System.Collections.Generic;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Chunks;
-using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Core;
-using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Voxels;
+using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World;
 using UnityEngine;
 
@@ -18,32 +16,43 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         WorldSnapshot = worldSnapshot,
         VoxelSize = world.Settings.VoxelSize,
         ChunkDataSnapshot = chunkData,
-        NeighborChunkSnapshots = CreateBlockMeshChunkSnapshots(chunkCoord),
-        SolidFallbackNeighborChunks = IsHybridTerrainEnabled ? null : CollectUnloadedInBoundsBlockNeighbors(chunkCoord)
+        BlockNeighborhood = CreateBlockMeshNeighborhood(chunkCoord, chunkData)
       };
 
       return buildQueue.TryStartBuild(request, MaxBlockAsyncTasks);
     }
 
-    private Dictionary<Vector3Int, BlockChunkData> CreateBlockMeshChunkSnapshots(Vector3Int root)
+    private BlockChunkNeighborhood CreateBlockMeshNeighborhood(Vector3Int root, BlockChunkData center)
     {
-      Dictionary<Vector3Int, BlockChunkData> snapshots = null;
+      world.Data.BlockChunks.TryGetValue(root + Vector3Int.right, out BlockChunkData xPositive);
+      world.Data.BlockChunks.TryGetValue(root + Vector3Int.left, out BlockChunkData xNegative);
+      world.Data.BlockChunks.TryGetValue(root + Vector3Int.up, out BlockChunkData yPositive);
+      world.Data.BlockChunks.TryGetValue(root + Vector3Int.down, out BlockChunkData yNegative);
+      world.Data.BlockChunks.TryGetValue(root + new Vector3Int(0, 0, 1), out BlockChunkData zPositive);
+      world.Data.BlockChunks.TryGetValue(root + new Vector3Int(0, 0, -1), out BlockChunkData zNegative);
 
-      for (int i = 0; i < BlockMeshNeighborOffsets.Length; i++)
-      {
-        Vector3Int offset = BlockMeshNeighborOffsets[i];
-        Vector3Int c = root + offset;
+      bool useSolidFallback = !IsHybridTerrainEnabled;
 
-        if (!world.Data.BlockChunks.TryGetValue(c, out BlockChunkData source) || source == null)
-        {
-          continue;
-        }
+      return new BlockChunkNeighborhood(
+        center,
+        xPositive,
+        xNegative,
+        yPositive,
+        yNegative,
+        zPositive,
+        zNegative,
+        useSolidFallback && xPositive == null && IsInBoundsBlockNeighbor(root + Vector3Int.right),
+        useSolidFallback && xNegative == null && IsInBoundsBlockNeighbor(root + Vector3Int.left),
+        useSolidFallback && yPositive == null && IsInBoundsBlockNeighbor(root + Vector3Int.up),
+        useSolidFallback && yNegative == null && IsInBoundsBlockNeighbor(root + Vector3Int.down),
+        useSolidFallback && zPositive == null && IsInBoundsBlockNeighbor(root + new Vector3Int(0, 0, 1)),
+        useSolidFallback && zNegative == null && IsInBoundsBlockNeighbor(root + new Vector3Int(0, 0, -1))
+      );
+    }
 
-        snapshots ??= new Dictionary<Vector3Int, BlockChunkData>();
-        snapshots[c] = CloneNeighborBoundaryFace(source, offset);
-      }
-
-      return snapshots;
+    private bool IsInBoundsBlockNeighbor(Vector3Int chunkCoord)
+    {
+      return world != null && world.Settings != null && world.Settings.IsInsideEffectiveWorldBounds3D(chunkCoord);
     }
 
     private bool HasAllInBoundsBlockNeighborsLoaded(Vector3Int root)
@@ -56,66 +65,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       }
 
       return true;
-    }
-
-    private HashSet<Vector3Int> CollectUnloadedInBoundsBlockNeighbors(Vector3Int root)
-    {
-      HashSet<Vector3Int> unloaded = null;
-
-      for (int i = 0; i < BlockMeshNeighborOffsets.Length; i++)
-      {
-        Vector3Int c = root + BlockMeshNeighborOffsets[i];
-
-        if (
-          world.Data.BlockChunks.ContainsKey(c) ||
-          !world.Settings.IsInsideEffectiveWorldBounds3D(c)
-        )
-        {
-          continue;
-        }
-
-        (unloaded ??= new HashSet<Vector3Int>()).Add(c);
-      }
-
-      return unloaded;
-    }
-
-    private static BlockChunkData CloneNeighborBoundaryFace(BlockChunkData source, Vector3Int offset)
-    {
-      const int size = VoxelConstants.ChunkSize;
-      Voxel[] rented = VoxelArrayPool.Rent();
-      Voxel[] src = source.GetRawVoxelArray();
-
-      if (offset.x != 0)
-      {
-        int x = offset.x < 0 ? size - 1 : 0;
-        for (int z = 0; z < size; z++)
-        {
-          int planeBase = size * size * z + x;
-          for (int y = 0; y < size; y++)
-          {
-            int idx = planeBase + size * y;
-            rented[idx] = src[idx];
-          }
-        }
-      }
-      else if (offset.y != 0)
-      {
-        int y = offset.y < 0 ? size - 1 : 0;
-        for (int z = 0; z < size; z++)
-        {
-          int rowBase = size * (y + size * z);
-          System.Array.Copy(src, rowBase, rented, rowBase, size);
-        }
-      }
-      else
-      {
-        int z = offset.z < 0 ? size - 1 : 0;
-        int planeBase = size * size * z;
-        System.Array.Copy(src, planeBase, rented, planeBase, size * size);
-      }
-
-      return new BlockChunkData(source.ChunkCoord, rented);
     }
 
     private void RequeueSettledBlockNeighbors(Vector3Int chunkCoord)
