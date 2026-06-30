@@ -52,11 +52,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
 
     public void SaveChunkLayer(WorldChunkRecord chunk)
     {
-      if (chunk == null)
-      {
-        return;
-      }
-
       int generation = GetWriteGeneration(chunk.WorldId);
       _ = Task.Run(() => WriteChunk(chunk, generation));
     }
