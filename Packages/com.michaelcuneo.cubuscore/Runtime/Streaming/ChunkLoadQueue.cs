@@ -60,6 +60,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       {
         completedResults.Clear();
       }
+
+      DensitySampleChunkCache.Clear();
     }
 
     public bool TryStartLoad(
