@@ -23,8 +23,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
             continue;
           }
 
-          knownEmptyChunks.Remove(c);
-          QueueRender(c);
+          knownEmptyDensityChunks.Remove(c);
+          QueueDensityRender(c);
         }
       }
     }
@@ -72,7 +72,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       }
 
       knownEmptyChunks.Remove(chunkCoord);
-      QueueRender(chunkCoord);
+      QueueBlockRender(chunkCoord);
     }
 
     private void AddEditedBlockChunkCandidate(Vector3Int chunkCoord)

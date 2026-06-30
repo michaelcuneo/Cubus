@@ -10,7 +10,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     private static bool hasContext;
     private static TerrainSystem terrainSystem;
     private static WorldGenerationSnapshot worldSnapshot;
-    private static HybridTerrainLayerGenerationMode hybridBlockLayerMode = HybridTerrainLayerGenerationMode.ProceduralTerrain;
+    private static HybridTerrainLayerGenerationMode hybridBlockLayerMode = HybridTerrainLayerGenerationMode.SparseOnly;
     private static HybridTerrainLayerGenerationMode hybridDensityLayerMode = HybridTerrainLayerGenerationMode.ProceduralTerrain;
 
     public static void Set(WorldSettings settings)
@@ -22,11 +22,17 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
           hasContext = false;
           terrainSystem = default;
           worldSnapshot = default;
+          hybridBlockLayerMode = HybridTerrainLayerGenerationMode.SparseOnly;
+          hybridDensityLayerMode = HybridTerrainLayerGenerationMode.ProceduralTerrain;
           return;
         }
 
         terrainSystem = settings.TerrainSystem;
         worldSnapshot = WorldGenerationSnapshot.FromSettings(settings);
+        hybridBlockLayerMode = terrainSystem == TerrainSystem.Hybrid
+          ? HybridTerrainLayerGenerationMode.SparseOnly
+          : HybridTerrainLayerGenerationMode.ProceduralTerrain;
+        hybridDensityLayerMode = HybridTerrainLayerGenerationMode.ProceduralTerrain;
         hasContext = true;
       }
     }
@@ -67,7 +73,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
       activeTerrainSystem = default;
       snapshot = default;
-      blockLayerMode = HybridTerrainLayerGenerationMode.ProceduralTerrain;
+      blockLayerMode = HybridTerrainLayerGenerationMode.SparseOnly;
       densityLayerMode = HybridTerrainLayerGenerationMode.ProceduralTerrain;
       return false;
     }

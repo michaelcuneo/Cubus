@@ -175,11 +175,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       request.ChunkDataSnapshots ??= new Dictionary<Vector3Int, DensityChunkData>();
       request.ChunkDataSnapshots[request.ChunkCoord] = chunkData;
 
-      // Do not pre-reject chunks with chunkData.HasSurfaceCrossing() here.
-      // Marching cubes samples a +X/+Y/+Z shell around the root chunk, so a surface
-      // can cross exactly on the root boundary even when the root chunk's own 16^3
-      // samples are all-solid or all-air. Let the mesher sample the full grid and
-      // decide whether the resulting mesh is empty.
       MeshData meshData = DensityMeshDataBuilder.GenerateFromChunkSnapshots(
           request.ChunkCoord,
           request.WorldSnapshot,
@@ -214,27 +209,16 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         return chunkData.GetVoxel(localCoord.x, localCoord.y, localCoord.z);
       }
 
-      bool outsideGeneratedBounds =
-          chunkCoord.x < request.GeneratedMinChunkX ||
-          chunkCoord.x > request.GeneratedMaxChunkX ||
-          chunkCoord.y < request.GeneratedMinChunkY ||
-          chunkCoord.y > request.GeneratedMaxChunkY ||
-          chunkCoord.z < request.GeneratedMinChunkZ ||
-          chunkCoord.z > request.GeneratedMaxChunkZ;
+      bool aboveGeneratedBounds = chunkCoord.y > request.GeneratedMaxChunkY;
+      bool belowGeneratedBounds = chunkCoord.y < request.GeneratedMinChunkY;
 
-      if (outsideGeneratedBounds)
+      if (aboveGeneratedBounds)
       {
-        // Do not seal the upper scalar-field boundary with solid density. That creates the
-        // giant flat roof seen over every streamed density region.
-        if (chunkCoord.y > request.GeneratedMaxChunkY)
-        {
-          return DensityVoxel.Empty;
-        }
+        return DensityVoxel.Empty;
+      }
 
-        // Keep the lower / horizontal world edges solid so the generated field does not open
-        // visible side holes at the finite world boundary. Use the biome material at this
-        // world coordinate instead of hard-coding material 1, otherwise boundary faces become
-        // green regardless of the actual biome.
+      if (belowGeneratedBounds)
+      {
         return SampleGeneratedVoxel(worldVoxelCoord, request.WorldSnapshot, forcedDensity: 1.0f);
       }
 

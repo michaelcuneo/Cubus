@@ -14,8 +14,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
           root,
           world,
           keepChunkCoords,
-          knownEmptyChunks,
-          HasRequiredChunkData,
+          knownEmptyDensityChunks,
+          HasDensityChunkData,
           chunkLoadQueue.IsInFlight,
           pendingLoadSet.Contains,
           c => QueueLoad(c)
@@ -52,6 +52,11 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       };
 
       return densityBuildQueue.TryStartBuild(request, MaxDensityAsyncTasks);
+    }
+
+    private bool HasDensityChunkData(Vector3Int chunkCoord)
+    {
+      return world.Data.DensityChunks.ContainsKey(chunkCoord);
     }
 
     private Dictionary<Vector3Int, DensityChunkData> CreateDensityMeshChunkSnapshots(Vector3Int root)

@@ -8,6 +8,16 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
   {
     private void ProcessRenderQueue(int renderBudget)
     {
+      if (IsBlockTerrainEnabled && IsDensityTerrainEnabled)
+      {
+        int blockBudget = Mathf.Max(1, renderBudget / 2);
+        int densityBudget = Mathf.Max(1, renderBudget - blockBudget);
+
+        ProcessBlockRenderQueue(blockBudget);
+        ProcessDensityRenderQueue(densityBudget);
+        return;
+      }
+
       if (IsBlockTerrainEnabled)
       {
         ProcessBlockRenderQueue(renderBudget);
@@ -112,7 +122,11 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     {
       if (!world.Data.DensityChunks.TryGetValue(c, out DensityChunkData d) || d == null)
       {
-        QueueLoad(c);
+        if (!knownEmptyDensityChunks.Contains(c))
+        {
+          QueueLoad(c, false);
+        }
+
         return false;
       }
 

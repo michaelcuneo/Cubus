@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
@@ -9,6 +10,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
   public sealed class FileWorldChunkStore : IWorldChunkStore
   {
     private readonly string rootDirectory;
+    private readonly ConcurrentDictionary<string, int> worldWriteGenerations = new();
 
     public FileWorldChunkStore(string rootDirectory)
     {
@@ -50,15 +52,26 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
 
     public void SaveChunkLayer(WorldChunkRecord chunk)
     {
-      _ = Task.Run(() => WriteChunk(chunk));
+      int generation = GetWriteGeneration(chunk.WorldId);
+      _ = Task.Run(() => WriteChunk(chunk, generation));
     }
 
-    private void WriteChunk(WorldChunkRecord chunk)
+    private void WriteChunk(WorldChunkRecord chunk, int generation)
     {
       try
       {
+        if (generation != GetWriteGeneration(chunk.WorldId))
+        {
+          return;
+        }
+
         string dir = GetChunkDirectory(chunk.WorldId, chunk.TerrainSystem);
         Directory.CreateDirectory(dir);
+
+        if (generation != GetWriteGeneration(chunk.WorldId))
+        {
+          return;
+        }
 
         string path = GetChunkPath(chunk.WorldId, chunk.ChunkCoord, chunk.TerrainSystem);
 
@@ -89,11 +102,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
       string path = GetChunkPath(worldId, chunkCoord, terrainSystem);
 
       if (TryReadChunk(path, worldId, chunkCoord, out chunk))
-      {
-        return chunk.TerrainSystem == terrainSystem;
-      }
-
-      if (TryLoadLegacyChunk(worldId, chunkCoord, out chunk))
       {
         return chunk.TerrainSystem == terrainSystem;
       }
@@ -193,12 +201,26 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
 
     public void DeleteWorld(string worldId)
     {
+      IncrementWriteGeneration(worldId);
+
       string dir = GetWorldDirectory(worldId);
 
       if (Directory.Exists(dir))
       {
         Directory.Delete(dir, true);
       }
+    }
+
+    private int GetWriteGeneration(string worldId)
+    {
+      string key = Sanitize(worldId);
+      return worldWriteGenerations.TryGetValue(key, out int generation) ? generation : 0;
+    }
+
+    private int IncrementWriteGeneration(string worldId)
+    {
+      string key = Sanitize(worldId);
+      return worldWriteGenerations.AddOrUpdate(key, 1, (_, current) => current + 1);
     }
 
     private string GetWorldDirectory(string worldId)
