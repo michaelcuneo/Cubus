@@ -19,11 +19,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         VoxelSize = world.Settings.VoxelSize,
         ChunkDataSnapshot = chunkData,
         NeighborChunkSnapshots = CreateBlockMeshChunkSnapshots(chunkCoord),
-        // In pure Block mode this hides temporary load-frontier seams. In Hybrid,
-        // however, density terrain may already visually occupy the neighbour space,
-        // so pretending unloaded block neighbours are solid creates the ugly random
-        // wall panels seen during mixed block+density streaming. Let Hybrid mesh
-        // against procedural fallback until the real block neighbour arrives.
         SolidFallbackNeighborChunks = IsHybridTerrainEnabled ? null : CollectUnloadedInBoundsBlockNeighbors(chunkCoord)
       };
 
@@ -63,12 +58,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       return true;
     }
 
-    // Block chunks are meshed immediately, without waiting for neighbour data.
-    // For each in-bounds face neighbour that has not loaded yet, record it so the
-    // mesher treats that neighbour as solid and hides the shared boundary face.
-    // Missing neighbours are not force-loaded here; the streaming desired/keep sets
-    // remain the only authority for what should load. When a real neighbour later
-    // loads, RequeueSettledBlockNeighbors rebuilds adjacent chunk boundaries.
     private HashSet<Vector3Int> CollectUnloadedInBoundsBlockNeighbors(Vector3Int root)
     {
       HashSet<Vector3Int> unloaded = null;
@@ -140,14 +129,14 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
           continue;
         }
 
-        if (pendingRenderSet.Contains(n))
+        if (pendingBlockRenderSet.Contains(n) || pendingBlockRenderRetrySet.Contains(n) || buildQueue.IsInFlight(n))
         {
           continue;
         }
 
         if (world.Data.BlockChunks.TryGetValue(n, out BlockChunkData nb) && nb != null)
         {
-          QueueRender(n);
+          QueueBlockRender(n);
         }
       }
     }
