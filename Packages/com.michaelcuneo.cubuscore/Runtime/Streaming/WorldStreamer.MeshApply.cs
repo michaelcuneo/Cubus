@@ -118,13 +118,14 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
         if (r.MeshData == null || r.MeshData.IsEmpty)
         {
+          knownEmptyDensityChunks.Add(r.ChunkCoord);
           worldRenderer.RemoveDensityChunkMesh(r.ChunkCoord);
           ReturnMeshData(r);
           count++;
           continue;
         }
 
-        knownEmptyChunks.Remove(r.ChunkCoord);
+        knownEmptyDensityChunks.Remove(r.ChunkCoord);
         Mesh mesh = r.MeshData.ToUnityMeshFast();
         MeshDataPool.Return(r.MeshData); r.MeshData = null;
         worldRenderer.RenderDensityChunkMesh(
