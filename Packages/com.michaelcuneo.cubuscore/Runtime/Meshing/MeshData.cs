@@ -12,13 +12,15 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
       public Vector3 Normal;
       public Color32 Color;
       public Vector2 Uv0;
+      public Vector2 Uv1;
 
-      public VertexData(Vector3 position, Vector3 normal, Color32 color, Vector2 uv0)
+      public VertexData(Vector3 position, Vector3 normal, Color32 color, Vector2 uv0, Vector2 uv1)
       {
         Position = position;
         Normal = normal;
         Color = color;
         Uv0 = uv0;
+        Uv1 = uv1;
       }
     }
 
@@ -26,6 +28,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
     public readonly List<int> Triangles = new();
     public readonly List<Vector3> Normals = new();
     public readonly List<Vector2> UVs = new();
+    public readonly List<Vector2> UV1s = new();
     public readonly List<Color32> Colors = new();
 
     private bool completeWithoutGeometry;
@@ -42,6 +45,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
       Triangles.Clear();
       Normals.Clear();
       UVs.Clear();
+      UV1s.Clear();
       Colors.Clear();
       completeWithoutGeometry = false;
     }
@@ -80,6 +84,11 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
       {
         Colors.Capacity = vertexCount;
       }
+
+      if (UV1s.Capacity < vertexCount)
+      {
+        UV1s.Capacity = vertexCount;
+      }
     }
 
     public Mesh ToUnityMesh()
@@ -95,6 +104,12 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
       mesh.SetTriangles(Triangles, 0);
       mesh.SetNormals(Normals);
       mesh.SetUVs(0, UVs);
+
+      if (UV1s.Count == Vertices.Count)
+      {
+        mesh.SetUVs(1, UV1s);
+      }
+
       mesh.SetColors(Colors);
 
       mesh.RecalculateBounds();
@@ -148,6 +163,11 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
       UVs.Add(uvScale);
       UVs.Add(new Vector2(uvScale.x, 0.0f));
 
+      UV1s.Add(Vector2.zero);
+      UV1s.Add(Vector2.zero);
+      UV1s.Add(Vector2.zero);
+      UV1s.Add(Vector2.zero);
+
       Color32 vertexColor = EncodeMaterialId(materialId);
 
       Colors.Add(vertexColor);
@@ -172,7 +192,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
         new VertexAttributeDescriptor(VertexAttribute.Position, VertexAttributeFormat.Float32, 3),
         new VertexAttributeDescriptor(VertexAttribute.Normal, VertexAttributeFormat.Float32, 3),
         new VertexAttributeDescriptor(VertexAttribute.Color, VertexAttributeFormat.UNorm8, 4),
-        new VertexAttributeDescriptor(VertexAttribute.TexCoord0, VertexAttributeFormat.Float32, 2)
+        new VertexAttributeDescriptor(VertexAttribute.TexCoord0, VertexAttributeFormat.Float32, 2),
+        new VertexAttributeDescriptor(VertexAttribute.TexCoord1, VertexAttributeFormat.Float32, 2)
       };
 
       meshData.SetVertexBufferParams(vertexCount, layout);
@@ -183,9 +204,10 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
       {
         Vector3 p = Vertices[i];
         Vector3 n = (Normals.Count == vertexCount) ? Normals[i] : Vector3.up;
-        Vector2 uv = (UVs.Count == vertexCount) ? UVs[i] : Vector2.zero;
+        Vector2 uv0 = (UVs.Count == vertexCount) ? UVs[i] : Vector2.zero;
+        Vector2 uv1 = (UV1s.Count == vertexCount) ? UV1s[i] : Vector2.zero;
         Color32 c = (Colors.Count == vertexCount) ? Colors[i] : new Color32(255, 255, 255, 255);
-        vb[i] = new VertexData(p, n, c, uv);
+        vb[i] = new VertexData(p, n, c, uv0, uv1);
       }
 
       meshData.SetIndexBufferParams(indexCount, indexFormat);

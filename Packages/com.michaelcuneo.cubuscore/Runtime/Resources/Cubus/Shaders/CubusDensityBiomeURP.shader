@@ -263,14 +263,15 @@ Shader "Cubus/DensityBiomeURP"
 
         float noise = (n1 * 0.65 + n2 * 0.35) - 0.5;
 
-        float blendWidth = max(0.001, _MaterialBlendWidth);
-        float noisyBlend = rawBlend + noise * _MaterialBlendNoiseStrength;
+        // Only disturb the centre of the blend. Do not shove clean 0/1 areas around.
+        float centreWeight = rawBlend * (1.0 - rawBlend) * 4.0;
 
-        return smoothstep(
-          0.5 - blendWidth,
-          0.5 + blendWidth,
-          noisyBlend
-        );
+        float noisyBlend =
+          rawBlend +
+          noise * _MaterialBlendNoiseStrength * centreWeight * _MaterialBlendWidth;
+
+        // This curves the existing gradient without thresholding it around 0.5.
+        return smoothstep(0.0, 1.0, saturate(noisyBlend));
       }
 
       float3 ApplyLighting(float3 albedoRgb, float3 normalWS)

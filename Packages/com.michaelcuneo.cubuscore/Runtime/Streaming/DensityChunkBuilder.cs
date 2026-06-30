@@ -44,11 +44,17 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
             if (sample.Density > 0.0f) hasSolid = true;
             else hasAir = true;
 
-            ushort materialId = sample.Density > 0.0f
-                ? (ushort)Mathf.Clamp(sample.SolidMaterialId, 1, 65535)
-                : (ushort)0;
+            DensityMaterialSet materials = sample.Density > 0.0f
+              ? sample.Materials
+              : DensityMaterialSet.Empty;
 
-            voxels[x + size * y + zBase] = new DensityVoxel(sample.Density, materialId);
+            if (sample.Density > 0.0f && materials.DominantMaterialId == 0)
+            {
+              ushort fallbackMaterialId = (ushort)Mathf.Clamp(sample.SolidMaterialId, 1, 65535);
+              materials = DensityMaterialSet.Single(fallbackMaterialId);
+            }
+
+            voxels[x + size * y + zBase] = new DensityVoxel(sample.Density, materials);
           }
         }
       }

@@ -11,7 +11,13 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
 {
   public static class DensityMeshDataBuilder
   {
-    public static MeshData Generate(Vector3Int chunkCoord, WorldGenerationSnapshot snapshot, int cellStep, bool flipWinding, Func<Vector3Int, DensityVoxel> sampleVoxelAtWorld)
+    public static MeshData Generate(
+      Vector3Int chunkCoord,
+      WorldGenerationSnapshot snapshot,
+      int cellStep,
+      bool flipWinding,
+      Func<Vector3Int, DensityVoxel> sampleVoxelAtWorld
+    )
     {
       if (sampleVoxelAtWorld == null) return null;
 
@@ -23,7 +29,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
       int baseWorldY = chunkCoord.y * VoxelConstants.ChunkSize;
       int baseWorldZ = chunkCoord.z * VoxelConstants.ChunkSize;
       float[] densityGrid = ArrayPool<float>.Shared.Rent(totalSamples);
-      ushort[] materialGrid = ArrayPool<ushort>.Shared.Rent(totalSamples);
+      DensityMaterialSet[] materialGrid = ArrayPool<DensityMaterialSet>.Shared.Rent(totalSamples);
 
       try
       {
@@ -39,7 +45,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
               int worldX = baseWorldX + sx * safeCellStep;
               DensityVoxel voxel = sampleVoxelAtWorld(new Vector3Int(worldX, worldY, worldZ));
               densityGrid[writeIndex] = voxel.Density;
-              materialGrid[writeIndex] = voxel.MaterialId;
+              materialGrid[writeIndex] = voxel.Materials;
               writeIndex++;
             }
           }
@@ -50,11 +56,19 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
       finally
       {
         ArrayPool<float>.Shared.Return(densityGrid);
-        ArrayPool<ushort>.Shared.Return(materialGrid);
+        ArrayPool<DensityMaterialSet>.Shared.Return(materialGrid);
       }
     }
 
-    public static MeshData GenerateFromChunkSnapshots(Vector3Int chunkCoord, WorldGenerationSnapshot snapshot, int cellStep, bool flipWinding, DensityChunkData rootChunkData, IReadOnlyDictionary<Vector3Int, DensityChunkData> chunkDataSnapshots, Func<Vector3Int, DensityVoxel> fallbackSampleVoxelAtWorld)
+    public static MeshData GenerateFromChunkSnapshots(
+      Vector3Int chunkCoord,
+      WorldGenerationSnapshot snapshot,
+      int cellStep,
+      bool flipWinding,
+      DensityChunkData rootChunkData,
+      IReadOnlyDictionary<Vector3Int, DensityChunkData> chunkDataSnapshots,
+      Func<Vector3Int, DensityVoxel> fallbackSampleVoxelAtWorld
+    )
     {
       if (rootChunkData == null) return Generate(chunkCoord, snapshot, cellStep, flipWinding, fallbackSampleVoxelAtWorld);
 
@@ -68,7 +82,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
       int baseWorldZ = chunkCoord.z * chunkSize;
       DensityVoxel[] rootVoxels = rootChunkData.GetRawVoxelArray();
       float[] densityGrid = ArrayPool<float>.Shared.Rent(totalSamples);
-      ushort[] materialGrid = ArrayPool<ushort>.Shared.Rent(totalSamples);
+      DensityMaterialSet[] materialGrid = ArrayPool<DensityMaterialSet>.Shared.Rent(totalSamples);
 
       try
       {
@@ -97,7 +111,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
               }
 
               densityGrid[writeIndex] = voxel.Density;
-              materialGrid[writeIndex] = voxel.MaterialId;
+              materialGrid[writeIndex] = voxel.Materials;
               writeIndex++;
             }
           }
@@ -108,11 +122,15 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
       finally
       {
         ArrayPool<float>.Shared.Return(densityGrid);
-        ArrayPool<ushort>.Shared.Return(materialGrid);
+        ArrayPool<DensityMaterialSet>.Shared.Return(materialGrid);
       }
     }
 
-    private static DensityVoxel SampleSnapshotOrFallback(IReadOnlyDictionary<Vector3Int, DensityChunkData> chunkDataSnapshots, Func<Vector3Int, DensityVoxel> fallbackSampleVoxelAtWorld, Vector3Int worldVoxel)
+    private static DensityVoxel SampleSnapshotOrFallback(
+      IReadOnlyDictionary<Vector3Int, DensityChunkData> chunkDataSnapshots,
+      Func<Vector3Int, DensityVoxel> fallbackSampleVoxelAtWorld,
+      Vector3Int worldVoxel
+    )
     {
       Vector3Int sampleChunkCoord = VoxelMath.WorldVoxelToChunkCoord(worldVoxel);
       Vector3Int localCoord = VoxelMath.WorldVoxelToLocalCoord(worldVoxel);
@@ -124,7 +142,13 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
       return fallbackSampleVoxelAtWorld != null ? fallbackSampleVoxelAtWorld(worldVoxel) : DensityVoxel.Empty;
     }
 
-    public static MeshData BuildFromGrids(float[] densityGrid, ushort[] materialGrid, int numCellsAxis, float cellWorldSize, bool flipWinding)
+    public static MeshData BuildFromGrids(
+      float[] densityGrid,
+      DensityMaterialSet[] materialGrid,
+      int numCellsAxis,
+      float cellWorldSize,
+      bool flipWinding
+    )
     {
       if (densityGrid == null || materialGrid == null || numCellsAxis <= 0) return null;
 
@@ -141,7 +165,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
         Span<float> densities = stackalloc float[8];
         Span<Vector3> positions = stackalloc Vector3[8];
         Span<Vector3> normals = stackalloc Vector3[8];
-        Span<ushort> materials = stackalloc ushort[8];
+        Span<DensityMaterialSet> materials = stackalloc DensityMaterialSet[8];
         Span<Vector3> edgeVertices = stackalloc Vector3[12];
         Span<Vector3> edgeNormals = stackalloc Vector3[12];
         Span<int> edgeIndices = stackalloc int[12];
@@ -304,7 +328,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
       int edgeIndex,
       Span<Vector3> positions,
       Span<float> densities,
-      Span<ushort> materials,
+      Span<DensityMaterialSet> materials,
       Span<Vector3> normals,
       Span<Vector3> edgeVertices,
       Span<Vector3> edgeNormals,
@@ -332,18 +356,21 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
 
       normal = normal.sqrMagnitude > 0.000001f ? normal.normalized : Vector3.up;
 
-      Vector2 materialBlend = BuildMaterialBlendUv(
+      BuildSplatPayload(
         positions,
         densities,
         materials,
         position,
-        out Color32 primaryColor);
+        out Color32 splatWeights,
+        out Vector2 materialIds01,
+        out Vector2 materialIds23);
 
       int index = mesh.Vertices.Count;
       mesh.Vertices.Add(position);
       mesh.Normals.Add(normal);
-      mesh.UVs.Add(materialBlend);
-      mesh.Colors.Add(primaryColor);
+      mesh.Colors.Add(splatWeights);
+      mesh.UVs.Add(materialIds01);
+      mesh.UV1s.Add(materialIds23);
 
       edgeVertices[edgeIndex] = position;
       edgeNormals[edgeIndex] = normal;
@@ -368,113 +395,187 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
       return Vector3.Lerp(a, b, t);
     }
 
-    private static ushort ChooseMaterial(Span<float> densities, Span<ushort> materials)
-    {
-      ushort selected = 0;
-      float bestDensity = float.NegativeInfinity;
-      for (int i = 0; i < 8; i++)
-      {
-        if (densities[i] <= 0.0f || materials[i] == 0) continue;
-        if (densities[i] > bestDensity)
-        {
-          bestDensity = densities[i];
-          selected = materials[i];
-        }
-      }
-      return selected == 0 ? (ushort)1 : selected;
-    }
-
-    private static Vector2 BuildMaterialBlendUv(
+    private static void BuildSplatPayload(
   Span<Vector3> positions,
   Span<float> densities,
-  Span<ushort> materials,
+  Span<DensityMaterialSet> materials,
   Vector3 surfacePosition,
-  out Color32 primaryColor)
+  out Color32 splatWeights,
+  out Vector2 materialIds01,
+  out Vector2 materialIds23)
     {
-      Span<ushort> ids = stackalloc ushort[8];
-      Span<float> weights = stackalloc float[8];
+      Span<ushort> ids = stackalloc ushort[16];
+      Span<float> weights = stackalloc float[16];
       int uniqueCount = 0;
 
-      for (int i = 0; i < 8; i++)
+      for (int corner = 0; corner < 8; corner++)
       {
-        ushort materialId = materials[i];
-        if (materialId == 0 || densities[i] <= -0.35f)
+        DensityMaterialSet set = materials[corner];
+
+        float cornerWeight = CalculateCornerMaterialInfluence(
+          positions[corner],
+          densities[corner],
+          surfacePosition);
+
+        if (cornerWeight <= 0.000001f)
         {
           continue;
         }
 
-        float distanceSq = (positions[i] - surfacePosition).sqrMagnitude;
-        float solidInfluence = Mathf.Clamp01(densities[i] + 0.65f);
-        float weight = solidInfluence / Mathf.Max(0.0001f, distanceSq + 0.06f);
-
-        if (weight <= 0.000001f)
-        {
-          continue;
-        }
-
-        int existing = -1;
-        for (int j = 0; j < uniqueCount; j++)
-        {
-          if (ids[j] == materialId)
-          {
-            existing = j;
-            break;
-          }
-        }
-
-        if (existing >= 0)
-        {
-          weights[existing] += weight;
-        }
-        else if (uniqueCount < 8)
-        {
-          ids[uniqueCount] = materialId;
-          weights[uniqueCount] = weight;
-          uniqueCount++;
-        }
+        AccumulateMaterial(ref uniqueCount, ids, weights, set.Material0, set.Weight0 * cornerWeight);
+        AccumulateMaterial(ref uniqueCount, ids, weights, set.Material1, set.Weight1 * cornerWeight);
+        AccumulateMaterial(ref uniqueCount, ids, weights, set.Material2, set.Weight2 * cornerWeight);
+        AccumulateMaterial(ref uniqueCount, ids, weights, set.Material3, set.Weight3 * cornerWeight);
       }
 
       if (uniqueCount == 0)
       {
-        primaryColor = MaterialToColor(1);
-        return Vector2.zero;
+        splatWeights = new Color32(255, 0, 0, 0);
+        materialIds01 = new Vector2(1, 0);
+        materialIds23 = Vector2.zero;
+        return;
       }
 
-      int primaryIndex = 0;
-      int secondaryIndex = -1;
+      SortMaterialsByWeight(ids, weights, uniqueCount);
 
-      for (int i = 1; i < uniqueCount; i++)
-      {
-        if (weights[i] > weights[primaryIndex])
-        {
-          secondaryIndex = primaryIndex;
-          primaryIndex = i;
-        }
-        else if (secondaryIndex < 0 || weights[i] > weights[secondaryIndex])
-        {
-          secondaryIndex = i;
-        }
-      }
+      ushort material0 = uniqueCount > 0 ? ids[0] : (ushort)1;
+      ushort material1 = uniqueCount > 1 ? ids[1] : (ushort)0;
+      ushort material2 = uniqueCount > 2 ? ids[2] : (ushort)0;
+      ushort material3 = uniqueCount > 3 ? ids[3] : (ushort)0;
 
-      ushort primaryMaterialId = ids[primaryIndex];
-      primaryColor = MaterialToColor(primaryMaterialId);
+      float weight0 = uniqueCount > 0 ? weights[0] : 0.0f;
+      float weight1 = uniqueCount > 1 ? weights[1] : 0.0f;
+      float weight2 = uniqueCount > 2 ? weights[2] : 0.0f;
+      float weight3 = uniqueCount > 3 ? weights[3] : 0.0f;
 
-      if (secondaryIndex < 0 || ids[secondaryIndex] == primaryMaterialId)
-      {
-        return new Vector2(primaryMaterialId, 0.0f);
-      }
+      NormalizeTopFourWeights(
+        weight0,
+        weight1,
+        weight2,
+        weight3,
+        out byte packed0,
+        out byte packed1,
+        out byte packed2,
+        out byte packed3);
 
-      float primaryWeight = Mathf.Max(0.0001f, weights[primaryIndex]);
-      float secondaryWeight = Mathf.Max(0.0f, weights[secondaryIndex]);
-      float blendWeight = Mathf.Clamp01(secondaryWeight / (primaryWeight + secondaryWeight));
-      blendWeight = Mathf.SmoothStep(0.0f, 1.0f, blendWeight);
-
-      return new Vector2(ids[secondaryIndex], blendWeight);
+      splatWeights = new Color32(packed0, packed1, packed2, packed3);
+      materialIds01 = new Vector2(material0, material1);
+      materialIds23 = new Vector2(material2, material3);
     }
 
-    private static Color32 MaterialToColor(ushort materialId)
+    private static float CalculateCornerMaterialInfluence(
+      Vector3 cornerPosition,
+      float density,
+      Vector3 surfacePosition)
     {
-      return new Color32((byte)(materialId & 0xFF), (byte)((materialId >> 8) & 0xFF), 255, 255);
+      // Let near-surface empty samples still contribute slightly so exposed material
+      // transitions do not collapse into hard positive-density-only islands.
+      if (density <= -0.75f)
+      {
+        return 0.0f;
+      }
+
+      float distanceSq = (cornerPosition - surfacePosition).sqrMagnitude;
+      float distanceWeight = 1.0f / Mathf.Max(0.0001f, distanceSq + 0.08f);
+      float densityWeight = Mathf.Clamp01(density + 0.75f);
+
+      return distanceWeight * densityWeight;
+    }
+
+    private static void AccumulateMaterial(
+      ref int uniqueCount,
+      Span<ushort> ids,
+      Span<float> weights,
+      ushort materialId,
+      float weight)
+    {
+      if (materialId == 0 || weight <= 0.000001f)
+      {
+        return;
+      }
+
+      for (int i = 0; i < uniqueCount; i++)
+      {
+        if (ids[i] == materialId)
+        {
+          weights[i] += weight;
+          return;
+        }
+      }
+
+      if (uniqueCount >= ids.Length)
+      {
+        return;
+      }
+
+      ids[uniqueCount] = materialId;
+      weights[uniqueCount] = weight;
+      uniqueCount++;
+    }
+
+    private static void SortMaterialsByWeight(
+      Span<ushort> ids,
+      Span<float> weights,
+      int count)
+    {
+      int safeCount = Mathf.Min(count, ids.Length);
+
+      for (int i = 0; i < safeCount - 1; i++)
+      {
+        int best = i;
+
+        for (int j = i + 1; j < safeCount; j++)
+        {
+          if (weights[j] > weights[best])
+          {
+            best = j;
+          }
+        }
+
+        if (best == i)
+        {
+          continue;
+        }
+
+        (ids[i], ids[best]) = (ids[best], ids[i]);
+        (weights[i], weights[best]) = (weights[best], weights[i]);
+      }
+    }
+
+    private static void NormalizeTopFourWeights(
+      float weight0,
+      float weight1,
+      float weight2,
+      float weight3,
+      out byte packed0,
+      out byte packed1,
+      out byte packed2,
+      out byte packed3)
+    {
+      float total = weight0 + weight1 + weight2 + weight3;
+
+      if (total <= 0.000001f)
+      {
+        packed0 = 255;
+        packed1 = 0;
+        packed2 = 0;
+        packed3 = 0;
+        return;
+      }
+
+      float invTotal = 1.0f / total;
+
+      int p0 = Mathf.Clamp(Mathf.RoundToInt(weight0 * invTotal * 255.0f), 0, 255);
+      int p1 = Mathf.Clamp(Mathf.RoundToInt(weight1 * invTotal * 255.0f), 0, 255);
+      int p2 = Mathf.Clamp(Mathf.RoundToInt(weight2 * invTotal * 255.0f), 0, 255);
+
+      int used = p0 + p1 + p2;
+      int p3 = Mathf.Clamp(255 - used, 0, 255);
+
+      packed0 = (byte)p0;
+      packed1 = (byte)p1;
+      packed2 = (byte)p2;
+      packed3 = (byte)p3;
     }
   }
 }
