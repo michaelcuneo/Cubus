@@ -1,6 +1,7 @@
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Lod;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World;
+using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Voxels;
 using NUnit.Framework;
 using UnityEngine;
 
@@ -38,12 +39,12 @@ namespace CubusCore.Tests
 
       var allSolid = new float[total];
       var allAir = new float[total];
-      var materials = new ushort[total];
+      var materials = new DensityMaterialSet[total];
       for (int i = 0; i < total; i++)
       {
         allSolid[i] = 1.0f;
         allAir[i] = -1.0f;
-        materials[i] = 1;
+        materials[i] = DensityMaterialSet.Single(1);
       }
 
       Assert.IsNull(
@@ -62,7 +63,7 @@ namespace CubusCore.Tests
       int total = samplesAxis * samplesAxis * samplesAxis;
 
       var density = new float[total];
-      var materials = new ushort[total];
+      var materials = new DensityMaterialSet[total];
 
       // Surface crossing between sy = 0 (solid) and sy = 1 (air).
       for (int sz = 0; sz < samplesAxis; sz++)
@@ -73,7 +74,7 @@ namespace CubusCore.Tests
           {
             int index = SampleIndex(sx, sy, sz, samplesAxis);
             density[index] = 0.5f - sy;
-            materials[index] = 1;
+            materials[index] = DensityMaterialSet.Single(1);
           }
         }
       }

@@ -1,4 +1,5 @@
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World;
+using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Voxels;
 using UnityEngine;
 
 namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain
@@ -178,6 +179,9 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain
       result.SolidMaterialId = result.Density > 0.0f
           ? Mathf.Clamp(dominantMaterialId, 1, 65535)
           : 0;
+      result.Materials = result.Density > 0.0f
+          ? DensityMaterialSet.Single((ushort)result.SolidMaterialId)
+          : DensityMaterialSet.Empty;
       result.LiquidMaterialId = 0;
       result.IsLiquid = false;
 
@@ -349,6 +353,9 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain
       result.SolidMaterialId = result.Density > 0.0f
           ? Mathf.Clamp(dominantMaterialId, 1, 65535)
           : 0;
+      result.Materials = result.Density > 0.0f
+          ? DensityMaterialSet.Single((ushort)result.SolidMaterialId)
+          : DensityMaterialSet.Empty;
       result.LiquidMaterialId = 0;
       result.IsLiquid = false;
 

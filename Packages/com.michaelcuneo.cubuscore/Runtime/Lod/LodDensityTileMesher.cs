@@ -1,6 +1,7 @@
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Core;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain;
+using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Voxels;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World;
 using UnityEngine;
 
@@ -49,7 +50,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Lod
       Vector3Int origin = tileCoord * (numCellsAxis * stride);
 
       float[] densityGrid = new float[totalSamples];
-      ushort[] materialGrid = new ushort[totalSamples];
+      DensityMaterialSet[] materialGrid = new DensityMaterialSet[totalSamples];
 
       for (int sz = 0; sz < numSamplesAxis; sz++)
       {
@@ -68,13 +69,19 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Lod
             Vector3Int worldVoxel = new(worldX, origin.y + sy * stride, worldZ);
             TerrainSample sample = BiomeTerrainSampler.Sample(snapshot, blend, worldVoxel, densityScale);
 
-            ushort materialId = sample.Density > 0.0f
-                ? (ushort)Mathf.Clamp(sample.SolidMaterialId, 1, 65535)
-                : (ushort)0;
+            DensityMaterialSet materials = sample.Density > 0.0f
+              ? sample.Materials
+              : DensityMaterialSet.Empty;
+
+            if (sample.Density > 0.0f && materials.DominantMaterialId == 0)
+            {
+              ushort fallbackMaterialId = (ushort)Mathf.Clamp(sample.SolidMaterialId, 1, 65535);
+              materials = DensityMaterialSet.Single(fallbackMaterialId);
+            }
 
             int index = sx + numSamplesAxis * (sy + numSamplesAxis * sz);
             densityGrid[index] = sample.Density;
-            materialGrid[index] = materialId;
+            materialGrid[index] = materials;
           }
         }
       }
