@@ -8,8 +8,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 {
   public sealed partial class WorldStreamer
   {
-    private const int SurfaceVerticalChunkMargin = 2;
-    private const int ViewerVerticalChunkMargin = 1;
+    private const int SurfaceVerticalChunkMargin = 0;
+    private const int ViewerVerticalChunkMargin = 0;
 
     private void BuildChunkSet(Vector3Int viewerChunkCoord, int horizontalRadius, HashSet<Vector3Int> targetSet)
     {
@@ -29,7 +29,11 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
           );
 
           AddVerticalChunkRange(targetSet, chunkX, chunkZ, surfaceChunkY - SurfaceVerticalChunkMargin, surfaceChunkY + SurfaceVerticalChunkMargin, minChunkY, maxChunkY);
-          AddVerticalChunkRange(targetSet, chunkX, chunkZ, viewerChunkCoord.y - ViewerVerticalChunkMargin, viewerChunkCoord.y + ViewerVerticalChunkMargin, minChunkY, maxChunkY);
+
+          if (!IsHybridTerrainEnabled && !IsDensityTerrainEnabled)
+          {
+            AddVerticalChunkRange(targetSet, chunkX, chunkZ, viewerChunkCoord.y - ViewerVerticalChunkMargin, viewerChunkCoord.y + ViewerVerticalChunkMargin, minChunkY, maxChunkY);
+          }
         }
     }
 
@@ -105,6 +109,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     private bool NeedsBlockRenderOrLoad(Vector3Int chunkCoord)
     {
       return IsBlockTerrainEnabled &&
+             !IsHybridTerrainEnabled &&
              !HasRenderedBlockChunk(chunkCoord) &&
              !pendingBlockRenderSet.Contains(chunkCoord) &&
              !pendingBlockRenderRetrySet.Contains(chunkCoord) &&
@@ -116,8 +121,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       return IsDensityTerrainEnabled &&
              !HasRenderedDensityChunk(chunkCoord) &&
              !pendingDensityRenderSet.Contains(chunkCoord) &&
-             !pendingDensityRenderRetrySet.Contains(chunkCoord) &&
-             !knownEmptyDensityChunks.Contains(chunkCoord);
+             !pendingDensityRenderRetrySet.Contains(chunkCoord);
     }
 
     private void QueueNeededRenderOrLoadLayers(Vector3Int chunkCoord)
