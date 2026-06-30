@@ -193,6 +193,13 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       ForceRefreshStreamingSet();
     }
 
+    public void ConfigureInitialStreamingStage(int radiusInChunks, int keepPaddingInChunks = 0, bool enabled = true)
+    {
+      useInitialStreamingStage = enabled;
+      initialStreamingRadiusInChunks = Mathf.Max(0, radiusInChunks);
+      initialKeepPaddingInChunks = Mathf.Max(0, keepPaddingInChunks);
+    }
+
     private void Awake()
     {
       cachedMaxHardwareConcurrency = Mathf.Max(1, SystemInfo.processorCount - 1);
