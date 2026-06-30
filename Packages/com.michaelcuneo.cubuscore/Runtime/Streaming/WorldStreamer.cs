@@ -86,8 +86,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     private long totalChunkUnloadsApplied;
     private int adaptiveThrottleFramesRemaining;
 
-    private const float AdaptiveThrottleTriggerFrameMs = 33.0f;
-    private const int AdaptiveThrottleDurationFrames = 8;
+    private const float AdaptiveThrottleTriggerFrameMs = 45.0f;
+    private const int AdaptiveThrottleDurationFrames = 2;
 
     public StreamingSettings Settings => settings;
     public Vector3Int LastViewerChunkCoord => lastViewerChunkCoord;
@@ -146,20 +146,20 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     private int ChunksLoadedPerFrame => Mathf.Clamp(
       settings != null
         ? (UseInitialStreamingStageNow ? settings.InitialChunksGeneratedPerFrame : settings.ChunksGeneratedPerFrame)
-        : 8,
+        : 96,
       1,
-      64
+      256
     );
-    private int ChunksRenderedPerFrame => Mathf.Clamp(settings != null ? settings.ChunksRenderedPerFrame : 32, 1, 128);
-    private int ChunksUnloadedPerFrame => Mathf.Clamp(settings != null ? settings.ChunksRenderedPerFrame / 4 : 4, 1, 8);
-    private int MeshAppliesPerFrame => Mathf.Clamp(settings != null ? settings.MeshAppliesPerFrame : 32, 1, 128);
-    private int MaxAsyncChunkTasks => Mathf.Clamp(settings != null ? settings.MaxAsyncChunkTasks : 8, 1, 32);
-    private int MaxTotalAsyncTasks => Mathf.Clamp(MaxAsyncChunkTasks, 1, cachedMaxHardwareConcurrency);
-    private int MaxLoadAsyncTasks => Mathf.Max(1, MaxTotalAsyncTasks / 2);
+    private int ChunksRenderedPerFrame => Mathf.Clamp(settings != null ? settings.ChunksRenderedPerFrame : 128, 1, 256);
+    private int ChunksUnloadedPerFrame => Mathf.Clamp(settings != null ? settings.ChunksRenderedPerFrame / 2 : 32, 1, 64);
+    private int MeshAppliesPerFrame => Mathf.Clamp(settings != null ? settings.MeshAppliesPerFrame : 64, 1, 256);
+    private int MaxAsyncChunkTasks => Mathf.Clamp(settings != null ? settings.MaxAsyncChunkTasks : 64, 1, 128);
+    private int MaxTotalAsyncTasks => Mathf.Clamp(MaxAsyncChunkTasks, 1, Mathf.Max(1, cachedMaxHardwareConcurrency * 2));
+    private int MaxLoadAsyncTasks => IsHybridTerrainEnabled ? Mathf.Max(1, Mathf.CeilToInt(MaxTotalAsyncTasks * 0.35f)) : Mathf.Max(1, MaxTotalAsyncTasks / 2);
     private int MaxMeshAsyncTasks => Mathf.Max(1, MaxTotalAsyncTasks - MaxLoadAsyncTasks);
-    private int MaxBlockAsyncTasks => IsBlockTerrainEnabled ? Mathf.Max(1, IsDensityTerrainEnabled ? MaxMeshAsyncTasks / 2 : MaxMeshAsyncTasks) : 0;
-    private int MaxDensityAsyncTasks => IsDensityTerrainEnabled ? Mathf.Max(1, IsBlockTerrainEnabled ? MaxMeshAsyncTasks - Mathf.Max(1, MaxMeshAsyncTasks / 2) : MaxMeshAsyncTasks) : 0;
-    private float MeshApplyTimeBudgetSeconds => Mathf.Max(0.001f, (settings != null ? settings.MeshApplyTimeBudgetMs : 2) / 1000.0f);
+    private int MaxBlockAsyncTasks => IsBlockTerrainEnabled ? Mathf.Max(1, IsDensityTerrainEnabled ? Mathf.Max(1, MaxMeshAsyncTasks / 6) : MaxMeshAsyncTasks) : 0;
+    private int MaxDensityAsyncTasks => IsDensityTerrainEnabled ? Mathf.Max(1, IsBlockTerrainEnabled ? MaxMeshAsyncTasks - MaxBlockAsyncTasks : MaxMeshAsyncTasks) : 0;
+    private float MeshApplyTimeBudgetSeconds => Mathf.Max(0.001f, (settings != null ? settings.MeshApplyTimeBudgetMs : 12) / 1000.0f);
 
     private static readonly Vector3Int[] DensityMeshSampleChunkOffsets =
     {
@@ -325,7 +325,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
       if (adaptiveThrottleFramesRemaining > 0)
       {
-        loadBudget = Mathf.Max(1, loadBudget / 4);
+        loadBudget = Mathf.Max(1, loadBudget / 2);
         renderBudget = Mathf.Max(1, renderBudget / 2);
         unloadBudget = Mathf.Max(1, unloadBudget / 2);
       }
