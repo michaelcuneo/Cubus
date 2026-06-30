@@ -97,21 +97,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       }
     }
 
-    private bool ShouldStartChunkLoadForCurrentVisibility(Vector3Int chunkCoord)
-    {
-      if (hasPriorityChunkCoord && chunkCoord == priorityChunkCoord)
-      {
-        return true;
-      }
-
-      if (IsChunkNearViewerForImmediateMesh(chunkCoord))
-      {
-        return true;
-      }
-
-      return ShouldQueueMeshWorkForChunk(chunkCoord);
-    }
-
     private void ProcessCompletedChunkLoads()
     {
       int count = 0;
