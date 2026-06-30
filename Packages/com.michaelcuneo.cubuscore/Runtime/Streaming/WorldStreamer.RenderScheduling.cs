@@ -8,13 +8,27 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
   {
     private void ProcessRenderQueue(int renderBudget)
     {
+      if (IsHybridTerrainEnabled)
+      {
+        // In Cubus gameplay, Hybrid means density terrain first and sparse block
+        // data for building/editing. Do not let empty sparse-block work steal
+        // terrain reveal budget from density meshes.
+        int densityBudget = Mathf.Max(1, Mathf.CeilToInt(renderBudget * 0.9f));
+        int densityStarted = ProcessDensityRenderQueue(densityBudget);
+        int spareBudget = Mathf.Max(0, renderBudget - densityStarted);
+
+        if (spareBudget > 0)
+        {
+          ProcessBlockRenderQueue(spareBudget);
+        }
+
+        return;
+      }
+
       if (IsBlockTerrainEnabled && IsDensityTerrainEnabled)
       {
-        // Get solid collision/visual terrain on screen first. Density terrain is
-        // still scheduled every frame, but block terrain gets the first bite of
-        // render/build slots while both queues are busy.
         int blockBudget = PendingBlockRenderCount > 0
-          ? Mathf.Max(1, Mathf.CeilToInt(renderBudget * 0.75f))
+          ? Mathf.Max(1, Mathf.CeilToInt(renderBudget * 0.5f))
           : 0;
         int densityBudget = Mathf.Max(1, renderBudget - blockBudget);
 
@@ -58,8 +72,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
         if (!ShouldQueueMeshWorkForChunk(c))
         {
-          // Camera movement / visibility refresh will enqueue this again when it
-          // becomes useful. Do not keep recycling invisible chunks forever.
           continue;
         }
 
@@ -111,7 +123,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     {
       int count = 0;
       int scanned = 0;
-      int maxScans = Mathf.Max(renderBudget * 4, pendingDensityRenderQueue.Count + pendingDensityRenderRetryQueue.Count);
+      int maxScans = Mathf.Max(renderBudget * 8, pendingDensityRenderQueue.Count + pendingDensityRenderRetryQueue.Count);
 
       while ((pendingDensityRenderRetryQueue.Count > 0 || pendingDensityRenderQueue.Count > 0) && count < renderBudget && scanned < maxScans)
       {
@@ -159,12 +171,10 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         return false;
       }
 
-      if (!EnsureDensitySampleChunksAvailableForMesh(c))
-      {
-        QueueDensityRender(c, false);
-        return false;
-      }
-
+      // Density marching only needs the root chunk plus boundary samples.
+      // Missing neighbour chunks are sampled deterministically by the density
+      // build fallback instead of forcing full neighbour chunk generation before
+      // this visible chunk can mesh.
       int totalActiveTasks = chunkLoadQueue.ActiveTaskCount + buildQueue.ActiveTaskCount + densityBuildQueue.ActiveTaskCount;
 
       if (densityBuildQueue.ActiveTaskCount >= MaxDensityAsyncTasks || totalActiveTasks >= MaxTotalAsyncTasks)
