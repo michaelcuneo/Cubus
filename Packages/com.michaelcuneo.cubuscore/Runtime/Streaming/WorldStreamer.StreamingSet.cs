@@ -10,7 +10,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
   {
     private const int SurfaceVerticalChunkMargin = 1;
     private const int ViewerVerticalChunkMargin = 0;
-    private const int RuntimeDensityStartRadius = 3;
+    private const int RuntimeDensityStartRadius = 5;
+    private const int RuntimeDensityRadiusExpansionStep = 2;
     private int activeProgressiveStreamingRadius = -1;
     private int retainedPrewarmRadius = -1;
     private Vector3Int retainedPrewarmCenterChunkCoord;
@@ -206,7 +207,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         return targetRadius;
       }
 
-      int startRadius = Mathf.Clamp(RuntimeDensityStartRadius, 1, targetRadius);
+      int startRadius = Mathf.Clamp(Mathf.Min(targetRadius, RuntimeDensityStartRadius), 1, targetRadius);
 
       if (force || activeProgressiveStreamingRadius < 0)
       {
@@ -222,7 +223,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
       if (activeProgressiveStreamingRadius < targetRadius && ShouldExpandProgressiveRadius())
       {
-        activeProgressiveStreamingRadius++;
+        activeProgressiveStreamingRadius += RuntimeDensityRadiusExpansionStep;
       }
 
       return Mathf.Clamp(activeProgressiveStreamingRadius, 1, targetRadius);
@@ -234,7 +235,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       int queuedDensityWork = pendingDensityRenderQueue.Count + pendingDensityRenderRetryQueue.Count;
       int activeWork = chunkLoadQueue.ActiveTaskCount + densityBuildQueue.ActiveTaskCount;
       int activeLimit = Mathf.Max(4, MaxLoadAsyncTasks + MaxDensityAsyncTasks);
-      return queuedLoadWork <= MaxLoadAsyncTasks && queuedDensityWork <= MaxDensityAsyncTasks * 2 && activeWork <= activeLimit;
+      return queuedLoadWork <= MaxLoadAsyncTasks * 3 && queuedDensityWork <= MaxDensityAsyncTasks * 6 && activeWork <= activeLimit;
     }
 
     private void RetainInitialPrewarmBubble(Vector3Int viewerChunkCoord, int targetRadius)
