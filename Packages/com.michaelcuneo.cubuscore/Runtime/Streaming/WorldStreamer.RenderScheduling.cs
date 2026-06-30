@@ -49,12 +49,12 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
     private int ProcessBlockRenderQueue(int renderBudget)
     {
-      int count = 0;
+      int started = 0;
       int scanned = 0;
       int retryScansRemaining = pendingBlockRenderRetryQueue.Count;
-      int maxScans = Mathf.Max(renderBudget * 6, pendingBlockRenderQueue.Count + retryScansRemaining);
+      int maxScans = Mathf.Max(renderBudget * 8, pendingBlockRenderQueue.Count + retryScansRemaining);
 
-      while ((pendingBlockRenderQueue.Count > 0 || pendingBlockRenderRetryQueue.Count > 0) && count < renderBudget && scanned < maxScans)
+      while ((pendingBlockRenderQueue.Count > 0 || pendingBlockRenderRetryQueue.Count > 0) && started < renderBudget && scanned < maxScans)
       {
         scanned++;
 
@@ -66,10 +66,10 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         if (!desiredChunkCoords.Contains(c)) continue;
         if (!ShouldQueueMeshWorkForChunk(c)) continue;
 
-        if (TryProcessBlockRenderCandidate(c)) count++;
+        if (TryProcessBlockRenderCandidate(c)) started++;
       }
 
-      return count;
+      return started;
     }
 
     private bool TryProcessBlockRenderCandidate(Vector3Int c)
@@ -77,36 +77,36 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       if (!world.Data.BlockChunks.TryGetValue(c, out BlockChunkData b) || b == null)
       {
         if (!knownEmptyChunks.Contains(c)) QueueLoad(c, false);
-        return true;
+        return false;
       }
 
       if (buildQueue.IsInFlight(c))
       {
         QueueBlockRenderRetry(c);
-        return true;
+        return false;
       }
 
       int totalActiveTasks = chunkLoadQueue.ActiveTaskCount + buildQueue.ActiveTaskCount + densityBuildQueue.ActiveTaskCount;
       if (buildQueue.ActiveTaskCount >= MaxBlockAsyncTasks || totalActiveTasks >= MaxTotalAsyncTasks)
       {
         QueueBlockRenderRetry(c);
-        return true;
+        return false;
       }
 
       if (TryStartBlockMeshBuild(c, b)) return true;
 
       QueueBlockRenderRetry(c);
-      return true;
+      return false;
     }
 
     private int ProcessDensityRenderQueue(int renderBudget)
     {
-      int count = 0;
+      int started = 0;
       int scanned = 0;
       int retryScansRemaining = pendingDensityRenderRetryQueue.Count;
-      int maxScans = Mathf.Max(renderBudget * 10, pendingDensityRenderQueue.Count + retryScansRemaining);
+      int maxScans = Mathf.Max(renderBudget * 12, pendingDensityRenderQueue.Count + retryScansRemaining);
 
-      while ((pendingDensityRenderRetryQueue.Count > 0 || pendingDensityRenderQueue.Count > 0) && count < renderBudget && scanned < maxScans)
+      while ((pendingDensityRenderRetryQueue.Count > 0 || pendingDensityRenderQueue.Count > 0) && started < renderBudget && scanned < maxScans)
       {
         scanned++;
 
@@ -119,45 +119,45 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         if (knownEmptyDensityChunks.Contains(c)) continue;
         if (!ShouldQueueMeshWorkForChunk(c)) continue;
 
-        if (TryProcessDensityRenderCandidate(c)) count++;
+        if (TryProcessDensityRenderCandidate(c)) started++;
       }
 
-      return count;
+      return started;
     }
 
     private bool TryProcessDensityRenderCandidate(Vector3Int c)
     {
-      if (knownEmptyDensityChunks.Contains(c)) return true;
+      if (knownEmptyDensityChunks.Contains(c)) return false;
 
       if (!world.Data.DensityChunks.TryGetValue(c, out DensityChunkData d) || d == null)
       {
         if (!knownEmptyDensityChunks.Contains(c)) QueueLoad(c, false);
-        return true;
+        return false;
       }
 
       if (densityBuildQueue.IsInFlight(c))
       {
         QueueDensityRenderRetry(c);
-        return true;
+        return false;
       }
 
       if (!EnsureDensitySampleChunksAvailableForMesh(c))
       {
         QueueDensityRenderRetry(c);
-        return true;
+        return false;
       }
 
       int totalActiveTasks = chunkLoadQueue.ActiveTaskCount + buildQueue.ActiveTaskCount + densityBuildQueue.ActiveTaskCount;
       if (densityBuildQueue.ActiveTaskCount >= MaxDensityAsyncTasks || totalActiveTasks >= MaxTotalAsyncTasks)
       {
         QueueDensityRenderRetry(c);
-        return true;
+        return false;
       }
 
       if (TryStartDensityMeshBuild(c, d)) return true;
 
       QueueDensityRenderRetry(c);
-      return true;
+      return false;
     }
 
     private void QueueBlockRenderRetry(Vector3Int chunkCoord)
