@@ -50,6 +50,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
     private readonly WorldStreamingQueueSet pendingUnload = new();
     private readonly HashSet<Vector3Int> knownEmptyChunks = new();
+    private readonly HashSet<Vector3Int> knownEmptyDensityChunks = new();
     private readonly Dictionary<Vector2Int, int> surfaceChunkYCache = new();
     private readonly List<Vector3Int> candidateChunksBuffer = new();
     private readonly List<Vector3Int> queueSortBuffer = new();
@@ -136,12 +137,13 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     public int FullDetailChunkRadius =>
         Mathf.Max(1, world != null && world.Settings != null ? world.Settings.ViewDistanceInChunks : 1);
 
-    public int FullDetailKeepRadius => FullDetailChunkRadius + UnloadPaddingInChunks;
+    public int FullDetailKeepRadius => FullDetailChunkRadius + ActiveUnloadPaddingInChunks;
 
     private bool UseInitialStreamingStageNow => useInitialStreamingStage && world != null && !world.IsInitialTerrainReady;
     private int ActiveDesiredRadiusInChunks => UseInitialStreamingStageNow ? Mathf.Max(0, initialStreamingRadiusInChunks) : Mathf.Max(1, world != null && world.Settings != null ? world.Settings.ViewDistanceInChunks : 1);
-    private int ActiveKeepRadiusInChunks => ActiveDesiredRadiusInChunks + (UseInitialStreamingStageNow ? Mathf.Max(0, initialKeepPaddingInChunks) : UnloadPaddingInChunks);
+    private int ActiveKeepRadiusInChunks => ActiveDesiredRadiusInChunks + (UseInitialStreamingStageNow ? Mathf.Max(0, initialKeepPaddingInChunks) : ActiveUnloadPaddingInChunks);
 
+    private int ActiveUnloadPaddingInChunks => IsDensityTerrainEnabled ? 0 : UnloadPaddingInChunks;
     private int UnloadPaddingInChunks => Mathf.Max(2, settings != null ? settings.UnloadPaddingInChunks : 4);
     private int ChunksLoadedPerFrame => Mathf.Clamp(
       settings != null
@@ -155,7 +157,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     private int MeshAppliesPerFrame => Mathf.Clamp(settings != null ? settings.MeshAppliesPerFrame : 64, 1, 256);
     private int MaxAsyncChunkTasks => Mathf.Clamp(settings != null ? settings.MaxAsyncChunkTasks : 64, 1, 128);
     private int MaxTotalAsyncTasks => Mathf.Clamp(MaxAsyncChunkTasks, 1, Mathf.Max(1, cachedMaxHardwareConcurrency * 2));
-    private int MaxLoadAsyncTasks => IsHybridTerrainEnabled ? Mathf.Max(1, Mathf.CeilToInt(MaxTotalAsyncTasks * 0.35f)) : Mathf.Max(1, MaxTotalAsyncTasks / 2);
+    private int MaxLoadAsyncTasks => IsDensityTerrainEnabled ? Mathf.Max(1, Mathf.CeilToInt(MaxTotalAsyncTasks * 0.6f)) : Mathf.Max(1, MaxTotalAsyncTasks / 2);
     private int MaxMeshAsyncTasks => Mathf.Max(1, MaxTotalAsyncTasks - MaxLoadAsyncTasks);
     private int MaxBlockAsyncTasks => IsBlockTerrainEnabled ? Mathf.Max(1, IsDensityTerrainEnabled ? Mathf.Max(1, MaxMeshAsyncTasks / 6) : MaxMeshAsyncTasks) : 0;
     private int MaxDensityAsyncTasks => IsDensityTerrainEnabled ? Mathf.Max(1, IsBlockTerrainEnabled ? MaxMeshAsyncTasks - MaxBlockAsyncTasks : MaxMeshAsyncTasks) : 0;
@@ -179,263 +181,10 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       Vector3Int.right,
       Vector3Int.up,
       Vector3Int.down,
-      new Vector3Int(0, 0, -1),
-      new Vector3Int(0, 0, 1)
+      new(0, 0, 1),
+      new(0, 0, -1)
     };
 
-    public void SetViewer(Transform newViewer)
-    {
-      viewer = newViewer;
-      cachedVisibilityCamera = null;
-      hasLastVisibilityCameraState = false;
-      worldRenderer?.SetCollisionViewer(newViewer);
-      ForceRefreshStreamingSet();
-    }
-
-    private void Awake()
-    {
-      cachedMaxHardwareConcurrency = Mathf.Max(1, SystemInfo.processorCount - 1);
-      chunkPriorityComparison = CompareChunkPriorityByPivot;
-      EnsureRuntimeReferences();
-      EnsureLodStreamer();
-    }
-
-    private void EnsureLodStreamer()
-    {
-      if (world == null || world.Settings == null || !world.Settings.EnableLodTerrain)
-      {
-        return;
-      }
-
-      if (GetComponent<LodStreamer>() == null)
-      {
-        gameObject.AddComponent<LodStreamer>();
-      }
-    }
-
-    private bool EnsureRuntimeReferences()
-    {
-      world ??= GetComponent<CubusWorld>();
-      storage ??= GetComponent<CubusWorldStorage>();
-      worldRenderer ??= GetComponent<WorldRenderer>();
-      editTool ??= GetComponent<BlockEditTool>();
-      return world != null && worldRenderer != null && world.Settings != null;
-    }
-
-    private void OnEnable()
-    {
-      EnsureRuntimeReferences();
-      if (editTool != null) editTool.BlockChunksEdited += HandleBlockChunksEdited;
-    }
-
-    private void OnDisable()
-    {
-      if (editTool != null) editTool.BlockChunksEdited -= HandleBlockChunksEdited;
-    }
-
-    private void Start()
-    {
-      if (!EnsureRuntimeReferences()) return;
-      if (viewer == null && Camera.main != null) viewer = Camera.main.transform;
-      if (!world.Settings.TryValidateConfiguration(out string configError))
-      {
-        Debug.LogError($"WorldStreamer disabled due to invalid world settings: {configError}");
-        enabled = false;
-        return;
-      }
-
-      ApplyRuntimePerformanceProfile();
-
-      StartBootstrap(false);
-    }
-
-    [ContextMenu("Regenerate Streamed World")]
-    public void RegenerateStreamedWorld()
-    {
-      if (!EnsureRuntimeReferences()) return;
-      world.SyncBiomeMaterialLayersFromRules();
-      StartBootstrap(true);
-    }
-
-    private void StartBootstrap(bool logRegenerateMessage)
-    {
-      if (bootstrapCoroutine != null) StopCoroutine(bootstrapCoroutine);
-      bootstrapCoroutine = StartCoroutine(BootstrapRoutine(logRegenerateMessage));
-    }
-
-    private IEnumerator BootstrapRoutine(bool logRegenerateMessage)
-    {
-      if (!EnsureRuntimeReferences()) yield break;
-
-      if (!world.IsWorldReady)
-      {
-        if (generateWorldDatabaseBeforeStreaming)
-        {
-          if (storage == null || !storage.LoadWorldManifestOnly())
-          {
-            yield return world.GenerateWorldAsync();
-            storage?.LoadWorldManifestOnly();
-          }
-        }
-        else
-        {
-          storage?.LoadWorldManifestOnly();
-          if (!world.IsWorldReady) world.MarkDatabaseLoaded();
-        }
-      }
-
-      generator = new WorldGenerator(world.Settings);
-      StreamingGenerationContext.Set(world.Settings);
-      worldSnapshot = WorldGenerationSnapshot.FromSettings(world.Settings);
-      worldRenderer.ClearAll();
-      ClearStreamingState();
-      ForceRefreshStreamingSet();
-      if (logRegenerateMessage) Debug.Log($"WorldStreamer refreshed. Mode={world.Settings.TerrainSystem}");
-      bootstrapCoroutine = null;
-    }
-
-    private void ApplyRuntimePerformanceProfile()
-    {
-      if (settings == null || world == null || world.Settings == null) return;
-      settings.NormalizeRuntimeBudgets();
-    }
-
-    private void Update()
-    {
-      if (!EnsureRuntimeReferences()) return;
-      if (bootstrapCoroutine != null) return;
-      if (!IsAnyTerrainEnabled) return;
-
-      float updateStart = NowMs();
-
-      float frameMs = Time.unscaledDeltaTime * 1000.0f;
-      if (frameMs >= AdaptiveThrottleTriggerFrameMs)
-      {
-        adaptiveThrottleFramesRemaining = AdaptiveThrottleDurationFrames;
-      }
-      else if (adaptiveThrottleFramesRemaining > 0)
-      {
-        adaptiveThrottleFramesRemaining--;
-      }
-
-      int loadBudget = ChunksLoadedPerFrame;
-      int renderBudget = ChunksRenderedPerFrame;
-      int unloadBudget = ChunksUnloadedPerFrame;
-      int meshApplyBudget = MeshAppliesPerFrame;
-
-      if (adaptiveThrottleFramesRemaining > 0)
-      {
-        loadBudget = Mathf.Max(1, loadBudget / 2);
-        renderBudget = Mathf.Max(1, renderBudget / 2);
-        unloadBudget = Mathf.Max(1, unloadBudget / 2);
-      }
-
-      float t0 = NowMs();
-      UpdateStreamingSetIfNeeded();
-      float t1 = NowMs();
-      RefreshVisibilitySchedulingIfNeeded();
-      float t2 = NowMs();
-      PrioritizePendingQueues();
-      float t3 = NowMs();
-      ProcessCompletedChunkLoads();
-      float t4 = NowMs();
-      ProcessRenderQueue(renderBudget);
-      float t5 = NowMs();
-      ProcessLoadQueue(loadBudget, renderBudget);
-      float t6 = NowMs();
-      ProcessUnloadQueue(unloadBudget);
-      float t7 = NowMs();
-      ProcessCompletedBuildResults(meshApplyBudget);
-      float t8 = NowMs();
-      ReconcileRenderCoverageIfSettled();
-      float t9 = NowMs();
-
-      AccumulateStreamingPhaseTimings(
-        t1 - t0,
-        t2 - t1,
-        t3 - t2,
-        t4 - t3,
-        t5 - t4,
-        t6 - t5,
-        t7 - t6,
-        t8 - t7,
-        t9 - t8,
-        t9 - updateStart
-      );
-    }
-
-    private void ReconcileRenderCoverageIfSettled()
-    {
-      bool busy =
-          pendingLoadQueue.Count > 0 ||
-          pendingRenderQueue.Count > 0 ||
-          pendingRenderRetryQueue.Count > 0 ||
-          pendingBlockRenderQueue.Count > 0 ||
-          pendingBlockRenderRetryQueue.Count > 0 ||
-          pendingDensityRenderQueue.Count > 0 ||
-          pendingDensityRenderRetryQueue.Count > 0 ||
-          chunkLoadQueue.ActiveTaskCount > 0 ||
-          buildQueue.ActiveTaskCount > 0 ||
-          densityBuildQueue.ActiveTaskCount > 0;
-
-      if (busy)
-      {
-        renderReconciliationPending = true;
-        return;
-      }
-
-      if (!renderReconciliationPending || !hasLastViewerChunkCoord)
-      {
-        return;
-      }
-
-      renderReconciliationPending = false;
-      QueueGeneratedChunksForRender(lastViewerChunkCoord);
-    }
-
-    [ContextMenu("Force Refresh Streaming Set")]
-    public void ForceRefreshStreamingSet()
-    {
-      if (!EnsureRuntimeReferences()) return;
-      StreamingGenerationContext.Set(world.Settings);
-      worldSnapshot = WorldGenerationSnapshot.FromSettings(world.Settings);
-      generator ??= new WorldGenerator(world.Settings);
-      surfaceChunkYCache.Clear();
-      buildQueue.IncrementGeneration();
-      densityBuildQueue.IncrementGeneration();
-      chunkLoadQueue.IncrementGeneration();
-      pendingLoadQueue.Clear(); pendingLoadSet.Clear();
-      pendingRenderQueue.Clear(); pendingRenderSet.Clear();
-      pendingRenderRetryQueue.Clear(); pendingRenderRetrySet.Clear();
-      pendingBlockRenderQueue.Clear(); pendingBlockRenderSet.Clear();
-      pendingBlockRenderRetryQueue.Clear(); pendingBlockRenderRetrySet.Clear();
-      pendingDensityRenderQueue.Clear(); pendingDensityRenderSet.Clear();
-      pendingDensityRenderRetryQueue.Clear(); pendingDensityRenderRetrySet.Clear();
-      pendingUnload.Clear();
-      hasLastViewerChunkCoord = false;
-      hasLastVisibilityCameraState = false;
-      pendingLoadQueueNeedsPrioritization = false;
-      pendingRenderQueueNeedsPrioritization = false;
-      UpdateStreamingSetIfNeeded(true);
-    }
-
-    public void ClearStreamingState()
-    {
-      desiredChunkCoords.Clear(); keepChunkCoords.Clear();
-      pendingLoadQueue.Clear(); pendingLoadSet.Clear();
-      pendingRenderQueue.Clear(); pendingRenderSet.Clear();
-      pendingRenderRetryQueue.Clear(); pendingRenderRetrySet.Clear();
-      pendingBlockRenderQueue.Clear(); pendingBlockRenderSet.Clear();
-      pendingBlockRenderRetryQueue.Clear(); pendingBlockRenderRetrySet.Clear();
-      pendingDensityRenderQueue.Clear(); pendingDensityRenderSet.Clear();
-      pendingDensityRenderRetryQueue.Clear(); pendingDensityRenderRetrySet.Clear();
-      pendingUnload.Clear();
-      knownEmptyChunks.Clear();
-      buildQueue.IncrementGeneration(); densityBuildQueue.IncrementGeneration(); chunkLoadQueue.IncrementGeneration();
-      hasLastViewerChunkCoord = false;
-      hasLastVisibilityCameraState = false;
-      pendingLoadQueueNeedsPrioritization = false;
-      pendingRenderQueueNeedsPrioritization = false;
-    }
+    private readonly HashSet<Vector3Int> knownEmptyDensityChunks = new();
   }
 }
