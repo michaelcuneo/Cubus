@@ -60,7 +60,8 @@ Shader "Cubus/DensityBiomeURP"
         float4 positionOS : POSITION;
         float3 normalOS : NORMAL;
         float4 color : COLOR;
-        float2 uv : TEXCOORD0;
+        float2 uv0 : TEXCOORD0;
+        float2 uv1 : TEXCOORD1;
       };
 
       struct Varyings
@@ -68,8 +69,9 @@ Shader "Cubus/DensityBiomeURP"
         float4 positionCS : SV_POSITION;
         float3 positionWS : TEXCOORD0;
         float3 normalWS : TEXCOORD1;
-        float4 color : TEXCOORD2;
-        float2 materialBlend : TEXCOORD3;
+        float4 splatWeights : TEXCOORD2;
+        float2 materialIds01 : TEXCOORD3;
+        float2 materialIds23 : TEXCOORD4;
       };
 
       CBUFFER_START(UnityPerMaterial)
@@ -247,31 +249,46 @@ Shader "Cubus/DensityBiomeURP"
         return lerp(nxy0, nxy1, f.z);
       }
 
-      float TerrainBlendMask(float rawBlend, float3 positionWS)
+      float4 NormalizeSplatWeights(float4 weights)
       {
-        rawBlend = saturate(rawBlend);
+        weights = max(weights, 0.0);
 
-        if (rawBlend <= 0.0001 || rawBlend >= 0.9999)
+        float total = weights.x + weights.y + weights.z + weights.w;
+
+        if (total <= 0.0001)
         {
-          return rawBlend;
+          return float4(1.0, 0.0, 0.0, 0.0);
         }
+
+        return weights / total;
+      }
+
+      float4 BreakupSplatWeights(float4 weights, float3 positionWS)
+      {
+        weights = NormalizeSplatWeights(weights);
 
         float noiseScale = max(0.0001, _MaterialBlendNoiseScale);
 
         float n1 = ValueNoise(positionWS * noiseScale);
         float n2 = ValueNoise(positionWS * noiseScale * 2.37 + 19.17);
+        float n3 = ValueNoise(positionWS * noiseScale * 4.71 - 7.93);
 
-        float noise = (n1 * 0.65 + n2 * 0.35) - 0.5;
+        float3 noise = float3(n1, n2, n3) - 0.5;
 
-        // Only disturb the centre of the blend. Do not shove clean 0/1 areas around.
-        float centreWeight = rawBlend * (1.0 - rawBlend) * 4.0;
+        float transitionAmount =
+          1.0 - saturate(max(max(weights.x, weights.y), max(weights.z, weights.w)));
 
-        float noisyBlend =
-          rawBlend +
-          noise * _MaterialBlendNoiseStrength * centreWeight * _MaterialBlendWidth;
+        float strength =
+          _MaterialBlendNoiseStrength *
+          _MaterialBlendWidth *
+          transitionAmount;
 
-        // This curves the existing gradient without thresholding it around 0.5.
-        return smoothstep(0.0, 1.0, saturate(noisyBlend));
+        weights.x += noise.x * strength;
+        weights.y += noise.y * strength;
+        weights.z += noise.z * strength;
+        weights.w -= (noise.x + noise.y + noise.z) * 0.3333333 * strength;
+
+        return NormalizeSplatWeights(weights);
       }
 
       float3 ApplyLighting(float3 albedoRgb, float3 normalWS)
@@ -295,45 +312,43 @@ Shader "Cubus/DensityBiomeURP"
         OUT.positionCS = pos.positionCS;
         OUT.positionWS = pos.positionWS;
         OUT.normalWS = nrm.normalWS;
-        OUT.color = IN.color;
-        OUT.materialBlend = IN.uv;
+
+        OUT.splatWeights = IN.color;
+        OUT.materialIds01 = IN.uv0;
+        OUT.materialIds23 = IN.uv1;
 
         return OUT;
       }
 
       half4 frag(Varyings IN) : SV_Target
       {
-        float primaryMaterialId = DecodeMaterialId(IN.color);
-        float secondaryMaterialId = max(1.0, round(IN.materialBlend.x));
-        float rawBlendWeight = saturate(IN.materialBlend.y);
+        float4 weights = BreakupSplatWeights(IN.splatWeights, IN.positionWS);
 
-        if (abs(secondaryMaterialId - primaryMaterialId) < 0.5)
-        {
-          rawBlendWeight = 0.0;
-        }
+        float material0 = max(1.0, round(IN.materialIds01.x));
+        float material1 = max(1.0, round(IN.materialIds01.y));
+        float material2 = max(1.0, round(IN.materialIds23.x));
+        float material3 = max(1.0, round(IN.materialIds23.y));
 
-        float blendWeight = TerrainBlendMask(rawBlendWeight, IN.positionWS);
+        float tile0 = SampleDensityTileId(material0);
+        float tile1 = SampleDensityTileId(material1);
+        float tile2 = SampleDensityTileId(material2);
+        float tile3 = SampleDensityTileId(material3);
 
-        float primaryTileId = SampleDensityTileId(primaryMaterialId);
-        float secondaryTileId = SampleDensityTileId(secondaryMaterialId);
-        float renderCategory = SampleRenderCategory(primaryMaterialId);
+        float renderCategory0 = SampleRenderCategory(material0);
         float3 normalWS = normalize(IN.normalWS);
 
-        half4 primaryAlbedo = SampleTriplanar(
-            primaryTileId,
-            IN.positionWS,
-            normalWS
-        );
+        half4 albedo0 = SampleTriplanar(tile0, IN.positionWS, normalWS);
+        half4 albedo1 = SampleTriplanar(tile1, IN.positionWS, normalWS);
+        half4 albedo2 = SampleTriplanar(tile2, IN.positionWS, normalWS);
+        half4 albedo3 = SampleTriplanar(tile3, IN.positionWS, normalWS);
 
-        half4 secondaryAlbedo = SampleTriplanar(
-            secondaryTileId,
-            IN.positionWS,
-            normalWS
-        );
+        half4 albedo =
+          albedo0 * weights.x +
+          albedo1 * weights.y +
+          albedo2 * weights.z +
+          albedo3 * weights.w;
 
-        half4 albedo = lerp(primaryAlbedo, secondaryAlbedo, blendWeight);
-
-        if (renderCategory == 1.0 && albedo.a < 0.5)
+        if (renderCategory0 == 1.0 && albedo.a < 0.5)
         {
           discard;
         }

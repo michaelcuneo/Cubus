@@ -78,6 +78,10 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain
         {
           MaxDepthBelowSurface = src.MaxDepthBelowSurface,
           MaterialId = Mathf.Clamp(src.MaterialId, 1, 65535),
+          BlendWidth = src.BlendWidth,
+          Weight = src.Weight,
+          NoiseScale = src.NoiseScale,
+          NoiseStrength = src.NoiseStrength,
           Label = src.Label,
         });
       }

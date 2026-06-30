@@ -19,5 +19,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain
     /// If empty, consumers should fall back to SolidMaterialId.
     /// </summary>
     public DensityMaterialSet Materials;
+
+    public TerrainGenerationProfileSnapshot Profile;
   }
 }

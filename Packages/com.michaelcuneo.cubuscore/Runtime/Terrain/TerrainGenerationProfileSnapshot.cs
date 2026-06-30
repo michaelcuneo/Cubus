@@ -9,11 +9,57 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain
   {
     public readonly float MaxDepthBelowSurface;
     public readonly int MaterialId;
+    public readonly float BlendWidth;
+    public readonly float Weight;
+    public readonly float NoiseScale;
+    public readonly float NoiseStrength;
 
-    public MaterialLayerSnapshotEntry(float maxDepthBelowSurface, int materialId)
+    public MaterialLayerSnapshotEntry(
+      float maxDepthBelowSurface,
+      int materialId,
+      float blendWidth,
+      float weight,
+      float noiseScale,
+      float noiseStrength)
     {
       MaxDepthBelowSurface = maxDepthBelowSurface;
       MaterialId = materialId;
+      BlendWidth = blendWidth;
+      Weight = weight;
+      NoiseScale = noiseScale;
+      NoiseStrength = noiseStrength;
+    }
+  }
+
+  public readonly struct MaterialVeinSnapshotEntry
+  {
+    public readonly int MaterialId;
+    public readonly float MinDepthBelowSurface;
+    public readonly float MaxDepthBelowSurface;
+    public readonly float NoiseScale;
+    public readonly float Threshold;
+    public readonly float BlendWidth;
+    public readonly float Weight;
+    public readonly float VerticalScale;
+
+    public MaterialVeinSnapshotEntry(
+      int materialId,
+      float minDepthBelowSurface,
+      float maxDepthBelowSurface,
+      float noiseScale,
+      float threshold,
+      float blendWidth,
+      float weight,
+      float verticalScale)
+    {
+      MaterialId = materialId;
+      MinDepthBelowSurface = minDepthBelowSurface;
+      MaxDepthBelowSurface = maxDepthBelowSurface;
+      NoiseScale = noiseScale;
+      Threshold = threshold;
+      BlendWidth = blendWidth;
+      Weight = weight;
+      VerticalScale = verticalScale;
     }
   }
 
@@ -55,6 +101,11 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain
     public readonly int LayerCount;
     public readonly FixedList4096Bytes<MaterialLayerSnapshotEntry> MaterialLayers;
 
+    public const int MaxVeins = 128;
+
+    public readonly int VeinCount;
+    public readonly FixedList4096Bytes<MaterialVeinSnapshotEntry> MaterialVeins;
+
     private TerrainGenerationProfileSnapshot(
         bool useWorldEdgeFalloff,
         float worldEdgeRadius,
@@ -80,7 +131,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain
         float caveFrequency,
         float caveStartDepth,
         int worldSeed,
-        FixedList4096Bytes<MaterialLayerSnapshotEntry> materialLayers)
+        FixedList4096Bytes<MaterialLayerSnapshotEntry> materialLayers,
+        FixedList4096Bytes<MaterialVeinSnapshotEntry> materialVeins)
     {
       UseWorldEdgeFalloff = useWorldEdgeFalloff;
       WorldEdgeRadius = worldEdgeRadius;
@@ -108,6 +160,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain
       WorldSeed = worldSeed;
       MaterialLayers = materialLayers;
       LayerCount = MaterialLayers.Length;
+      MaterialVeins = materialVeins;
+      VeinCount = MaterialVeins.Length;
     }
 
     public TerrainGenerationProfileSnapshot(TerrainGenerationProfile profile, int worldSeed = 0)
@@ -158,18 +212,63 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain
           MaterialLayer layer = src[i];
           layers.Add(new MaterialLayerSnapshotEntry(
               layer.MaxDepthBelowSurface,
-              Mathf.Clamp(layer.MaterialId, 1, 65535)
+              Mathf.Clamp(layer.MaterialId, 1, 65535),
+              Mathf.Max(0.01f, layer.BlendWidth),
+              Mathf.Max(0.0f, layer.Weight),
+              Mathf.Max(0.0001f, layer.NoiseScale),
+              Mathf.Clamp01(layer.NoiseStrength)
           ));
         }
       }
 
       if (layers.Length == 0)
       {
-        layers.Add(new MaterialLayerSnapshotEntry(99999.0f, 1));
+        layers.Add(new MaterialLayerSnapshotEntry(
+            99999.0f,
+            1,
+            8.0f,
+            1.0f,
+            0.037f,
+            0.25f
+        ));
       }
 
       MaterialLayers = layers;
       LayerCount = MaterialLayers.Length;
+
+      FixedList4096Bytes<MaterialVeinSnapshotEntry> veins = new();
+
+      if (profile.MaterialVeins != null)
+      {
+        int desiredVeinCount = Mathf.Min(profile.MaterialVeins.Count, MaxVeins);
+
+        for (int i = 0; i < desiredVeinCount; i++)
+        {
+          if (veins.Length >= veins.Capacity)
+          {
+            break;
+          }
+
+          MaterialVeinRule vein = profile.MaterialVeins[i];
+
+          float minDepth = Mathf.Max(0.0f, vein.MinDepthBelowSurface);
+          float maxDepth = Mathf.Max(minDepth + 0.001f, vein.MaxDepthBelowSurface);
+
+          veins.Add(new MaterialVeinSnapshotEntry(
+            Mathf.Clamp(vein.MaterialId, 1, 65535),
+            minDepth,
+            maxDepth,
+            Mathf.Max(0.0001f, vein.NoiseScale),
+            Mathf.Clamp01(vein.Threshold),
+            Mathf.Max(0.001f, vein.BlendWidth),
+            Mathf.Max(0.0f, vein.Weight),
+            Mathf.Max(0.01f, vein.VerticalScale)
+          ));
+        }
+      }
+
+      MaterialVeins = veins;
+      VeinCount = MaterialVeins.Length;
     }
 
     // Returns the material ID for a given depth below the terrain surface.
@@ -202,6 +301,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain
       // Keep a stable layer set during profile blending. Selecting A/B layers by
       // a hard 0.5 threshold creates visible seam lines across biome transitions.
       FixedList4096Bytes<MaterialLayerSnapshotEntry> layers = a.MaterialLayers;
+      FixedList4096Bytes<MaterialVeinSnapshotEntry> veins = a.MaterialVeins;
 
       // Preserve biome character away from the center of the transition.
       // Only switch to Custom near the middle band to avoid hard preset snaps.
@@ -250,7 +350,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain
           Mathf.Lerp(a.CaveFrequency, b.CaveFrequency, clampedT),
           Mathf.Lerp(a.CaveStartDepth, b.CaveStartDepth, clampedT),
           a.WorldSeed,
-          layers
+          layers,
+          veins
       );
     }
   }
