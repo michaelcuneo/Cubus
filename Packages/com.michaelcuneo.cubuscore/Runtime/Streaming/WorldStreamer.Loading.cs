@@ -30,26 +30,19 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         bool isDesiredChunk = desiredChunkCoords.Contains(c);
         bool isKeepChunk = keepChunkCoords.Contains(c);
 
-        if (IsBlockTerrainEnabled)
-        {
-          if (!isDesiredChunk)
-          {
-            continue;
-          }
-        }
-        else if (!isDesiredChunk && !isKeepChunk)
+        if (!isDesiredChunk && !isKeepChunk)
         {
           continue;
         }
 
-        if (knownEmptyChunks.Contains(c) && !IsDensityTerrainEnabled)
+        if (!ShouldLoadChunkDataForCurrentTerrain(c, isDesiredChunk, isKeepChunk))
         {
           continue;
         }
 
         if (HasRequiredChunkData(c))
         {
-          if (desiredChunkCoords.Contains(c) && ShouldQueueMeshWorkForChunk(c))
+          if (isDesiredChunk && ShouldQueueMeshWorkForChunk(c))
           {
             QueueLoadedChunkRenderLayers(c);
           }
@@ -64,11 +57,11 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
           continue;
         }
 
-        if (!ShouldStartChunkLoadForCurrentVisibility(c))
+        // Desired chunks should respect visibility scheduling. Keep-only chunks are
+        // often density sample dependencies for a visible root chunk, so rejecting
+        // them here can deadlock SmoothDensity/Hybrid meshing on the +X/+Y/+Z shell.
+        if (isDesiredChunk && !ShouldStartChunkLoadForCurrentVisibility(c))
         {
-          // Do not keep invisible chunks spinning through the load queue every
-          // frame. Visibility refresh / camera movement will enqueue them again
-          // when they become worth generating.
           continue;
         }
 
@@ -97,6 +90,29 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         QueueLoad(c, false);
         break;
       }
+    }
+
+    private bool ShouldLoadChunkDataForCurrentTerrain(Vector3Int c, bool isDesiredChunk, bool isKeepChunk)
+    {
+      if (isDesiredChunk)
+      {
+        if (IsBlockTerrainEnabled && !world.Data.BlockChunks.ContainsKey(c) && !knownEmptyChunks.Contains(c))
+        {
+          return true;
+        }
+
+        if (IsDensityTerrainEnabled && !world.Data.DensityChunks.ContainsKey(c) && !knownEmptyDensityChunks.Contains(c))
+        {
+          return true;
+        }
+
+        return false;
+      }
+
+      // Keep-only loads are intentionally allowed only for density-capable terrain.
+      // Block neighbour seams are handled by meshing fallback/requeue; density needs
+      // real sample chunks outside the visible root mesh.
+      return isKeepChunk && IsDensityTerrainEnabled && !world.Data.DensityChunks.ContainsKey(c) && !knownEmptyDensityChunks.Contains(c);
     }
 
     private void ProcessCompletedChunkLoads()
