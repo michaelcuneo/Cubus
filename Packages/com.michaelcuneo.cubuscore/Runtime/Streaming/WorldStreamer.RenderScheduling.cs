@@ -80,7 +80,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
       if (buildQueue.ActiveTaskCount >= MaxBlockAsyncTasks || totalActiveTasks >= MaxTotalAsyncTasks)
       {
-        QueueBlockRenderRetry(c);
+        // Async capacity is already busy; reconciliation will revisit this after
+        // active work completes instead of spinning retry queues this frame.
         return true;
       }
 
@@ -139,7 +140,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
       if (!EnsureDensitySampleChunksAvailableForMesh(c))
       {
-        QueueDensityRenderRetry(c);
+        // Missing +X/+Y/+Z sample chunks were queued for load. Reconciliation will
+        // queue this root chunk again once the load/build queues settle.
         return true;
       }
 
@@ -147,7 +149,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
       if (densityBuildQueue.ActiveTaskCount >= MaxDensityAsyncTasks || totalActiveTasks >= MaxTotalAsyncTasks)
       {
-        QueueDensityRenderRetry(c);
         return true;
       }
 
