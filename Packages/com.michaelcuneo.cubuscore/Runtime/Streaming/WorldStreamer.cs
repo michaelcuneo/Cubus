@@ -22,7 +22,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     [SerializeField] private StreamingSettings settings = new();
     [SerializeField] private bool evictCachedChunkDataOutsideKeepSet = true;
     [SerializeField] private bool generateWorldDatabaseBeforeStreaming = false;
-    [SerializeField] private bool persistStreamedChunks = true;
+    [SerializeField] private bool persistStreamedChunks = false;
 
     [Header("Initial Streaming Stage")]
     [SerializeField][Min(0)] private int initialStreamingRadiusInChunks = 1;
@@ -403,7 +403,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       pendingBlockRenderQueue.Clear(); pendingBlockRenderSet.Clear();
       pendingBlockRenderRetryQueue.Clear(); pendingBlockRenderRetrySet.Clear();
       pendingDensityRenderQueue.Clear(); pendingDensityRenderSet.Clear();
-      pendingDensityRenderRetryQueue.Clear(); pendingDensityRenderRetrySet.Clear();
+      pendingDensityRenderRetryQueue.Clear(); pendingDensityRenderSet.Clear();
       pendingUnload.Clear();
       knownEmptyChunks.Clear();
       buildQueue.IncrementGeneration(); densityBuildQueue.IncrementGeneration(); chunkLoadQueue.IncrementGeneration();
