@@ -59,7 +59,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         {
           if (world.Data.BlockChunks.ContainsKey(r.ChunkCoord))
           {
-            QueueRender(r.ChunkCoord, false);
+            QueueBlockRender(r.ChunkCoord, false);
           }
           ReturnMeshData(r.MeshData);
           blockCount++;
@@ -109,7 +109,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         {
           if (world.Data.DensityChunks.ContainsKey(r.ChunkCoord))
           {
-            QueueRender(r.ChunkCoord, false);
+            QueueDensityRender(r.ChunkCoord, false);
           }
           ReturnMeshData(r);
           count++;
