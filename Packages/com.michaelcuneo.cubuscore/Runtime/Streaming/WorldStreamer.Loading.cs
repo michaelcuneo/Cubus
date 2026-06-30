@@ -49,7 +49,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
         if (HasRequiredChunkData(c))
         {
-          if (desiredChunkCoords.Contains(c))
+          if (desiredChunkCoords.Contains(c) && ShouldQueueMeshWorkForChunk(c))
           {
             QueueLoadedChunkRenderLayers(c);
           }
@@ -61,6 +61,12 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         {
           knownEmptyChunks.Add(c);
           knownEmptyDensityChunks.Add(c);
+          continue;
+        }
+
+        if (!ShouldStartChunkLoadForCurrentVisibility(c))
+        {
+          QueueLoad(c, false);
           continue;
         }
 
@@ -89,6 +95,21 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         QueueLoad(c, false);
         break;
       }
+    }
+
+    private bool ShouldStartChunkLoadForCurrentVisibility(Vector3Int chunkCoord)
+    {
+      if (hasPriorityChunkCoord && chunkCoord == priorityChunkCoord)
+      {
+        return true;
+      }
+
+      if (IsChunkNearViewerForImmediateMesh(chunkCoord))
+      {
+        return true;
+      }
+
+      return ShouldQueueMeshWorkForChunk(chunkCoord);
     }
 
     private void ProcessCompletedChunkLoads()
@@ -127,7 +148,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
             storage.SaveChunk(c);
           }
 
-          if (desiredChunkCoords.Contains(c))
+          if (desiredChunkCoords.Contains(c) && ShouldQueueMeshWorkForChunk(c))
           {
             if (loadedBlock)
             {
@@ -151,6 +172,11 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
     private void QueueLoadedChunkRenderLayers(Vector3Int c)
     {
+      if (!ShouldQueueMeshWorkForChunk(c))
+      {
+        return;
+      }
+
       if (IsBlockTerrainEnabled && world.Data.BlockChunks.ContainsKey(c))
       {
         QueueBlockRender(c);
