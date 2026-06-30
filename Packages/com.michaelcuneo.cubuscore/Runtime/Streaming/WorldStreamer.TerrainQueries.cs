@@ -96,24 +96,59 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       desiredChunkCoords.Add(chunkCoord);
       keepChunkCoords.Add(chunkCoord);
       knownEmptyChunks.Remove(chunkCoord);
+      knownEmptyDensityChunks.Remove(chunkCoord);
 
-      if (worldRenderer.HasChunkView(chunkCoord))
+      bool needsBlock = IsBlockTerrainEnabled &&
+                        !HasRenderedBlockChunk(chunkCoord) &&
+                        !pendingBlockRenderSet.Contains(chunkCoord) &&
+                        !pendingBlockRenderRetrySet.Contains(chunkCoord);
+
+      bool needsDensity = IsDensityTerrainEnabled &&
+                          !HasRenderedDensityChunk(chunkCoord) &&
+                          !pendingDensityRenderSet.Contains(chunkCoord) &&
+                          !pendingDensityRenderRetrySet.Contains(chunkCoord);
+
+      if (!needsBlock && !needsDensity)
       {
         return;
       }
 
-      if (pendingRenderSet.Contains(chunkCoord) || pendingLoadSet.Contains(chunkCoord) || chunkLoadQueue.IsInFlight(chunkCoord))
+      if (pendingLoadSet.Contains(chunkCoord) || chunkLoadQueue.IsInFlight(chunkCoord))
       {
         return;
       }
 
-      if (HasRequiredChunkData(chunkCoord))
+      bool queuedRender = false;
+
+      if (needsBlock)
       {
-        QueueRender(chunkCoord);
+        if (world.Data.BlockChunks.ContainsKey(chunkCoord))
+        {
+          queuedRender |= QueueBlockRender(chunkCoord);
+        }
+        else
+        {
+          QueueLoad(chunkCoord);
+          return;
+        }
       }
-      else
+
+      if (needsDensity)
       {
-        QueueLoad(chunkCoord);
+        if (world.Data.DensityChunks.ContainsKey(chunkCoord))
+        {
+          queuedRender |= QueueDensityRender(chunkCoord);
+        }
+        else
+        {
+          QueueLoad(chunkCoord);
+          return;
+        }
+      }
+
+      if (queuedRender)
+      {
+        pendingRenderQueueNeedsPrioritization = true;
       }
     }
 
