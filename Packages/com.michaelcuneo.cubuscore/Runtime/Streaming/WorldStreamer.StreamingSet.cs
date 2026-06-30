@@ -192,7 +192,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
     private int ResolveActiveProgressiveRadius(Vector3Int viewerChunkCoord, int targetRadius, bool force)
     {
-      bool viewerChanged = force || !hasLastViewerChunkCoord || viewerChunkCoord != lastViewerChunkCoord;
+      bool hasMovedHorizontally = hasLastViewerChunkCoord && (viewerChunkCoord.x != lastViewerChunkCoord.x || viewerChunkCoord.z != lastViewerChunkCoord.z);
+      bool shouldRestartProgressiveRadius = force || !hasLastViewerChunkCoord || (hasMovedHorizontally && activeProgressiveStreamingRadius < targetRadius);
 
       if (!IsDensityTerrainEnabled || UseInitialStreamingStageNow)
       {
@@ -202,9 +203,15 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
       int startRadius = Mathf.Clamp(RuntimeDensityStartRadius, 1, targetRadius);
 
-      if (viewerChanged || activeProgressiveStreamingRadius < 0)
+      if (activeProgressiveStreamingRadius < 0)
       {
         activeProgressiveStreamingRadius = startRadius;
+        return activeProgressiveStreamingRadius;
+      }
+
+      if (shouldRestartProgressiveRadius)
+      {
+        activeProgressiveStreamingRadius = Mathf.Max(startRadius, Mathf.Min(activeProgressiveStreamingRadius, targetRadius));
         return activeProgressiveStreamingRadius;
       }
 
