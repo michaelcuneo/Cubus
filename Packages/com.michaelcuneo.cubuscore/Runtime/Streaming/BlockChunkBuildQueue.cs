@@ -1,7 +1,6 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Chunks;
-using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Core;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World;
@@ -11,11 +10,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 {
   public sealed class BlockChunkBuildQueue
   {
-    // Material used for an in-bounds neighbour voxel whose chunk hasn't loaded
-    // yet. Any non-zero (solid) id hides the shared boundary face; the value
-    // itself is never rendered because the hidden face emits no geometry.
-    private const ushort SolidBoundaryFallbackMaterial = 1;
-
     private readonly Queue<BlockChunkBuildResult> completedResults = new();
     private readonly HashSet<Vector3Int> inFlightChunkCoords = new();
 
@@ -116,8 +110,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
           Debug.LogException(task.Exception);
         }
 
-        ReturnNeighborSnapshotsToPool(request);
-
         lock (completedResults)
         {
           if (result != null)
@@ -170,24 +162,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       }
     }
 
-    private static void ReturnNeighborSnapshotsToPool(BlockChunkBuildRequest request)
-    {
-      if (request?.NeighborChunkSnapshots == null)
-      {
-        return;
-      }
-
-      foreach (KeyValuePair<Vector3Int, BlockChunkData> snapshot in request.NeighborChunkSnapshots)
-      {
-        if (snapshot.Key == request.ChunkCoord)
-        {
-          continue;
-        }
-
-        VoxelArrayPool.Return(snapshot.Value?.GetRawVoxelArray());
-      }
-    }
-
     public bool TryDequeueCompleted(out BlockChunkBuildResult result)
     {
       lock (completedResults)
@@ -228,16 +202,27 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       MeshData meshData = null;
       if (hasAnySolidVoxel)
       {
-        // Boundary voxels with no neighbor snapshot fall back to terrain
-        // sampling. Cache a sampler per (x, z) column so the surface noise is
-        // resolved once per column instead of once per boundary voxel.
-        TerrainColumnLookupCache meshColumnCache = new();
+        if (request.BlockNeighborhood != null)
+        {
+          meshData = BlockGreedyMesher.GenerateNeighbourAware(
+              chunkData,
+              request.BlockNeighborhood,
+              Mathf.Max(0.0001f, request.VoxelSize)
+          );
+        }
+        else
+        {
+          // Fallback for non-streaming callers. Cache a sampler per (x, z)
+          // column so the surface noise is resolved once per boundary column
+          // instead of once per boundary voxel.
+          TerrainColumnLookupCache meshColumnCache = new();
 
-        meshData = BlockGreedyMesher.GenerateNeighbourAware(
-            chunkData,
-            worldVoxelCoord => ResolveMaterialForMeshing(request, worldVoxelCoord, ref meshColumnCache),
-            Mathf.Max(0.0001f, request.VoxelSize)
-        );
+          meshData = BlockGreedyMesher.GenerateNeighbourAware(
+              chunkData,
+              worldVoxelCoord => ResolveMaterialForMeshing(request, worldVoxelCoord, ref meshColumnCache),
+              Mathf.Max(0.0001f, request.VoxelSize)
+          );
+        }
       }
 
       return new BlockChunkBuildResult
@@ -255,26 +240,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         Vector3Int worldVoxelCoord,
         ref TerrainColumnLookupCache columnCache)
     {
-      Vector3Int chunkCoord = VoxelMath.WorldVoxelToChunkCoord(worldVoxelCoord);
-
-      if (request?.NeighborChunkSnapshots != null
-          && request.NeighborChunkSnapshots.TryGetValue(chunkCoord, out BlockChunkData snapshotChunk)
-          && snapshotChunk != null)
-      {
-        Vector3Int localCoord = VoxelMath.WorldVoxelToLocalCoord(worldVoxelCoord);
-        return snapshotChunk.GetVoxel(localCoord.x, localCoord.y, localCoord.z).MaterialId;
-      }
-
-      // In-bounds face neighbour that hasn't loaded yet: treat it as solid so the
-      // shared boundary face is hidden rather than meshed against the terrain
-      // fallback (which briefly draws a one-sided wall that vanishes when the real
-      // neighbour arrives). The chunk is re-meshed once the neighbour loads, so
-      // the correct faces appear then.
-      if (request?.SolidFallbackNeighborChunks != null && request.SolidFallbackNeighborChunks.Contains(chunkCoord))
-      {
-        return SolidBoundaryFallbackMaterial;
-      }
-
       TerrainColumnSampler column = columnCache.Get(
         request.WorldSnapshot,
         worldVoxelCoord.x,
