@@ -65,13 +65,15 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
           QueueLoad(c, false);
         }
 
-        return false;
+        // Consume this render slot. The load queue owns this chunk until data exists.
+        return true;
       }
 
       if (buildQueue.IsInFlight(c))
       {
-        QueueBlockRender(c, false);
-        return false;
+        // Do not requeue into the same draining loop. ReconcileRenderCoverageIfSettled
+        // will enqueue it again if the completed build did not render the chunk.
+        return true;
       }
 
       int totalActiveTasks = chunkLoadQueue.ActiveTaskCount + buildQueue.ActiveTaskCount + densityBuildQueue.ActiveTaskCount;
@@ -79,7 +81,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       if (buildQueue.ActiveTaskCount >= MaxBlockAsyncTasks || totalActiveTasks >= MaxTotalAsyncTasks)
       {
         QueueBlockRenderRetry(c);
-        return false;
+        return true;
       }
 
       if (TryStartBlockMeshBuild(c, b))
@@ -87,8 +89,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         return true;
       }
 
-      QueueBlockRender(c, false);
-      return false;
+      QueueBlockRenderRetry(c);
+      return true;
     }
 
     private void ProcessDensityRenderQueue(int renderBudget)
@@ -127,19 +129,18 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
           QueueLoad(c, false);
         }
 
-        return false;
+        return true;
       }
 
       if (densityBuildQueue.IsInFlight(c))
       {
-        QueueDensityRender(c, false);
-        return false;
+        return true;
       }
 
       if (!EnsureDensitySampleChunksAvailableForMesh(c))
       {
-        QueueDensityRender(c, false);
-        return false;
+        QueueDensityRenderRetry(c);
+        return true;
       }
 
       int totalActiveTasks = chunkLoadQueue.ActiveTaskCount + buildQueue.ActiveTaskCount + densityBuildQueue.ActiveTaskCount;
@@ -147,7 +148,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       if (densityBuildQueue.ActiveTaskCount >= MaxDensityAsyncTasks || totalActiveTasks >= MaxTotalAsyncTasks)
       {
         QueueDensityRenderRetry(c);
-        return false;
+        return true;
       }
 
       if (TryStartDensityMeshBuild(c, d))
@@ -155,8 +156,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         return true;
       }
 
-      QueueDensityRender(c, false);
-      return false;
+      QueueDensityRenderRetry(c);
+      return true;
     }
 
     private void QueueBlockRenderRetry(Vector3Int chunkCoord)
