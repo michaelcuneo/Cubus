@@ -22,6 +22,7 @@ namespace Assets.Demo.Scripts.Core
     [SerializeField] private string launcherSceneName = "DemoLauncher";
     [SerializeField] private float connectedWorldReadyTimeoutSeconds = 30.0f;
     [SerializeField] private bool logLoadingDiagnostics = true;
+    [SerializeField] private bool prewarmFullViewDistanceBeforeLocalSpawn = true;
 
     private string loadingStage = "Waiting for launch context";
     private string loadingDetail = string.Empty;
@@ -153,9 +154,11 @@ namespace Assets.Demo.Scripts.Core
       WorldStreamer streamer = GetStreamer();
       if (streamer != null)
       {
-        SetStage("Prewarming streamed terrain", "Starting the WorldStreamer under launcher control.");
-        Debug.Log($"[DemoLaunch] Preparing local streamed world '{DemoGameLaunchContext.WorldId}' before spawning.");
+        int prewarmRadius = ResolveLocalPrewarmRadius();
+        SetStage("Prewarming streamed terrain", $"Generating/loading spawn bubble before release. Radius={prewarmRadius} chunks.");
+        Debug.Log($"[DemoLaunch] Preparing local streamed world '{DemoGameLaunchContext.WorldId}' before spawning. PrewarmRadius={prewarmRadius}.");
         yield return EnableStreamerForBootstrap(streamer);
+        streamer.ConfigureInitialStreamingStage(prewarmRadius, 0, true);
         streamer.ClearStreamingState();
         streamer.RegenerateStreamedWorld();
         if (spawnGate != null)
@@ -177,6 +180,16 @@ namespace Assets.Demo.Scripts.Core
 
       SetStage("Local world ready", "Initial terrain is ready. Player spawn released.");
       Debug.Log($"[DemoLaunch] Local world '{DemoGameLaunchContext.WorldId}' is ready. Player spawn released.");
+    }
+
+    private int ResolveLocalPrewarmRadius()
+    {
+      if (!prewarmFullViewDistanceBeforeLocalSpawn || world == null || world.Settings == null)
+      {
+        return 1;
+      }
+
+      return Mathf.Max(1, world.Settings.ViewDistanceInChunks);
     }
 
     private IEnumerator PrepareConnectedWorldThenSpawn()
