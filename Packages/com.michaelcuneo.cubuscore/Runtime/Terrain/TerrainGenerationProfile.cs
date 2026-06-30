@@ -101,13 +101,66 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain
     public float CaveStartDepth = 18.0f;
 
     [Header("Material Layers")]
-    [Tooltip("Layers are evaluated in order. The first layer whose MaxDepthBelowSurface >= depth is used. " +
-             "The last layer acts as the fallback for any depth. Add as many as you like.")]
+    [Tooltip("Depth-driven material layers. Material IDs are game-defined. " +
+             "The engine only blends them by depth, weight, and noise.")]
     public List<MaterialLayer> MaterialLayers = new()
     {
-      new MaterialLayer { MaxDepthBelowSurface = 3.0f,     MaterialId = 1, Label = "Surface" },
-      new MaterialLayer { MaxDepthBelowSurface = 18.0f,    MaterialId = 2, Label = "Subsurface" },
-      new MaterialLayer { MaxDepthBelowSurface = 99999.0f, MaterialId = 3, Label = "Stone" },
+      new MaterialLayer
+      {
+        MaxDepthBelowSurface = 2.0f,
+        MaterialId = 1,
+        BlendWidth = 2.5f,
+        Weight = 1.25f,
+        NoiseScale = 0.045f,
+        NoiseStrength = 0.12f,
+        Label = "Surface"
+      },
+      new MaterialLayer
+      {
+        MaxDepthBelowSurface = 8.0f,
+        MaterialId = 2,
+        BlendWidth = 4.0f,
+        Weight = 1.0f,
+        NoiseScale = 0.04f,
+        NoiseStrength = 0.25f,
+        Label = "Shallow Subsurface"
+      },
+      new MaterialLayer
+      {
+        MaxDepthBelowSurface = 20.0f,
+        MaterialId = 3,
+        BlendWidth = 6.0f,
+        Weight = 0.95f,
+        NoiseScale = 0.032f,
+        NoiseStrength = 0.35f,
+        Label = "Mid Layer"
+      },
+      new MaterialLayer
+      {
+        MaxDepthBelowSurface = 45.0f,
+        MaterialId = 4,
+        BlendWidth = 8.0f,
+        Weight = 0.9f,
+        NoiseScale = 0.07f,
+        NoiseStrength = 0.45f,
+        Label = "Deep Broken Layer"
+      },
+      new MaterialLayer
+      {
+        MaxDepthBelowSurface = 99999.0f,
+        MaterialId = 5,
+        BlendWidth = 12.0f,
+        Weight = 1.1f,
+        NoiseScale = 0.025f,
+        NoiseStrength = 0.18f,
+        Label = "Base Layer"
+      },
+    };
+
+    [Header("Material Veins")]
+    [Tooltip("Optional 3D material injections. Game-defined material IDs can represent ores, crystals, coal, clay pockets, fossil bands, etc.")]
+    public List<MaterialVeinRule> MaterialVeins = new()
+    {
     };
   }
 }
