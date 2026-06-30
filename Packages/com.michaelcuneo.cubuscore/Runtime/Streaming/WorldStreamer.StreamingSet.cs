@@ -10,6 +10,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
   {
     private const int SurfaceVerticalChunkMargin = 1;
     private const int ViewerVerticalChunkMargin = 0;
+    private const int RuntimeDensityStartRadius = 3;
+    private int activeProgressiveStreamingRadius = -1;
 
     private void BuildChunkSet(Vector3Int viewerChunkCoord, int horizontalRadius, HashSet<Vector3Int> targetSet)
     {
@@ -97,7 +99,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       return IsDensityTerrainEnabled &&
              !HasRenderedDensityChunk(chunkCoord) &&
              !pendingDensityRenderSet.Contains(chunkCoord) &&
-             !pendingDensityRenderRetrySet.Contains(chunkCoord);
+             !pendingDensityRenderRetrySet.Contains(chunkCoord) &&
+             !knownEmptyDensityChunks.Contains(chunkCoord);
     }
 
     private void QueueNeededRenderOrLoadLayers(Vector3Int chunkCoord)
@@ -136,13 +139,13 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         if (forward.sqrMagnitude > 0.0001f)
         {
           forward.Normalize();
-          int lead = Mathf.Max(2, ActiveDesiredRadiusInChunks / 2);
+          int lead = Mathf.Max(2, activeProgressiveStreamingRadius > 0 ? activeProgressiveStreamingRadius : ActiveDesiredRadiusInChunks / 2);
           return new Vector3Int(lastViewerChunkCoord.x + Mathf.RoundToInt(forward.x * lead), lastViewerChunkCoord.y, lastViewerChunkCoord.z + Mathf.RoundToInt(forward.z * lead));
         }
       }
 
       if (!hasLastViewerChunkCoord) return lastViewerChunkCoord;
-      int fallbackLead = Mathf.Max(2, ActiveDesiredRadiusInChunks / 2);
+      int fallbackLead = Mathf.Max(2, activeProgressiveStreamingRadius > 0 ? activeProgressiveStreamingRadius : ActiveDesiredRadiusInChunks / 2);
       Vector3 heading = new(viewerHeading.x, 0.0f, viewerHeading.z);
       if (heading.sqrMagnitude < 0.0001f) return lastViewerChunkCoord;
       heading.Normalize();
@@ -187,10 +190,51 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       return dx * dx + dz * dz;
     }
 
+    private int ResolveActiveProgressiveRadius(Vector3Int viewerChunkCoord, int targetRadius, bool force)
+    {
+      bool viewerChanged = force || !hasLastViewerChunkCoord || viewerChunkCoord != lastViewerChunkCoord;
+
+      if (!IsDensityTerrainEnabled || UseInitialStreamingStageNow)
+      {
+        activeProgressiveStreamingRadius = targetRadius;
+        return targetRadius;
+      }
+
+      int startRadius = Mathf.Clamp(RuntimeDensityStartRadius, 1, targetRadius);
+
+      if (viewerChanged || activeProgressiveStreamingRadius < 0)
+      {
+        activeProgressiveStreamingRadius = startRadius;
+        return activeProgressiveStreamingRadius;
+      }
+
+      if (activeProgressiveStreamingRadius < targetRadius && ShouldExpandProgressiveRadius())
+      {
+        activeProgressiveStreamingRadius++;
+      }
+
+      return Mathf.Clamp(activeProgressiveStreamingRadius, 1, targetRadius);
+    }
+
+    private bool ShouldExpandProgressiveRadius()
+    {
+      int queuedLoadWork = pendingLoadQueue.Count + pendingLoadSet.Count;
+      int queuedDensityWork = pendingDensityRenderQueue.Count + pendingDensityRenderRetryQueue.Count;
+      int activeWork = chunkLoadQueue.ActiveTaskCount + densityBuildQueue.ActiveTaskCount;
+      int activeLimit = Mathf.Max(4, MaxLoadAsyncTasks + MaxDensityAsyncTasks);
+      return queuedLoadWork <= MaxLoadAsyncTasks && queuedDensityWork <= MaxDensityAsyncTasks * 2 && activeWork <= activeLimit;
+    }
+
     private void UpdateStreamingSetIfNeeded(bool force = false)
     {
       Vector3Int viewerChunkCoord = GetStreamingFocusChunkCoord();
-      if (!force && hasLastViewerChunkCoord && viewerChunkCoord == lastViewerChunkCoord) return;
+      int targetDesiredRadius = ActiveDesiredRadiusInChunks;
+      int progressiveDesiredRadius = ResolveActiveProgressiveRadius(viewerChunkCoord, targetDesiredRadius, force);
+
+      if (!force && hasLastViewerChunkCoord && viewerChunkCoord == lastViewerChunkCoord && progressiveDesiredRadius == desiredChunkRadiusLastBuilt)
+      {
+        return;
+      }
 
       if (force) knownEmptyDensityChunks.Clear();
 
@@ -202,14 +246,18 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
       lastViewerChunkCoord = viewerChunkCoord;
       hasLastViewerChunkCoord = true;
-      BuildChunkSet(viewerChunkCoord, ActiveDesiredRadiusInChunks, desiredChunkCoords);
-      BuildChunkSet(viewerChunkCoord, ActiveKeepRadiusInChunks, keepChunkCoords);
+      desiredChunkRadiusLastBuilt = progressiveDesiredRadius;
+
+      BuildChunkSet(viewerChunkCoord, progressiveDesiredRadius, desiredChunkCoords);
+      BuildChunkSet(viewerChunkCoord, progressiveDesiredRadius + ActiveUnloadPaddingInChunks, keepChunkCoords);
       PruneKnownEmptyChunksOutsideCurrentInterest();
       QueueGeneratedChunksForRender(viewerChunkCoord);
       UnloadOutsideKeepSet();
       pendingLoadQueueNeedsPrioritization = true;
       pendingRenderQueueNeedsPrioritization = true;
     }
+
+    private int desiredChunkRadiusLastBuilt = -1;
 
     private void PruneKnownEmptyChunksOutsideCurrentInterest()
     {
