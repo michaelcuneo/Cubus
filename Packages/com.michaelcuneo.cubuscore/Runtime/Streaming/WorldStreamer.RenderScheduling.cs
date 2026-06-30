@@ -10,9 +10,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     {
       if (IsHybridTerrainEnabled)
       {
-        // In Cubus gameplay, Hybrid means density terrain first and sparse block
-        // data for building/editing. Do not let empty sparse-block work steal
-        // terrain reveal budget from density meshes.
         int densityBudget = Mathf.Max(1, Mathf.CeilToInt(renderBudget * 0.9f));
         int densityStarted = ProcessDensityRenderQueue(densityBudget);
         int spareBudget = Mathf.Max(0, renderBudget - densityStarted);
@@ -65,20 +62,10 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
           break;
         }
 
-        if (!desiredChunkCoords.Contains(c))
-        {
-          continue;
-        }
+        if (!desiredChunkCoords.Contains(c)) continue;
+        if (!ShouldQueueMeshWorkForChunk(c)) continue;
 
-        if (!ShouldQueueMeshWorkForChunk(c))
-        {
-          continue;
-        }
-
-        if (TryProcessBlockRenderCandidate(c))
-        {
-          count++;
-        }
+        if (TryProcessBlockRenderCandidate(c)) count++;
       }
 
       return count;
@@ -88,11 +75,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     {
       if (!world.Data.BlockChunks.TryGetValue(c, out BlockChunkData b) || b == null)
       {
-        if (!knownEmptyChunks.Contains(c))
-        {
-          QueueLoad(c, false);
-        }
-
+        if (!knownEmptyChunks.Contains(c)) QueueLoad(c, false);
         return false;
       }
 
@@ -103,17 +86,13 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       }
 
       int totalActiveTasks = chunkLoadQueue.ActiveTaskCount + buildQueue.ActiveTaskCount + densityBuildQueue.ActiveTaskCount;
-
       if (buildQueue.ActiveTaskCount >= MaxBlockAsyncTasks || totalActiveTasks >= MaxTotalAsyncTasks)
       {
         QueueBlockRenderRetry(c);
         return false;
       }
 
-      if (TryStartBlockMeshBuild(c, b))
-      {
-        return true;
-      }
+      if (TryStartBlockMeshBuild(c, b)) return true;
 
       QueueBlockRender(c, false);
       return false;
@@ -134,20 +113,11 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
           break;
         }
 
-        if (!desiredChunkCoords.Contains(c))
-        {
-          continue;
-        }
+        if (!desiredChunkCoords.Contains(c)) continue;
+        if (knownEmptyDensityChunks.Contains(c)) continue;
+        if (!ShouldQueueMeshWorkForChunk(c)) continue;
 
-        if (!ShouldQueueMeshWorkForChunk(c))
-        {
-          continue;
-        }
-
-        if (TryProcessDensityRenderCandidate(c))
-        {
-          count++;
-        }
+        if (TryProcessDensityRenderCandidate(c)) count++;
       }
 
       return count;
@@ -155,13 +125,11 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
     private bool TryProcessDensityRenderCandidate(Vector3Int c)
     {
+      if (knownEmptyDensityChunks.Contains(c)) return false;
+
       if (!world.Data.DensityChunks.TryGetValue(c, out DensityChunkData d) || d == null)
       {
-        if (!knownEmptyDensityChunks.Contains(c))
-        {
-          QueueLoad(c, false);
-        }
-
+        if (!knownEmptyDensityChunks.Contains(c)) QueueLoad(c, false);
         return false;
       }
 
@@ -171,10 +139,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         return false;
       }
 
-      // Density marching only needs the root chunk plus boundary samples.
-      // Missing neighbour chunks are sampled deterministically by the density
-      // build fallback instead of forcing full neighbour chunk generation before
-      // this visible chunk can mesh.
       if (!EnsureDensitySampleChunksAvailableForMesh(c))
       {
         QueueDensityRender(c, false);
@@ -182,17 +146,13 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       }
 
       int totalActiveTasks = chunkLoadQueue.ActiveTaskCount + buildQueue.ActiveTaskCount + densityBuildQueue.ActiveTaskCount;
-
       if (densityBuildQueue.ActiveTaskCount >= MaxDensityAsyncTasks || totalActiveTasks >= MaxTotalAsyncTasks)
       {
         QueueDensityRenderRetry(c);
         return false;
       }
 
-      if (TryStartDensityMeshBuild(c, d))
-      {
-        return true;
-      }
+      if (TryStartDensityMeshBuild(c, d)) return true;
 
       QueueDensityRender(c, false);
       return false;
@@ -200,22 +160,14 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
     private void QueueBlockRenderRetry(Vector3Int chunkCoord)
     {
-      if (pendingBlockRenderSet.Contains(chunkCoord) || pendingBlockRenderRetrySet.Contains(chunkCoord))
-      {
-        return;
-      }
-
+      if (pendingBlockRenderSet.Contains(chunkCoord) || pendingBlockRenderRetrySet.Contains(chunkCoord)) return;
       pendingBlockRenderRetrySet.Add(chunkCoord);
       pendingBlockRenderRetryQueue.Enqueue(chunkCoord);
     }
 
     private void QueueDensityRenderRetry(Vector3Int chunkCoord)
     {
-      if (pendingDensityRenderSet.Contains(chunkCoord) || pendingDensityRenderRetrySet.Contains(chunkCoord))
-      {
-        return;
-      }
-
+      if (pendingDensityRenderSet.Contains(chunkCoord) || pendingDensityRenderRetrySet.Contains(chunkCoord)) return;
       pendingDensityRenderRetrySet.Add(chunkCoord);
       pendingDensityRenderRetryQueue.Enqueue(chunkCoord);
     }
@@ -230,21 +182,13 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       while (retryQueue.Count > 0)
       {
         chunkCoord = retryQueue.Dequeue();
-
-        if (retryMembership.Remove(chunkCoord))
-        {
-          return true;
-        }
+        if (retryMembership.Remove(chunkCoord)) return true;
       }
 
       while (queue.Count > 0)
       {
         chunkCoord = queue.Dequeue();
-
-        if (membership.Remove(chunkCoord))
-        {
-          return true;
-        }
+        if (membership.Remove(chunkCoord)) return true;
       }
 
       chunkCoord = default;
