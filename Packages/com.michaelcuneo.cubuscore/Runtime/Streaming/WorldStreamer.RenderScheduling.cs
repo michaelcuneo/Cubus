@@ -10,11 +10,18 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     {
       if (IsBlockTerrainEnabled && IsDensityTerrainEnabled)
       {
-        int blockBudget = Mathf.Max(1, renderBudget / 2);
+        // Get solid collision/visual terrain on screen first. Density terrain is
+        // still scheduled every frame, but block terrain gets the first bite of
+        // render/build slots while both queues are busy.
+        int blockBudget = PendingBlockRenderCount > 0
+          ? Mathf.Max(1, Mathf.CeilToInt(renderBudget * 0.75f))
+          : 0;
         int densityBudget = Mathf.Max(1, renderBudget - blockBudget);
 
-        ProcessBlockRenderQueue(blockBudget);
-        ProcessDensityRenderQueue(densityBudget);
+        int blockStarted = blockBudget > 0 ? ProcessBlockRenderQueue(blockBudget) : 0;
+        int unusedBlockBudget = Mathf.Max(0, blockBudget - blockStarted);
+
+        ProcessDensityRenderQueue(densityBudget + unusedBlockBudget);
         return;
       }
 
@@ -29,7 +36,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       }
     }
 
-    private void ProcessBlockRenderQueue(int renderBudget)
+    private int ProcessBlockRenderQueue(int renderBudget)
     {
       int count = 0;
       int scanned = 0;
@@ -49,11 +56,20 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
           continue;
         }
 
+        if (!ShouldQueueMeshWorkForChunk(c))
+        {
+          // Camera movement / visibility refresh will enqueue this again when it
+          // becomes useful. Do not keep recycling invisible chunks forever.
+          continue;
+        }
+
         if (TryProcessBlockRenderCandidate(c))
         {
           count++;
         }
       }
+
+      return count;
     }
 
     private bool TryProcessBlockRenderCandidate(Vector3Int c)
@@ -91,7 +107,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       return false;
     }
 
-    private void ProcessDensityRenderQueue(int renderBudget)
+    private int ProcessDensityRenderQueue(int renderBudget)
     {
       int count = 0;
       int scanned = 0;
@@ -111,11 +127,18 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
           continue;
         }
 
+        if (!ShouldQueueMeshWorkForChunk(c))
+        {
+          continue;
+        }
+
         if (TryProcessDensityRenderCandidate(c))
         {
           count++;
         }
       }
+
+      return count;
     }
 
     private bool TryProcessDensityRenderCandidate(Vector3Int c)
