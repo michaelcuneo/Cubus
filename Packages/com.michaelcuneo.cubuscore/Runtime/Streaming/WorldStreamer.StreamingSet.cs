@@ -8,25 +8,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 {
   public sealed partial class WorldStreamer
   {
-
-    // Number of chunks of vertical headroom kept above each column's surface
-    // chunk so the chunk straddling the surface (and any thin overhang) is always
-    // streamed.
-    private const int SurfaceVerticalChunkMargin = 1;
-
-    // Builds a desired/keep set whose horizontal extent is the view radius. The
-    // vertical extent is surface-AWARE AND honours the configured world band: for
-    // every (x, z) column we cover the UNION of the world band
-    // (BlockMin/MaxChunkY or DensityMin/MaxChunkY) and this column's surface chunk
-    // (+/- a small margin).
-    //
-    // The world-band union is the SAFETY NET: it guarantees every column always
-    // covers the full playable terrain band regardless of how the per-column
-    // surface sample lands, so steep/undulating terrain never drops the chunk that
-    // actually contains the surface (which shows up as missing chunks/holes). The
-    // surface term extends that coverage upward/downward when terrain rises above
-    // or sinks below the band. Empty chunks above the terrain are cheap - flagged
-    // known-empty as soon as they mesh to nothing.
     private void BuildChunkSet(Vector3Int viewerChunkCoord, int horizontalRadius, HashSet<Vector3Int> targetSet)
     {
       targetSet.Clear();
@@ -38,19 +19,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
           int chunkX = viewerChunkCoord.x + x;
           int chunkZ = viewerChunkCoord.z + z;
 
-          int surfaceChunkY = GetSurfaceChunkYForColumn(
-            chunkX,
-            chunkZ,
-            maxChunkY * VoxelConstants.ChunkSize
-          );
-
-          int columnMinY = surfaceChunkY - SurfaceVerticalChunkMargin;
-          int columnMaxY = surfaceChunkY + SurfaceVerticalChunkMargin;
-
-          columnMinY = Mathf.Clamp(columnMinY, minChunkY, maxChunkY);
-          columnMaxY = Mathf.Clamp(columnMaxY, minChunkY, maxChunkY);
-
-          for (int y = columnMinY; y <= columnMaxY; y++)
+          for (int y = minChunkY; y <= maxChunkY; y++)
           {
             Vector3Int chunkCoord = new(chunkX, y, chunkZ);
             if (world.Settings.IsInsideEffectiveWorldBounds3D(chunkCoord))
@@ -64,15 +33,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     private void QueueGeneratedChunksForRender(Vector3Int viewerChunkCoord)
     {
       candidateChunksBuffer.Clear();
-      // Proactively load + mesh ONLY the desired (view-radius) set. The keep set
-      // is a DATA / hysteresis cache, not a render region: meshing the whole keep
-      // set is catastrophic when the unload padding is large (e.g. view 16 +
-      // padding 16 => keep radius 32 => ~4x the desired chunk count), which buries
-      // the worker pool under tens of thousands of invisible chunks and stalls the
-      // frontier ("walk to the edge and it never loads"). Already-built meshes are
-      // left untouched out to the keep radius (UnloadOutsideKeepSet only removes
-      // beyond it), so terrain still lingers smoothly as you move - we just stop
-      // GENERATING terrain you cannot see past the render radius.
       foreach (Vector3Int chunkCoord in desiredChunkCoords)
       {
         if (!world.Settings.IsInsideEffectiveWorldBounds3D(chunkCoord))
@@ -117,8 +77,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       }
     }
 
-    // Returns the cached comparison delegate configured for the given pivot.
-    // Avoids allocating a new closure/Comparison on every Sort call.
     private Comparison<Vector3Int> GetChunkPriorityComparison(Vector3Int pivotChunkCoord)
     {
       sortPivotChunkCoord = pivotChunkCoord;
@@ -126,10 +84,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       return chunkPriorityComparison;
     }
 
-    // The point the build queues sort around. Normally the viewer, but shifted
-    // forward along the recent heading by half the desired radius so chunks in the
-    // direction of travel are generated BEFORE the viewer arrives (predictive
-    // prefetch). Falls back to the viewer when stationary.
     private Vector3Int ComputeSortPivot()
     {
       if (!hasLastViewerChunkCoord) return lastViewerChunkCoord;
@@ -193,10 +147,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         knownEmptyDensityChunks.Clear();
       }
 
-      // Remember which way the viewer is travelling (in chunk space) so the build
-      // queues can be biased toward the frontier ahead instead of always nearest-
-      // first. Without this the chunks you are walking INTO are the lowest priority
-      // and only get built once you are on top of them, leaving gaps at the edge.
       if (hasLastViewerChunkCoord)
       {
         Vector3Int delta = viewerChunkCoord - lastViewerChunkCoord;
