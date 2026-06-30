@@ -10,16 +10,22 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
   {
     private bool EnsureDensitySampleChunksAvailableForMesh(Vector3Int root)
     {
-      return DensityMeshSampleDependencyPlanner.QueueMissingSampleChunks(
-          root,
-          world,
-          keepChunkCoords,
-          knownEmptyDensityChunks,
-          HasDensityChunkData,
-          chunkLoadQueue.IsInFlight,
-          pendingLoadSet.Contains,
-          c => QueueLoad(c)
-      );
+      for (int i = 0; i < DensityMeshSampleDependencyPlanner.SampleChunkOffsets.Length; i++)
+      {
+        Vector3Int sampleCoord = root + DensityMeshSampleDependencyPlanner.SampleChunkOffsets[i];
+        if (!world.Settings.IsInsideEffectiveWorldBounds3D(sampleCoord)) continue;
+        if (world.Data.DensityChunks.ContainsKey(sampleCoord)) continue;
+
+        bool cacheHit = DensitySampleChunkCache.TryGet(sampleCoord, out DensityChunkData cachedChunk);
+        if (cacheHit && cachedChunk != null) continue;
+
+        DensitySampleChunkCache.GetOrCreate(
+          sampleCoord,
+          worldSnapshot,
+          world.CreateDensityOverrideSnapshot(sampleCoord));
+      }
+
+      return true;
     }
 
     private bool TryStartDensityMeshBuild(Vector3Int chunkCoord, DensityChunkData chunkData)
@@ -54,17 +60,28 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       return densityBuildQueue.TryStartBuild(request, MaxDensityAsyncTasks);
     }
 
-    private bool HasDensityChunkData(Vector3Int chunkCoord)
-    {
-      return world.Data.DensityChunks.ContainsKey(chunkCoord);
-    }
-
     private Dictionary<Vector3Int, DensityChunkData> CreateDensityMeshChunkSnapshots(Vector3Int root)
     {
-      return DensityMeshSampleDependencyPlanner.CreateSnapshotMap(
-          root,
-          world.Data.DensityChunks
-      );
+      Dictionary<Vector3Int, DensityChunkData> snapshots = new();
+
+      for (int i = 0; i < DensityMeshSampleDependencyPlanner.SampleChunkOffsets.Length; i++)
+      {
+        Vector3Int sampleCoord = root + DensityMeshSampleDependencyPlanner.SampleChunkOffsets[i];
+        if (sampleCoord == root) continue;
+
+        if (world.Data.DensityChunks.TryGetValue(sampleCoord, out DensityChunkData fullChunk) && fullChunk != null)
+        {
+          snapshots[sampleCoord] = fullChunk.Clone();
+          continue;
+        }
+
+        if (DensitySampleChunkCache.TryGet(sampleCoord, out DensityChunkData cachedChunk) && cachedChunk != null)
+        {
+          snapshots[sampleCoord] = cachedChunk.Clone();
+        }
+      }
+
+      return snapshots;
     }
 
     private static void ReturnMeshData(DensityChunkBuildResult result)
