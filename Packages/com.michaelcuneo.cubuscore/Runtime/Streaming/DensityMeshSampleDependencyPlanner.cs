@@ -11,9 +11,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
   /// builder.
   ///
   /// A density chunk mesh samples the root chunk plus the +X/+Y/+Z boundary shell.
-  /// WorldStreamer currently owns this dependency logic directly; this helper is a
-  /// behaviour-neutral extraction target so the density path can move out of
-  /// WorldStreamer in small steps.
+  /// The neighbour chunk does not need to be rendered, but its edge sample data
+  /// must be known before marching triangles are built for the root chunk.
   /// </summary>
   internal static class DensityMeshSampleDependencyPlanner
   {

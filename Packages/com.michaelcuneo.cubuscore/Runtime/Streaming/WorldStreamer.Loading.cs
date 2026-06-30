@@ -30,14 +30,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         bool isDesiredChunk = desiredChunkCoords.Contains(c);
         bool isKeepChunk = keepChunkCoords.Contains(c);
 
-        if (IsBlockTerrainEnabled)
-        {
-          if (!isDesiredChunk)
-          {
-            continue;
-          }
-        }
-        else if (!isDesiredChunk && !isKeepChunk)
+        if (!isDesiredChunk && !isKeepChunk)
         {
           continue;
         }
@@ -64,15 +57,19 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
           continue;
         }
 
-        if (!ShouldStartChunkLoadForCurrentVisibility(c))
+        if (!isKeepChunk && !ShouldStartChunkLoadForCurrentVisibility(c))
         {
-          // Do not keep invisible chunks spinning through the load queue every
-          // frame. Visibility refresh / camera movement will enqueue them again
-          // when they become worth generating.
           continue;
         }
 
         if (chunkLoadQueue.IsInFlight(c)) continue;
+
+        bool loadBlockLayer = ShouldLoadBlockLayerNow(c);
+        bool loadDensityLayer = ShouldLoadDensityLayerNow(c, loadBlockLayer);
+        if (!loadBlockLayer && !loadDensityLayer)
+        {
+          continue;
+        }
 
         int totalActiveAsyncTasks = chunkLoadQueue.ActiveTaskCount + buildQueue.ActiveTaskCount + densityBuildQueue.ActiveTaskCount;
         if (chunkLoadQueue.ActiveTaskCount >= maxLoadTasks || totalActiveAsyncTasks >= maxTotalTasks)
@@ -86,8 +83,10 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
               storage != null ? storage.WorldId : null,
               c,
               MaxLoadAsyncTasks,
-              IsBlockTerrainEnabled ? world.CreateBlockOverrideSnapshot(c) : null,
-              IsDensityTerrainEnabled ? world.CreateDensityOverrideSnapshot(c) : null))
+              loadBlockLayer ? world.CreateBlockOverrideSnapshot(c) : null,
+              loadDensityLayer ? world.CreateDensityOverrideSnapshot(c) : null,
+              loadBlockLayer,
+              loadDensityLayer))
         {
           totalChunkLoadRequestsStarted++;
           count++;
@@ -137,7 +136,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
           if (desiredChunkCoords.Contains(c) && ShouldQueueMeshWorkForChunk(c))
           {
-            if (loadedBlock)
+            if (loadedBlock && !IsHybridTerrainEnabled)
             {
               QueueBlockRender(c);
             }
@@ -146,6 +145,11 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
             {
               QueueDensityRender(c);
             }
+          }
+
+          if ((desiredChunkCoords.Contains(c) || keepChunkCoords.Contains(c)) && (ShouldLoadBlockLayerNow(c) || ShouldLoadDensityLayerNow(c, false)))
+          {
+            QueueLoad(c);
           }
 
           continue;
@@ -164,7 +168,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         return;
       }
 
-      if (IsBlockTerrainEnabled && world.Data.BlockChunks.ContainsKey(c))
+      if (IsBlockTerrainEnabled && !IsHybridTerrainEnabled && world.Data.BlockChunks.ContainsKey(c))
       {
         QueueBlockRender(c);
       }
@@ -175,9 +179,32 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       }
     }
 
+    private bool ShouldLoadBlockLayerNow(Vector3Int c)
+    {
+      return IsBlockTerrainEnabled &&
+             !IsHybridTerrainEnabled &&
+             !knownEmptyChunks.Contains(c) &&
+             !world.Data.BlockChunks.ContainsKey(c);
+    }
+
+    private bool ShouldLoadDensityLayerNow(Vector3Int c, bool blockLayerIsBeingLoadedNow)
+    {
+      if (!IsDensityTerrainEnabled || knownEmptyDensityChunks.Contains(c) || world.Data.DensityChunks.ContainsKey(c))
+      {
+        return false;
+      }
+
+      if (!IsBlockTerrainEnabled)
+      {
+        return true;
+      }
+
+      return desiredChunkCoords.Contains(c) || keepChunkCoords.Contains(c);
+    }
+
     private bool HasRequiredChunkData(Vector3Int c)
     {
-      if (IsBlockTerrainEnabled && !world.Data.BlockChunks.ContainsKey(c))
+      if (IsBlockTerrainEnabled && !IsHybridTerrainEnabled && !world.Data.BlockChunks.ContainsKey(c))
       {
         return false;
       }

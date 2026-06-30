@@ -1,6 +1,5 @@
 using System.Collections.Generic;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Chunks;
-using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World;
 using UnityEngine;
 
@@ -10,7 +9,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
   {
     public void RebuildDensityChunks(IEnumerable<Vector3Int> dirtyChunks)
     {
-      if (!EnsureRuntimeReferences() || world.Settings.TerrainSystem != TerrainSystem.SmoothDensity) return;
+      if (!EnsureRuntimeReferences() || !IsDensityTerrainEnabled || dirtyChunks == null) return;
 
       foreach (Vector3Int dirtyChunk in dirtyChunks)
       {

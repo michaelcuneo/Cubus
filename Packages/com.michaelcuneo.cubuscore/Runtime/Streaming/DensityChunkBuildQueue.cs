@@ -174,6 +174,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
       request.ChunkDataSnapshots ??= new Dictionary<Vector3Int, DensityChunkData>();
       request.ChunkDataSnapshots[request.ChunkCoord] = chunkData;
+      FillMissingSampleSnapshots(request);
 
       MeshData meshData = DensityMeshDataBuilder.GenerateFromChunkSnapshots(
           request.ChunkCoord,
@@ -194,6 +195,28 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         HasSurfaceCrossing = meshData != null && !meshData.IsEmpty,
         GenerationId = request.GenerationId
       };
+    }
+
+    private static void FillMissingSampleSnapshots(DensityChunkBuildRequest request)
+    {
+      for (int i = 0; i < DensityMeshSampleDependencyPlanner.SampleChunkOffsets.Length; i++)
+      {
+        Vector3Int chunkCoord = request.ChunkCoord + DensityMeshSampleDependencyPlanner.SampleChunkOffsets[i];
+        if (request.ChunkDataSnapshots.ContainsKey(chunkCoord)) continue;
+        if (chunkCoord.x < request.GeneratedMinChunkX || chunkCoord.x > request.GeneratedMaxChunkX) continue;
+        if (chunkCoord.y < request.GeneratedMinChunkY || chunkCoord.y > request.GeneratedMaxChunkY) continue;
+        if (chunkCoord.z < request.GeneratedMinChunkZ || chunkCoord.z > request.GeneratedMaxChunkZ) continue;
+
+        DensityChunkData cached = DensitySampleChunkCache.GetOrCreate(
+          chunkCoord,
+          request.WorldSnapshot,
+          null);
+
+        if (cached != null)
+        {
+          request.ChunkDataSnapshots[chunkCoord] = cached;
+        }
+      }
     }
 
     private static DensityVoxel SampleVoxelForBuild(Vector3Int worldVoxelCoord, DensityChunkBuildRequest request)

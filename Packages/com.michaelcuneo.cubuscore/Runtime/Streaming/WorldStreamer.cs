@@ -22,7 +22,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     [SerializeField] private StreamingSettings settings = new();
     [SerializeField] private bool evictCachedChunkDataOutsideKeepSet = true;
     [SerializeField] private bool generateWorldDatabaseBeforeStreaming = false;
-    [SerializeField] private bool persistStreamedChunks = true;
+    [SerializeField] private bool persistStreamedChunks = false;
 
     [Header("Initial Streaming Stage")]
     [SerializeField][Min(0)] private int initialStreamingRadiusInChunks = 1;
@@ -86,8 +86,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     private long totalChunkUnloadsApplied;
     private int adaptiveThrottleFramesRemaining;
 
-    private const float AdaptiveThrottleTriggerFrameMs = 33.0f;
-    private const int AdaptiveThrottleDurationFrames = 8;
+    private const float AdaptiveThrottleTriggerFrameMs = 45.0f;
+    private const int AdaptiveThrottleDurationFrames = 2;
 
     public StreamingSettings Settings => settings;
     public Vector3Int LastViewerChunkCoord => lastViewerChunkCoord;
@@ -136,30 +136,31 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     public int FullDetailChunkRadius =>
         Mathf.Max(1, world != null && world.Settings != null ? world.Settings.ViewDistanceInChunks : 1);
 
-    public int FullDetailKeepRadius => FullDetailChunkRadius + UnloadPaddingInChunks;
+    public int FullDetailKeepRadius => FullDetailChunkRadius + ActiveUnloadPaddingInChunks;
 
     private bool UseInitialStreamingStageNow => useInitialStreamingStage && world != null && !world.IsInitialTerrainReady;
     private int ActiveDesiredRadiusInChunks => UseInitialStreamingStageNow ? Mathf.Max(0, initialStreamingRadiusInChunks) : Mathf.Max(1, world != null && world.Settings != null ? world.Settings.ViewDistanceInChunks : 1);
-    private int ActiveKeepRadiusInChunks => ActiveDesiredRadiusInChunks + (UseInitialStreamingStageNow ? Mathf.Max(0, initialKeepPaddingInChunks) : UnloadPaddingInChunks);
+    private int ActiveKeepRadiusInChunks => ActiveDesiredRadiusInChunks + (UseInitialStreamingStageNow ? Mathf.Max(0, initialKeepPaddingInChunks) : ActiveUnloadPaddingInChunks);
 
+    private int ActiveUnloadPaddingInChunks => IsDensityTerrainEnabled ? 0 : UnloadPaddingInChunks;
     private int UnloadPaddingInChunks => Mathf.Max(2, settings != null ? settings.UnloadPaddingInChunks : 4);
     private int ChunksLoadedPerFrame => Mathf.Clamp(
       settings != null
         ? (UseInitialStreamingStageNow ? settings.InitialChunksGeneratedPerFrame : settings.ChunksGeneratedPerFrame)
-        : 8,
+        : 96,
       1,
-      64
+      256
     );
-    private int ChunksRenderedPerFrame => Mathf.Clamp(settings != null ? settings.ChunksRenderedPerFrame : 32, 1, 128);
-    private int ChunksUnloadedPerFrame => Mathf.Clamp(settings != null ? settings.ChunksRenderedPerFrame / 4 : 4, 1, 8);
-    private int MeshAppliesPerFrame => Mathf.Clamp(settings != null ? settings.MeshAppliesPerFrame : 32, 1, 128);
-    private int MaxAsyncChunkTasks => Mathf.Clamp(settings != null ? settings.MaxAsyncChunkTasks : 8, 1, 32);
-    private int MaxTotalAsyncTasks => Mathf.Clamp(MaxAsyncChunkTasks, 1, cachedMaxHardwareConcurrency);
-    private int MaxLoadAsyncTasks => Mathf.Max(1, MaxTotalAsyncTasks / 2);
+    private int ChunksRenderedPerFrame => Mathf.Clamp(settings != null ? settings.ChunksRenderedPerFrame : 128, 1, 256);
+    private int ChunksUnloadedPerFrame => Mathf.Clamp(settings != null ? settings.ChunksRenderedPerFrame / 2 : 32, 1, 64);
+    private int MeshAppliesPerFrame => Mathf.Clamp(settings != null ? settings.MeshAppliesPerFrame : 64, 1, 256);
+    private int MaxAsyncChunkTasks => Mathf.Clamp(settings != null ? settings.MaxAsyncChunkTasks : 64, 1, 128);
+    private int MaxTotalAsyncTasks => Mathf.Clamp(MaxAsyncChunkTasks, 1, Mathf.Max(1, cachedMaxHardwareConcurrency * 2));
+    private int MaxLoadAsyncTasks => IsDensityTerrainEnabled ? Mathf.Max(1, Mathf.CeilToInt(MaxTotalAsyncTasks * 0.6f)) : Mathf.Max(1, MaxTotalAsyncTasks / 2);
     private int MaxMeshAsyncTasks => Mathf.Max(1, MaxTotalAsyncTasks - MaxLoadAsyncTasks);
-    private int MaxBlockAsyncTasks => IsBlockTerrainEnabled ? Mathf.Max(1, IsDensityTerrainEnabled ? MaxMeshAsyncTasks / 2 : MaxMeshAsyncTasks) : 0;
-    private int MaxDensityAsyncTasks => IsDensityTerrainEnabled ? Mathf.Max(1, IsBlockTerrainEnabled ? MaxMeshAsyncTasks - Mathf.Max(1, MaxMeshAsyncTasks / 2) : MaxMeshAsyncTasks) : 0;
-    private float MeshApplyTimeBudgetSeconds => Mathf.Max(0.001f, (settings != null ? settings.MeshApplyTimeBudgetMs : 2) / 1000.0f);
+    private int MaxBlockAsyncTasks => IsBlockTerrainEnabled ? Mathf.Max(1, IsDensityTerrainEnabled ? Mathf.Max(1, MaxMeshAsyncTasks / 6) : MaxMeshAsyncTasks) : 0;
+    private int MaxDensityAsyncTasks => IsDensityTerrainEnabled ? Mathf.Max(1, IsBlockTerrainEnabled ? MaxMeshAsyncTasks - MaxBlockAsyncTasks : MaxMeshAsyncTasks) : 0;
+    private float MeshApplyTimeBudgetSeconds => Mathf.Max(0.001f, (settings != null ? settings.MeshApplyTimeBudgetMs : 12) / 1000.0f);
 
     private static readonly Vector3Int[] DensityMeshSampleChunkOffsets =
     {
@@ -190,6 +191,13 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       hasLastVisibilityCameraState = false;
       worldRenderer?.SetCollisionViewer(newViewer);
       ForceRefreshStreamingSet();
+    }
+
+    public void ConfigureInitialStreamingStage(int radiusInChunks, int keepPaddingInChunks = 0, bool enabled = true)
+    {
+      useInitialStreamingStage = enabled;
+      initialStreamingRadiusInChunks = Mathf.Max(0, radiusInChunks);
+      initialKeepPaddingInChunks = Mathf.Max(0, keepPaddingInChunks);
     }
 
     private void Awake()
@@ -306,6 +314,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       if (bootstrapCoroutine != null) return;
       if (!IsAnyTerrainEnabled) return;
 
+      float updateStart = NowMs();
+
       float frameMs = Time.unscaledDeltaTime * 1000.0f;
       if (frameMs >= AdaptiveThrottleTriggerFrameMs)
       {
@@ -323,20 +333,43 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
       if (adaptiveThrottleFramesRemaining > 0)
       {
-        loadBudget = Mathf.Max(1, loadBudget / 4);
+        loadBudget = Mathf.Max(1, loadBudget / 2);
         renderBudget = Mathf.Max(1, renderBudget / 2);
         unloadBudget = Mathf.Max(1, unloadBudget / 2);
       }
 
+      float t0 = NowMs();
       UpdateStreamingSetIfNeeded();
+      float t1 = NowMs();
       RefreshVisibilitySchedulingIfNeeded();
+      float t2 = NowMs();
       PrioritizePendingQueues();
+      float t3 = NowMs();
       ProcessCompletedChunkLoads();
+      float t4 = NowMs();
       ProcessRenderQueue(renderBudget);
+      float t5 = NowMs();
       ProcessLoadQueue(loadBudget, renderBudget);
+      float t6 = NowMs();
       ProcessUnloadQueue(unloadBudget);
+      float t7 = NowMs();
       ProcessCompletedBuildResults(meshApplyBudget);
+      float t8 = NowMs();
       ReconcileRenderCoverageIfSettled();
+      float t9 = NowMs();
+
+      AccumulateStreamingPhaseTimings(
+        t1 - t0,
+        t2 - t1,
+        t3 - t2,
+        t4 - t3,
+        t5 - t4,
+        t6 - t5,
+        t7 - t6,
+        t8 - t7,
+        t9 - t8,
+        t9 - updateStart
+      );
     }
 
     private void ReconcileRenderCoverageIfSettled()

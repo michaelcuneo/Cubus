@@ -21,11 +21,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
     private bool ShouldQueueMeshWorkForChunk(Vector3Int chunkCoord)
     {
-      if (UseInitialStreamingStageNow)
-      {
-        return true;
-      }
-
       if (hasPriorityChunkCoord && chunkCoord == priorityChunkCoord)
       {
         return true;
@@ -120,7 +115,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
     private void RefreshVisibilitySchedulingIfNeeded()
     {
-      if (UseInitialStreamingStageNow || !hasLastViewerChunkCoord || desiredChunkCoords.Count == 0)
+      if (!hasLastViewerChunkCoord || desiredChunkCoords.Count == 0)
       {
         return;
       }

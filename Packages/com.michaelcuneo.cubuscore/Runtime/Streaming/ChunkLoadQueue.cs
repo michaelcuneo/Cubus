@@ -60,6 +60,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       {
         completedResults.Clear();
       }
+
+      DensitySampleChunkCache.Clear();
     }
 
     public bool TryStartLoad(
@@ -68,7 +70,9 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         Vector3Int chunkCoord,
         int maxActiveTasks,
         IReadOnlyDictionary<int, ushort> blockOverrides = null,
-        IReadOnlyDictionary<int, DensityVoxelOverride> densityOverrides = null)
+        IReadOnlyDictionary<int, DensityVoxelOverride> densityOverrides = null,
+        bool requestBlockLayer = true,
+        bool requestDensityLayer = true)
     {
       int requestGeneration;
 
@@ -82,7 +86,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         activeTaskCount++;
       }
 
-      _ = Task.Run(() => Load(store, worldId, chunkCoord, requestGeneration, blockOverrides, densityOverrides)).ContinueWith(task =>
+      _ = Task.Run(() => Load(store, worldId, chunkCoord, requestGeneration, blockOverrides, densityOverrides, requestBlockLayer, requestDensityLayer)).ContinueWith(task =>
       {
         ChunkLoadResult result;
 
@@ -132,13 +136,18 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         Vector3Int chunkCoord,
         int generationId,
         IReadOnlyDictionary<int, ushort> blockOverrides,
-        IReadOnlyDictionary<int, DensityVoxelOverride> densityOverrides)
+        IReadOnlyDictionary<int, DensityVoxelOverride> densityOverrides,
+        bool requestBlockLayer,
+        bool requestDensityLayer)
     {
       bool hasGenerationContext = StreamingGenerationContext.TryGet(
         out TerrainSystem mode,
         out WorldGenerationSnapshot snapshot,
         out HybridTerrainLayerGenerationMode blockLayerMode,
         out HybridTerrainLayerGenerationMode densityLayerMode);
+
+      bool wantsBlockLayer = requestBlockLayer && (mode == TerrainSystem.Block || mode == TerrainSystem.Hybrid || !hasGenerationContext);
+      bool wantsDensityLayer = requestDensityLayer && (mode == TerrainSystem.SmoothDensity || mode == TerrainSystem.Hybrid || !hasGenerationContext);
 
       if (hasGenerationContext && store != null && !string.IsNullOrWhiteSpace(worldId))
       {
@@ -147,43 +156,61 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
           ChunkCoord = chunkCoord,
           GenerationId = generationId,
           Loaded = true,
-          TerrainSystem = mode
+          TerrainSystem = mode,
+          RequestedBlockLayer = wantsBlockLayer,
+          RequestedDensityLayer = wantsDensityLayer
         };
 
-        if ((mode == TerrainSystem.Block || mode == TerrainSystem.Hybrid) &&
+        if (wantsBlockLayer &&
+            (mode == TerrainSystem.Block || mode == TerrainSystem.Hybrid) &&
             store.TryLoadChunkLayer(worldId, chunkCoord, TerrainSystem.Block, out WorldChunkRecord blockRecord))
         {
           loaded.BlockChunkData = CubusChunkPayloadCodec.DecodeBlockChunk(blockRecord);
           BlockChunkBuilder.ApplyOverrides(loaded.BlockChunkData, blockOverrides);
         }
 
-        if ((mode == TerrainSystem.SmoothDensity || mode == TerrainSystem.Hybrid) &&
+        if (wantsDensityLayer &&
+            (mode == TerrainSystem.SmoothDensity || mode == TerrainSystem.Hybrid) &&
             store.TryLoadChunkLayer(worldId, chunkCoord, TerrainSystem.SmoothDensity, out WorldChunkRecord densityRecord))
         {
           loaded.DensityChunkData = CubusChunkPayloadCodec.DecodeDensityChunk(densityRecord);
           DensityChunkBuilder.ApplyOverrides(loaded.DensityChunkData, densityOverrides);
         }
 
-        FillMissingSparseHybridLayers(mode, blockLayerMode, densityLayerMode, loaded, chunkCoord, blockOverrides, densityOverrides);
+        FillMissingSparseHybridLayers(mode, blockLayerMode, densityLayerMode, loaded, chunkCoord, blockOverrides, densityOverrides, wantsBlockLayer, wantsDensityLayer);
 
-        if (HasRequiredLoadedLayers(mode, loaded))
+        if (HasRequestedLoadedLayers(mode, loaded, wantsBlockLayer, wantsDensityLayer))
         {
           return loaded;
         }
       }
       else if (store != null && !string.IsNullOrWhiteSpace(worldId) && store.TryLoadChunk(worldId, chunkCoord, out WorldChunkRecord record))
       {
-        ChunkLoadResult loaded = new() { ChunkCoord = chunkCoord, GenerationId = generationId, Loaded = true, TerrainSystem = record.TerrainSystem };
+        ChunkLoadResult loaded = new()
+        {
+          ChunkCoord = chunkCoord,
+          GenerationId = generationId,
+          Loaded = true,
+          TerrainSystem = record.TerrainSystem,
+          RequestedBlockLayer = wantsBlockLayer,
+          RequestedDensityLayer = wantsDensityLayer
+        };
 
         switch (record.TerrainSystem)
         {
           case TerrainSystem.Block:
-            loaded.BlockChunkData = CubusChunkPayloadCodec.DecodeBlockChunk(record);
-            BlockChunkBuilder.ApplyOverrides(loaded.BlockChunkData, blockOverrides);
+            if (wantsBlockLayer)
+            {
+              loaded.BlockChunkData = CubusChunkPayloadCodec.DecodeBlockChunk(record);
+              BlockChunkBuilder.ApplyOverrides(loaded.BlockChunkData, blockOverrides);
+            }
             break;
           case TerrainSystem.SmoothDensity:
-            loaded.DensityChunkData = CubusChunkPayloadCodec.DecodeDensityChunk(record);
-            DensityChunkBuilder.ApplyOverrides(loaded.DensityChunkData, densityOverrides);
+            if (wantsDensityLayer)
+            {
+              loaded.DensityChunkData = CubusChunkPayloadCodec.DecodeDensityChunk(record);
+              DensityChunkBuilder.ApplyOverrides(loaded.DensityChunkData, densityOverrides);
+            }
             break;
           default:
             loaded.Loaded = false;
@@ -201,25 +228,27 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
           GenerationId = generationId,
           Loaded = true,
           IsMissingFromStorage = true,
-          TerrainSystem = mode
+          TerrainSystem = mode,
+          RequestedBlockLayer = wantsBlockLayer,
+          RequestedDensityLayer = wantsDensityLayer
         };
 
-        if (mode == TerrainSystem.Block)
+        if (wantsBlockLayer && mode == TerrainSystem.Block)
         {
           result.BlockChunkData = BlockChunkBuilder.GenerateChunkData(chunkCoord, snapshot, blockOverrides, out _);
         }
-        else if (mode == TerrainSystem.Hybrid)
+        else if (wantsBlockLayer && mode == TerrainSystem.Hybrid)
         {
           result.BlockChunkData = blockLayerMode == HybridTerrainLayerGenerationMode.ProceduralTerrain
             ? BlockChunkBuilder.GenerateChunkData(chunkCoord, snapshot, blockOverrides, out _)
             : CreateSparseBlockChunk(chunkCoord, blockOverrides);
         }
 
-        if (mode == TerrainSystem.SmoothDensity)
+        if (wantsDensityLayer && mode == TerrainSystem.SmoothDensity)
         {
           result.DensityChunkData = DensityChunkBuilder.GenerateChunkData(chunkCoord, snapshot, densityOverrides);
         }
-        else if (mode == TerrainSystem.Hybrid)
+        else if (wantsDensityLayer && mode == TerrainSystem.Hybrid)
         {
           result.DensityChunkData = densityLayerMode == HybridTerrainLayerGenerationMode.ProceduralTerrain
             ? DensityChunkBuilder.GenerateChunkData(chunkCoord, snapshot, densityOverrides)
@@ -232,7 +261,15 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         }
       }
 
-      return new ChunkLoadResult { ChunkCoord = chunkCoord, GenerationId = generationId, Loaded = false, IsMissingFromStorage = true };
+      return new ChunkLoadResult
+      {
+        ChunkCoord = chunkCoord,
+        GenerationId = generationId,
+        Loaded = false,
+        IsMissingFromStorage = true,
+        RequestedBlockLayer = wantsBlockLayer,
+        RequestedDensityLayer = wantsDensityLayer
+      };
     }
 
     private static void FillMissingSparseHybridLayers(
@@ -242,19 +279,21 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         ChunkLoadResult loaded,
         Vector3Int chunkCoord,
         IReadOnlyDictionary<int, ushort> blockOverrides,
-        IReadOnlyDictionary<int, DensityVoxelOverride> densityOverrides)
+        IReadOnlyDictionary<int, DensityVoxelOverride> densityOverrides,
+        bool wantsBlockLayer,
+        bool wantsDensityLayer)
     {
       if (mode != TerrainSystem.Hybrid || loaded == null)
       {
         return;
       }
 
-      if (loaded.BlockChunkData == null && blockLayerMode == HybridTerrainLayerGenerationMode.SparseOnly)
+      if (wantsBlockLayer && loaded.BlockChunkData == null && blockLayerMode == HybridTerrainLayerGenerationMode.SparseOnly)
       {
         loaded.BlockChunkData = CreateSparseBlockChunk(chunkCoord, blockOverrides);
       }
 
-      if (loaded.DensityChunkData == null && densityLayerMode == HybridTerrainLayerGenerationMode.SparseOnly)
+      if (wantsDensityLayer && loaded.DensityChunkData == null && densityLayerMode == HybridTerrainLayerGenerationMode.SparseOnly)
       {
         loaded.DensityChunkData = CreateSparseDensityChunk(chunkCoord, densityOverrides);
       }
@@ -275,15 +314,16 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       return chunkData;
     }
 
-    private static bool HasRequiredLoadedLayers(TerrainSystem mode, ChunkLoadResult loaded)
+    private static bool HasRequestedLoadedLayers(TerrainSystem mode, ChunkLoadResult loaded, bool wantsBlockLayer, bool wantsDensityLayer)
     {
-      return mode switch
+      if (loaded == null)
       {
-        TerrainSystem.Block => loaded.BlockChunkData != null,
-        TerrainSystem.SmoothDensity => loaded.DensityChunkData != null,
-        TerrainSystem.Hybrid => loaded.BlockChunkData != null && loaded.DensityChunkData != null,
-        _ => false
-      };
+        return false;
+      }
+
+      bool blockOk = !wantsBlockLayer || mode == TerrainSystem.SmoothDensity || loaded.BlockChunkData != null;
+      bool densityOk = !wantsDensityLayer || mode == TerrainSystem.Block || loaded.DensityChunkData != null;
+      return blockOk && densityOk;
     }
   }
 
@@ -293,6 +333,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     public int GenerationId;
     public bool Loaded;
     public bool IsMissingFromStorage;
+    public bool RequestedBlockLayer;
+    public bool RequestedDensityLayer;
     public TerrainSystem TerrainSystem;
     public BlockChunkData BlockChunkData;
     public DensityChunkData DensityChunkData;
