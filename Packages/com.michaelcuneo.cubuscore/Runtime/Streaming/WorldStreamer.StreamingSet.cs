@@ -75,8 +75,37 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       // GENERATING terrain you cannot see past the render radius.
       foreach (Vector3Int chunkCoord in desiredChunkCoords)
       {
-        if (worldRenderer.HasChunkView(chunkCoord) || pendingLoadSet.Contains(chunkCoord) || pendingRenderSet.Contains(chunkCoord) || knownEmptyChunks.Contains(chunkCoord) || chunkLoadQueue.IsInFlight(chunkCoord)) continue;
-        if (!world.Settings.IsInsideEffectiveWorldBounds3D(chunkCoord)) { knownEmptyChunks.Add(chunkCoord); continue; }
+        if (!world.Settings.IsInsideEffectiveWorldBounds3D(chunkCoord))
+        {
+          knownEmptyChunks.Add(chunkCoord);
+          knownEmptyDensityChunks.Add(chunkCoord);
+          continue;
+        }
+
+        bool blockNeedsRender =
+          IsBlockTerrainEnabled &&
+          !HasRenderedBlockChunk(chunkCoord) &&
+          !pendingBlockRenderSet.Contains(chunkCoord) &&
+          !pendingBlockRenderRetrySet.Contains(chunkCoord) &&
+          !knownEmptyChunks.Contains(chunkCoord);
+
+        bool densityNeedsRender =
+          IsDensityTerrainEnabled &&
+          !HasRenderedDensityChunk(chunkCoord) &&
+          !pendingDensityRenderSet.Contains(chunkCoord) &&
+          !pendingDensityRenderRetrySet.Contains(chunkCoord) &&
+          !knownEmptyDensityChunks.Contains(chunkCoord);
+
+        if (!blockNeedsRender && !densityNeedsRender)
+        {
+          continue;
+        }
+
+        if (pendingLoadSet.Contains(chunkCoord) || chunkLoadQueue.IsInFlight(chunkCoord))
+        {
+          continue;
+        }
+
         candidateChunksBuffer.Add(chunkCoord);
       }
 
@@ -185,14 +214,20 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
     private void PruneKnownEmptyChunksOutsideCurrentInterest()
     {
-      if (knownEmptyChunks.Count == 0)
+      PruneKnownEmptySetOutsideCurrentInterest(knownEmptyChunks);
+      PruneKnownEmptySetOutsideCurrentInterest(knownEmptyDensityChunks);
+    }
+
+    private void PruneKnownEmptySetOutsideCurrentInterest(HashSet<Vector3Int> knownEmptySet)
+    {
+      if (knownEmptySet.Count == 0)
       {
         return;
       }
 
       candidateChunksBuffer.Clear();
 
-      foreach (Vector3Int chunkCoord in knownEmptyChunks)
+      foreach (Vector3Int chunkCoord in knownEmptySet)
       {
         if (!desiredChunkCoords.Contains(chunkCoord) && !keepChunkCoords.Contains(chunkCoord))
         {
@@ -202,7 +237,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
       for (int i = 0; i < candidateChunksBuffer.Count; i++)
       {
-        knownEmptyChunks.Remove(candidateChunksBuffer[i]);
+        knownEmptySet.Remove(candidateChunksBuffer[i]);
       }
 
       candidateChunksBuffer.Clear();
