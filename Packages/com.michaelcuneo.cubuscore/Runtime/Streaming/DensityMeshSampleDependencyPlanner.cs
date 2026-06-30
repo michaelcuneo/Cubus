@@ -11,10 +11,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
   /// builder.
   ///
   /// A density chunk mesh samples the root chunk plus the +X/+Y/+Z boundary shell.
-  /// Missing sample chunks are queued for their own full mesh builds, but they do
-  /// not block the current chunk from meshing. The density build queue has a
-  /// procedural sampler fallback for missing snapshots, which keeps terrain reveal
-  /// moving while neighbouring chunks catch up.
+  /// The neighbour chunk does not need to be rendered, but its edge sample data
+  /// must be known before marching triangles are built for the root chunk.
   /// </summary>
   internal static class DensityMeshSampleDependencyPlanner
   {
@@ -40,11 +38,14 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         Func<Vector3Int, bool> isPendingLoad,
         Action<Vector3Int> queueLoad)
     {
+      bool allSampleChunksAvailable = true;
+
       for (int i = 0; i < SampleChunkOffsets.Length; i++)
       {
         Vector3Int chunkCoord = root + SampleChunkOffsets[i];
         if (hasChunkData(chunkCoord) || !world.Settings.IsInsideEffectiveWorldBounds3D(chunkCoord)) continue;
 
+        allSampleChunksAvailable = false;
         knownEmptyChunks.Remove(chunkCoord);
         keepChunkCoords.Add(chunkCoord);
 
@@ -54,7 +55,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         }
       }
 
-      return true;
+      return allSampleChunksAvailable;
     }
 
     public static Dictionary<Vector3Int, DensityChunkData> CreateSnapshotMap(
