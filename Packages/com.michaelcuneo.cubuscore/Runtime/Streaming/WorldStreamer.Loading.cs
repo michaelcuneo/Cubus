@@ -42,7 +42,9 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
           continue;
         }
 
-        if (knownEmptyChunks.Contains(c))
+        // knownEmptyChunks is block-layer state. Do not let an empty block mesh
+        // suppress density loading in Hybrid mode.
+        if (knownEmptyChunks.Contains(c) && !IsDensityTerrainEnabled)
         {
           continue;
         }
@@ -60,6 +62,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         if (!world.Settings.IsInsideEffectiveWorldBounds3D(c))
         {
           knownEmptyChunks.Add(c);
+          knownEmptyDensityChunks.Add(c);
           continue;
         }
 
@@ -113,6 +116,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
           if (IsDensityTerrainEnabled && result.DensityChunkData != null)
           {
             world.Data.DensityChunks[c] = result.DensityChunkData;
+            knownEmptyDensityChunks.Remove(c);
           }
 
           if (result.IsMissingFromStorage && persistStreamedChunks && storage != null && storage.ActiveStore != null && HasRequiredChunkData(c))
