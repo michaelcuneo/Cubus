@@ -42,19 +42,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
           continue;
         }
 
-        bool blockNeedsRender =
-          IsBlockTerrainEnabled &&
-          !HasRenderedBlockChunk(chunkCoord) &&
-          !pendingBlockRenderSet.Contains(chunkCoord) &&
-          !pendingBlockRenderRetrySet.Contains(chunkCoord) &&
-          !knownEmptyChunks.Contains(chunkCoord);
-
-        bool densityNeedsRender =
-          IsDensityTerrainEnabled &&
-          !HasRenderedDensityChunk(chunkCoord) &&
-          !pendingDensityRenderSet.Contains(chunkCoord) &&
-          !pendingDensityRenderRetrySet.Contains(chunkCoord) &&
-          !knownEmptyDensityChunks.Contains(chunkCoord);
+        bool blockNeedsRender = NeedsBlockRenderOrLoad(chunkCoord);
+        bool densityNeedsRender = NeedsDensityRenderOrLoad(chunkCoord);
 
         if (!blockNeedsRender && !densityNeedsRender)
         {
@@ -63,6 +52,12 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
         if (pendingLoadSet.Contains(chunkCoord) || chunkLoadQueue.IsInFlight(chunkCoord))
         {
+          if ((blockNeedsRender && world.Data.BlockChunks.ContainsKey(chunkCoord)) ||
+              (densityNeedsRender && world.Data.DensityChunks.ContainsKey(chunkCoord)))
+          {
+            candidateChunksBuffer.Add(chunkCoord);
+          }
+
           continue;
         }
 
@@ -72,8 +67,59 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       candidateChunksBuffer.Sort(GetChunkPriorityComparison(ComputeSortPivot()));
       for (int i = 0; i < candidateChunksBuffer.Count; i++)
       {
-        if (HasRequiredChunkData(candidateChunksBuffer[i])) QueueRender(candidateChunksBuffer[i]);
-        else QueueLoad(candidateChunksBuffer[i]);
+        QueueNeededRenderOrLoadLayers(candidateChunksBuffer[i]);
+      }
+    }
+
+    private bool NeedsBlockRenderOrLoad(Vector3Int chunkCoord)
+    {
+      return IsBlockTerrainEnabled &&
+             !HasRenderedBlockChunk(chunkCoord) &&
+             !pendingBlockRenderSet.Contains(chunkCoord) &&
+             !pendingBlockRenderRetrySet.Contains(chunkCoord) &&
+             !knownEmptyChunks.Contains(chunkCoord);
+    }
+
+    private bool NeedsDensityRenderOrLoad(Vector3Int chunkCoord)
+    {
+      return IsDensityTerrainEnabled &&
+             !HasRenderedDensityChunk(chunkCoord) &&
+             !pendingDensityRenderSet.Contains(chunkCoord) &&
+             !pendingDensityRenderRetrySet.Contains(chunkCoord) &&
+             !knownEmptyDensityChunks.Contains(chunkCoord);
+    }
+
+    private void QueueNeededRenderOrLoadLayers(Vector3Int chunkCoord)
+    {
+      bool needsLoad = false;
+
+      if (NeedsBlockRenderOrLoad(chunkCoord))
+      {
+        if (world.Data.BlockChunks.ContainsKey(chunkCoord))
+        {
+          QueueBlockRender(chunkCoord);
+        }
+        else
+        {
+          needsLoad = true;
+        }
+      }
+
+      if (NeedsDensityRenderOrLoad(chunkCoord))
+      {
+        if (world.Data.DensityChunks.ContainsKey(chunkCoord))
+        {
+          QueueDensityRender(chunkCoord);
+        }
+        else
+        {
+          needsLoad = true;
+        }
+      }
+
+      if (needsLoad)
+      {
+        QueueLoad(chunkCoord);
       }
     }
 
