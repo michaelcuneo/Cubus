@@ -19,7 +19,12 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         VoxelSize = world.Settings.VoxelSize,
         ChunkDataSnapshot = chunkData,
         NeighborChunkSnapshots = CreateBlockMeshChunkSnapshots(chunkCoord),
-        SolidFallbackNeighborChunks = CollectUnloadedInBoundsBlockNeighbors(chunkCoord)
+        // In pure Block mode this hides temporary load-frontier seams. In Hybrid,
+        // however, density terrain may already visually occupy the neighbour space,
+        // so pretending unloaded block neighbours are solid creates the ugly random
+        // wall panels seen during mixed block+density streaming. Let Hybrid mesh
+        // against procedural fallback until the real block neighbour arrives.
+        SolidFallbackNeighborChunks = IsHybridTerrainEnabled ? null : CollectUnloadedInBoundsBlockNeighbors(chunkCoord)
       };
 
       return buildQueue.TryStartBuild(request, MaxBlockAsyncTasks);
