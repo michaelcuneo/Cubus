@@ -7,24 +7,21 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
   public sealed class StreamingSettings : ISerializationCallbackReceiver
   {
     private const int MaxRuntimeUnloadPaddingInChunks = 4;
-    private const int MaxRuntimeChunksGeneratedPerFrame = 64;
-    private const int MaxRuntimeInitialChunksGeneratedPerFrame = 128;
-    private const int MaxRuntimeChunksRenderedPerFrame = 128;
-    private const int MaxRuntimeMeshAppliesPerFrame = 64;
-    private const int MaxRuntimeMeshApplyTimeBudgetMs = 16;
-    private const int MaxRuntimeAsyncChunkTasks = 32;
+    private const int MaxRuntimeChunksGeneratedPerFrame = 128;
+    private const int MaxRuntimeInitialChunksGeneratedPerFrame = 256;
+    private const int MaxRuntimeChunksRenderedPerFrame = 192;
+    private const int MaxRuntimeMeshAppliesPerFrame = 96;
+    private const int MaxRuntimeMeshApplyTimeBudgetMs = 24;
+    private const int MaxRuntimeAsyncChunkTasks = 64;
 
-    // Minimum throughput floors. These guarantee that even a conservatively
-    // serialized scene component streams fast enough to draw nearby chunks
-    // promptly instead of leaving holes right in front of the viewer.
-    private const int MinRuntimeChunksGeneratedPerFrame = 16;
-    private const int MinRuntimeChunksRenderedPerFrame = 32;
-    private const int MinRuntimeMeshAppliesPerFrame = 12;
-    private const int MinRuntimeMeshApplyTimeBudgetMs = 6;
-    // Floor the worker-task budget high enough that streaming uses most of the
-    // machine. WorldStreamer clamps this to (cores - 1), so the effective total
-    // still never exceeds the available hardware concurrency.
-    private const int MinRuntimeAsyncChunkTasks = 16;
+    // Aggressive throughput floors. The streamer still clamps async work to the
+    // machine's hardware concurrency, but these defaults stop old serialized
+    // scene values from quietly throttling the new fast path.
+    private const int MinRuntimeChunksGeneratedPerFrame = 32;
+    private const int MinRuntimeChunksRenderedPerFrame = 64;
+    private const int MinRuntimeMeshAppliesPerFrame = 24;
+    private const int MinRuntimeMeshApplyTimeBudgetMs = 8;
+    private const int MinRuntimeAsyncChunkTasks = 24;
 
     [Header("Horizontal")]
     [Min(1)]
@@ -32,26 +29,26 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
     [Header("Budgets")]
     [Min(1)]
-    public int ChunksGeneratedPerFrame = 32;
+    public int ChunksGeneratedPerFrame = 96;
 
     [Min(1)]
-    public int InitialChunksGeneratedPerFrame = 64;
+    public int InitialChunksGeneratedPerFrame = 192;
 
     [Tooltip("Limits how many chunk render/build operations are started per frame.")]
     [Min(1)]
-    public int ChunksRenderedPerFrame = 64;
+    public int ChunksRenderedPerFrame = 128;
 
     [Tooltip("Maximum completed mesh data objects converted to Unity meshes per frame.")]
     [Min(1)]
-    public int MeshAppliesPerFrame = 32;
+    public int MeshAppliesPerFrame = 64;
 
     [Tooltip("Maximum time budget in milliseconds spent applying completed mesh builds per frame.")]
     [Min(1)]
-    public int MeshApplyTimeBudgetMs = 8;
+    public int MeshApplyTimeBudgetMs = 12;
 
     [Header("Async")]
     [Min(1)]
-    public int MaxAsyncChunkTasks = 32;
+    public int MaxAsyncChunkTasks = 64;
 
     public void OnBeforeSerialize()
     {
