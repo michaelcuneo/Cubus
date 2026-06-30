@@ -188,6 +188,11 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       Vector3Int viewerChunkCoord = GetStreamingFocusChunkCoord();
       if (!force && hasLastViewerChunkCoord && viewerChunkCoord == lastViewerChunkCoord) return;
 
+      if (force)
+      {
+        knownEmptyDensityChunks.Clear();
+      }
+
       // Remember which way the viewer is travelling (in chunk space) so the build
       // queues can be biased toward the frontier ahead instead of always nearest-
       // first. Without this the chunks you are walking INTO are the lowest priority
