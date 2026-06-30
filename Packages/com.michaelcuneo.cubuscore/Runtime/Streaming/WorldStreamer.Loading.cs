@@ -84,7 +84,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
         if (chunkLoadQueue.TryStartLoad(
               storage != null ? storage.ActiveStore : null,
-              c == default ? null : storage != null ? storage.WorldId : null,
+              storage != null ? storage.WorldId : null,
               c,
               MaxLoadAsyncTasks,
               loadBlockLayer ? world.CreateBlockOverrideSnapshot(c) : null,
