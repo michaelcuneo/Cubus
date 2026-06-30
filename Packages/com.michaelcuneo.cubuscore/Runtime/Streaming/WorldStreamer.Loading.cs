@@ -30,14 +30,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         bool isDesiredChunk = desiredChunkCoords.Contains(c);
         bool isKeepChunk = keepChunkCoords.Contains(c);
 
-        if (IsBlockTerrainEnabled)
-        {
-          if (!isDesiredChunk)
-          {
-            continue;
-          }
-        }
-        else if (!isDesiredChunk && !isKeepChunk)
+        if (!isDesiredChunk && !isKeepChunk)
         {
           continue;
         }
@@ -64,11 +57,12 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
           continue;
         }
 
-        if (!ShouldStartChunkLoadForCurrentVisibility(c))
+        if (!isKeepChunk && !ShouldStartChunkLoadForCurrentVisibility(c))
         {
-          // Do not keep invisible chunks spinning through the load queue every
-          // frame. Visibility refresh / camera movement will enqueue them again
-          // when they become worth generating.
+          // Do not keep invisible desired chunks spinning through the load queue
+          // every frame. Density edge dependencies are allowed through from the
+          // keep set because marching cubes needs their boundary sample data even
+          // when the neighbour chunk is not currently visible/rendered.
           continue;
         }
 
@@ -90,7 +84,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
         if (chunkLoadQueue.TryStartLoad(
               storage != null ? storage.ActiveStore : null,
-              storage != null ? storage.WorldId : null,
+              c == default ? null : storage != null ? storage.WorldId : null,
               c,
               MaxLoadAsyncTasks,
               loadBlockLayer ? world.CreateBlockOverrideSnapshot(c) : null,
@@ -157,7 +151,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
             }
           }
 
-          if (desiredChunkCoords.Contains(c) && (ShouldLoadBlockLayerNow(c) || ShouldLoadDensityLayerNow(c, false)))
+          if ((desiredChunkCoords.Contains(c) || keepChunkCoords.Contains(c)) && (ShouldLoadBlockLayerNow(c) || ShouldLoadDensityLayerNow(c, false)))
           {
             QueueLoad(c);
           }
@@ -208,17 +202,10 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         return true;
       }
 
-      if (blockLayerIsBeingLoadedNow)
-      {
-        return false;
-      }
-
-      // In hybrid worlds, get block terrain visible/collidable first. Density
-      // loading begins once the block layer exists, and is allowed immediately
-      // if a block mesh is already rendered or the block layer no longer needs
-      // a render queue slot.
-      return world.Data.BlockChunks.ContainsKey(c) &&
-             (HasRenderedBlockChunk(c) || !NeedsBlockRenderOrLoad(c));
+      // In this game Hybrid means procedural density terrain plus sparse/block
+      // building data. Density terrain and its edge dependencies must not wait
+      // for the sparse block layer or block rendering before loading.
+      return desiredChunkCoords.Contains(c) || keepChunkCoords.Contains(c);
     }
 
     private bool HasRequiredChunkData(Vector3Int c)
