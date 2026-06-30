@@ -8,7 +8,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 {
   public sealed partial class WorldStreamer
   {
-    private const int SurfaceVerticalChunkMargin = 0;
+    private const int SurfaceVerticalChunkMargin = 1;
     private const int ViewerVerticalChunkMargin = 0;
 
     private void BuildChunkSet(Vector3Int viewerChunkCoord, int horizontalRadius, HashSet<Vector3Int> targetSet)
@@ -17,16 +17,12 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       world.Settings.GetActiveVerticalChunkBounds(out int minChunkY, out int maxChunkY);
 
       for (int z = -horizontalRadius; z <= horizontalRadius; z++)
+      {
         for (int x = -horizontalRadius; x <= horizontalRadius; x++)
         {
           int chunkX = viewerChunkCoord.x + x;
           int chunkZ = viewerChunkCoord.z + z;
-
-          int surfaceChunkY = GetSurfaceChunkYForColumn(
-            chunkX,
-            chunkZ,
-            maxChunkY * VoxelConstants.ChunkSize
-          );
+          int surfaceChunkY = GetSurfaceChunkYForColumn(chunkX, chunkZ, maxChunkY * VoxelConstants.ChunkSize);
 
           AddVerticalChunkRange(targetSet, chunkX, chunkZ, surfaceChunkY - SurfaceVerticalChunkMargin, surfaceChunkY + SurfaceVerticalChunkMargin, minChunkY, maxChunkY);
 
@@ -35,16 +31,10 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
             AddVerticalChunkRange(targetSet, chunkX, chunkZ, viewerChunkCoord.y - ViewerVerticalChunkMargin, viewerChunkCoord.y + ViewerVerticalChunkMargin, minChunkY, maxChunkY);
           }
         }
+      }
     }
 
-    private void AddVerticalChunkRange(
-      HashSet<Vector3Int> targetSet,
-      int chunkX,
-      int chunkZ,
-      int requestedMinY,
-      int requestedMaxY,
-      int minChunkY,
-      int maxChunkY)
+    private void AddVerticalChunkRange(HashSet<Vector3Int> targetSet, int chunkX, int chunkZ, int requestedMinY, int requestedMaxY, int minChunkY, int maxChunkY)
     {
       int fromY = Mathf.Clamp(Mathf.Min(requestedMinY, requestedMaxY), minChunkY, maxChunkY);
       int toY = Mathf.Clamp(Mathf.Max(requestedMinY, requestedMaxY), minChunkY, maxChunkY);
@@ -52,10 +42,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       for (int y = fromY; y <= toY; y++)
       {
         Vector3Int chunkCoord = new(chunkX, y, chunkZ);
-        if (world.Settings.IsInsideEffectiveWorldBounds3D(chunkCoord))
-        {
-          targetSet.Add(chunkCoord);
-        }
+        if (world.Settings.IsInsideEffectiveWorldBounds3D(chunkCoord)) targetSet.Add(chunkCoord);
       }
     }
 
@@ -63,6 +50,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     {
       ResolveVisibilityCamera();
       candidateChunksBuffer.Clear();
+
       foreach (Vector3Int chunkCoord in desiredChunkCoords)
       {
         if (!world.Settings.IsInsideEffectiveWorldBounds3D(chunkCoord))
@@ -74,16 +62,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
         bool blockNeedsRender = NeedsBlockRenderOrLoad(chunkCoord);
         bool densityNeedsRender = NeedsDensityRenderOrLoad(chunkCoord);
-
-        if (!blockNeedsRender && !densityNeedsRender)
-        {
-          continue;
-        }
-
-        if (!ShouldQueueMeshWorkForChunk(chunkCoord))
-        {
-          continue;
-        }
+        if (!blockNeedsRender && !densityNeedsRender) continue;
+        if (!ShouldQueueMeshWorkForChunk(chunkCoord)) continue;
 
         if (pendingLoadSet.Contains(chunkCoord) || chunkLoadQueue.IsInFlight(chunkCoord))
         {
@@ -92,7 +72,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
           {
             candidateChunksBuffer.Add(chunkCoord);
           }
-
           continue;
         }
 
@@ -100,10 +79,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       }
 
       candidateChunksBuffer.Sort(GetChunkPriorityComparison(ComputeSortPivot()));
-      for (int i = 0; i < candidateChunksBuffer.Count; i++)
-      {
-        QueueNeededRenderOrLoadLayers(candidateChunksBuffer[i]);
-      }
+      for (int i = 0; i < candidateChunksBuffer.Count; i++) QueueNeededRenderOrLoadLayers(candidateChunksBuffer[i]);
     }
 
     private bool NeedsBlockRenderOrLoad(Vector3Int chunkCoord)
@@ -130,32 +106,17 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
       if (NeedsBlockRenderOrLoad(chunkCoord))
       {
-        if (world.Data.BlockChunks.ContainsKey(chunkCoord))
-        {
-          QueueBlockRender(chunkCoord);
-        }
-        else
-        {
-          needsLoad = true;
-        }
+        if (world.Data.BlockChunks.ContainsKey(chunkCoord)) QueueBlockRender(chunkCoord);
+        else needsLoad = true;
       }
 
       if (NeedsDensityRenderOrLoad(chunkCoord))
       {
-        if (world.Data.DensityChunks.ContainsKey(chunkCoord))
-        {
-          QueueDensityRender(chunkCoord);
-        }
-        else
-        {
-          needsLoad = true;
-        }
+        if (world.Data.DensityChunks.ContainsKey(chunkCoord)) QueueDensityRender(chunkCoord);
+        else needsLoad = true;
       }
 
-      if (needsLoad)
-      {
-        QueueLoad(chunkCoord);
-      }
+      if (needsLoad) QueueLoad(chunkCoord);
     }
 
     private Comparison<Vector3Int> GetChunkPriorityComparison(Vector3Int pivotChunkCoord)
@@ -172,29 +133,20 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       {
         Vector3 forward = camera.transform.forward;
         forward.y = 0.0f;
-
         if (forward.sqrMagnitude > 0.0001f)
         {
           forward.Normalize();
           int lead = Mathf.Max(2, ActiveDesiredRadiusInChunks / 2);
-          return new Vector3Int(
-            lastViewerChunkCoord.x + Mathf.RoundToInt(forward.x * lead),
-            lastViewerChunkCoord.y,
-            lastViewerChunkCoord.z + Mathf.RoundToInt(forward.z * lead));
+          return new Vector3Int(lastViewerChunkCoord.x + Mathf.RoundToInt(forward.x * lead), lastViewerChunkCoord.y, lastViewerChunkCoord.z + Mathf.RoundToInt(forward.z * lead));
         }
       }
 
       if (!hasLastViewerChunkCoord) return lastViewerChunkCoord;
-
       int fallbackLead = Mathf.Max(2, ActiveDesiredRadiusInChunks / 2);
       Vector3 heading = new(viewerHeading.x, 0.0f, viewerHeading.z);
       if (heading.sqrMagnitude < 0.0001f) return lastViewerChunkCoord;
-
       heading.Normalize();
-      return new Vector3Int(
-        lastViewerChunkCoord.x + Mathf.RoundToInt(heading.x * fallbackLead),
-        lastViewerChunkCoord.y,
-        lastViewerChunkCoord.z + Mathf.RoundToInt(heading.z * fallbackLead));
+      return new Vector3Int(lastViewerChunkCoord.x + Mathf.RoundToInt(heading.x * fallbackLead), lastViewerChunkCoord.y, lastViewerChunkCoord.z + Mathf.RoundToInt(heading.z * fallbackLead));
     }
 
     private int CompareChunkPriorityByPivot(Vector3Int a, Vector3Int b) => CompareChunkPriority(a, b, sortPivotChunkCoord);
@@ -240,18 +192,12 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       Vector3Int viewerChunkCoord = GetStreamingFocusChunkCoord();
       if (!force && hasLastViewerChunkCoord && viewerChunkCoord == lastViewerChunkCoord) return;
 
-      if (force)
-      {
-        knownEmptyDensityChunks.Clear();
-      }
+      if (force) knownEmptyDensityChunks.Clear();
 
       if (hasLastViewerChunkCoord)
       {
         Vector3Int delta = viewerChunkCoord - lastViewerChunkCoord;
-        if (delta.x != 0 || delta.z != 0)
-        {
-          viewerHeading = delta;
-        }
+        if (delta.x != 0 || delta.z != 0) viewerHeading = delta;
       }
 
       lastViewerChunkCoord = viewerChunkCoord;
@@ -273,26 +219,15 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
     private void PruneKnownEmptySetOutsideCurrentInterest(HashSet<Vector3Int> knownEmptySet)
     {
-      if (knownEmptySet.Count == 0)
-      {
-        return;
-      }
-
+      if (knownEmptySet.Count == 0) return;
       candidateChunksBuffer.Clear();
 
       foreach (Vector3Int chunkCoord in knownEmptySet)
       {
-        if (!desiredChunkCoords.Contains(chunkCoord) && !keepChunkCoords.Contains(chunkCoord))
-        {
-          candidateChunksBuffer.Add(chunkCoord);
-        }
+        if (!desiredChunkCoords.Contains(chunkCoord) && !keepChunkCoords.Contains(chunkCoord)) candidateChunksBuffer.Add(chunkCoord);
       }
 
-      for (int i = 0; i < candidateChunksBuffer.Count; i++)
-      {
-        knownEmptySet.Remove(candidateChunksBuffer[i]);
-      }
-
+      for (int i = 0; i < candidateChunksBuffer.Count; i++) knownEmptySet.Remove(candidateChunksBuffer[i]);
       candidateChunksBuffer.Clear();
     }
   }
