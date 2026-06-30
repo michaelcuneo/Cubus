@@ -12,10 +12,18 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     private const int ViewerVerticalChunkMargin = 0;
     private const int RuntimeDensityStartRadius = 3;
     private int activeProgressiveStreamingRadius = -1;
+    private int retainedPrewarmRadius = -1;
+    private Vector3Int retainedPrewarmCenterChunkCoord;
+    private bool hasRetainedPrewarmCenter;
 
     private void BuildChunkSet(Vector3Int viewerChunkCoord, int horizontalRadius, HashSet<Vector3Int> targetSet)
     {
       targetSet.Clear();
+      AddChunkSetRange(viewerChunkCoord, horizontalRadius, targetSet);
+    }
+
+    private void AddChunkSetRange(Vector3Int viewerChunkCoord, int horizontalRadius, HashSet<Vector3Int> targetSet)
+    {
       world.Settings.GetActiveVerticalChunkBounds(out int minChunkY, out int maxChunkY);
 
       for (int z = -horizontalRadius; z <= horizontalRadius; z++)
@@ -192,9 +200,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
     private int ResolveActiveProgressiveRadius(Vector3Int viewerChunkCoord, int targetRadius, bool force)
     {
-      bool hasMovedHorizontally = hasLastViewerChunkCoord && (viewerChunkCoord.x != lastViewerChunkCoord.x || viewerChunkCoord.z != lastViewerChunkCoord.z);
-      bool shouldRestartProgressiveRadius = force || !hasLastViewerChunkCoord || (hasMovedHorizontally && activeProgressiveStreamingRadius < targetRadius);
-
       if (!IsDensityTerrainEnabled || UseInitialStreamingStageNow)
       {
         activeProgressiveStreamingRadius = targetRadius;
@@ -203,15 +208,15 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
       int startRadius = Mathf.Clamp(RuntimeDensityStartRadius, 1, targetRadius);
 
-      if (activeProgressiveStreamingRadius < 0)
+      if (force || activeProgressiveStreamingRadius < 0)
       {
         activeProgressiveStreamingRadius = startRadius;
         return activeProgressiveStreamingRadius;
       }
 
-      if (shouldRestartProgressiveRadius)
+      if (hasLastViewerChunkCoord && (viewerChunkCoord.x != lastViewerChunkCoord.x || viewerChunkCoord.z != lastViewerChunkCoord.z))
       {
-        activeProgressiveStreamingRadius = Mathf.Max(startRadius, Mathf.Min(activeProgressiveStreamingRadius, targetRadius));
+        activeProgressiveStreamingRadius = startRadius;
         return activeProgressiveStreamingRadius;
       }
 
@@ -232,10 +237,35 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       return queuedLoadWork <= MaxLoadAsyncTasks && queuedDensityWork <= MaxDensityAsyncTasks * 2 && activeWork <= activeLimit;
     }
 
+    private void RetainInitialPrewarmBubble(Vector3Int viewerChunkCoord, int targetRadius)
+    {
+      if (!UseInitialStreamingStageNow || !IsDensityTerrainEnabled)
+      {
+        return;
+      }
+
+      retainedPrewarmRadius = Mathf.Max(retainedPrewarmRadius, targetRadius);
+      retainedPrewarmCenterChunkCoord = viewerChunkCoord;
+      hasRetainedPrewarmCenter = true;
+    }
+
+    private void BuildKeepChunkSet(Vector3Int viewerChunkCoord, int progressiveDesiredRadius)
+    {
+      BuildChunkSet(viewerChunkCoord, progressiveDesiredRadius + ActiveUnloadPaddingInChunks, keepChunkCoords);
+
+      if (!hasRetainedPrewarmCenter || retainedPrewarmRadius < 0)
+      {
+        return;
+      }
+
+      AddChunkSetRange(retainedPrewarmCenterChunkCoord, retainedPrewarmRadius, keepChunkCoords);
+    }
+
     private void UpdateStreamingSetIfNeeded(bool force = false)
     {
       Vector3Int viewerChunkCoord = GetStreamingFocusChunkCoord();
       int targetDesiredRadius = ActiveDesiredRadiusInChunks;
+      RetainInitialPrewarmBubble(viewerChunkCoord, targetDesiredRadius);
       int progressiveDesiredRadius = ResolveActiveProgressiveRadius(viewerChunkCoord, targetDesiredRadius, force);
 
       if (!force && hasLastViewerChunkCoord && viewerChunkCoord == lastViewerChunkCoord && progressiveDesiredRadius == desiredChunkRadiusLastBuilt)
@@ -256,7 +286,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       desiredChunkRadiusLastBuilt = progressiveDesiredRadius;
 
       BuildChunkSet(viewerChunkCoord, progressiveDesiredRadius, desiredChunkCoords);
-      BuildChunkSet(viewerChunkCoord, progressiveDesiredRadius + ActiveUnloadPaddingInChunks, keepChunkCoords);
+      BuildKeepChunkSet(viewerChunkCoord, progressiveDesiredRadius);
       PruneKnownEmptyChunksOutsideCurrentInterest();
       QueueGeneratedChunksForRender(viewerChunkCoord);
       UnloadOutsideKeepSet();
