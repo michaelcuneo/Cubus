@@ -42,16 +42,16 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
           continue;
         }
 
-        if (knownEmptyChunks.Contains(c))
+        if (knownEmptyChunks.Contains(c) && !IsDensityTerrainEnabled)
         {
           continue;
         }
 
         if (HasRequiredChunkData(c))
         {
-          if (desiredChunkCoords.Contains(c))
+          if (desiredChunkCoords.Contains(c) && ShouldQueueMeshWorkForChunk(c))
           {
-            QueueRender(c);
+            QueueLoadedChunkRenderLayers(c);
           }
 
           continue;
@@ -60,6 +60,15 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         if (!world.Settings.IsInsideEffectiveWorldBounds3D(c))
         {
           knownEmptyChunks.Add(c);
+          knownEmptyDensityChunks.Add(c);
+          continue;
+        }
+
+        if (!ShouldStartChunkLoadForCurrentVisibility(c))
+        {
+          // Do not keep invisible chunks spinning through the load queue every
+          // frame. Visibility refresh / camera movement will enqueue them again
+          // when they become worth generating.
           continue;
         }
 
@@ -103,16 +112,22 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         if (result.Loaded)
         {
           totalChunkLoadsCompleted++;
+          bool loadedBlock = false;
+          bool loadedDensity = false;
+
           if (IsBlockTerrainEnabled && result.BlockChunkData != null)
           {
             world.Data.BlockChunks[c] = result.BlockChunkData;
             knownEmptyChunks.Remove(c);
             RequeueSettledBlockNeighbors(c);
+            loadedBlock = true;
           }
 
           if (IsDensityTerrainEnabled && result.DensityChunkData != null)
           {
             world.Data.DensityChunks[c] = result.DensityChunkData;
+            knownEmptyDensityChunks.Remove(c);
+            loadedDensity = true;
           }
 
           if (result.IsMissingFromStorage && persistStreamedChunks && storage != null && storage.ActiveStore != null && HasRequiredChunkData(c))
@@ -120,9 +135,17 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
             storage.SaveChunk(c);
           }
 
-          if (desiredChunkCoords.Contains(c) && HasRequiredChunkData(c))
+          if (desiredChunkCoords.Contains(c) && ShouldQueueMeshWorkForChunk(c))
           {
-            QueueRender(c);
+            if (loadedBlock)
+            {
+              QueueBlockRender(c);
+            }
+
+            if (loadedDensity)
+            {
+              QueueDensityRender(c);
+            }
           }
 
           continue;
@@ -131,6 +154,24 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         if (!desiredChunkCoords.Contains(c) && !keepChunkCoords.Contains(c)) continue;
         totalChunkLoadFailures++;
         QueueLoad(c);
+      }
+    }
+
+    private void QueueLoadedChunkRenderLayers(Vector3Int c)
+    {
+      if (!ShouldQueueMeshWorkForChunk(c))
+      {
+        return;
+      }
+
+      if (IsBlockTerrainEnabled && world.Data.BlockChunks.ContainsKey(c))
+      {
+        QueueBlockRender(c);
+      }
+
+      if (IsDensityTerrainEnabled && world.Data.DensityChunks.ContainsKey(c))
+      {
+        QueueDensityRender(c);
       }
     }
 

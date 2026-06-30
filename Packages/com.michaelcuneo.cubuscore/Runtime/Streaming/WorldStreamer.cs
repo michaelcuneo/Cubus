@@ -75,11 +75,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     private bool pendingLoadQueueNeedsPrioritization;
     private bool pendingRenderQueueNeedsPrioritization;
     private bool renderReconciliationPending;
-    // Cached once on the main thread; SystemInfo.processorCount is a native call
-    // that was previously hit many times per frame inside the streaming loops.
     private int cachedMaxHardwareConcurrency = 1;
-    // Reusable sort state so the priority comparison can be a single cached
-    // delegate instead of allocating a closure + Comparison delegate per sort.
     private Vector3Int sortPivotChunkCoord;
     private Comparison<Vector3Int> chunkPriorityComparison;
     private long totalChunkLoadRequestsStarted;
@@ -137,20 +133,9 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     private bool hasOverrideStreamingFocusVoxel;
     private Vector3Int overrideStreamingFocusVoxel;
 
-    /// <summary>
-    /// Base-chunk radius the full-detail streamer fills around the viewer (the
-    /// LOD0 region). The LOD streamer reads this so both systems share a single
-    /// hand-off boundary instead of each deriving it independently. Uses the
-    /// steady-state view distance so the LOD boundary does not jump while the
-    /// transient initial-streaming stage is active.
-    /// </summary>
     public int FullDetailChunkRadius =>
         Mathf.Max(1, world != null && world.Settings != null ? world.Settings.ViewDistanceInChunks : 1);
 
-    /// <summary>
-    /// Outer base-chunk radius full-detail chunk meshes can still occupy before
-    /// they are unloaded (full-detail radius plus the unload-hysteresis padding).
-    /// </summary>
     public int FullDetailKeepRadius => FullDetailChunkRadius + UnloadPaddingInChunks;
 
     private bool UseInitialStreamingStageNow => useInitialStreamingStage && world != null && !world.IsInitialTerrainReady;
@@ -170,9 +155,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     private int MeshAppliesPerFrame => Mathf.Clamp(settings != null ? settings.MeshAppliesPerFrame : 32, 1, 128);
     private int MaxAsyncChunkTasks => Mathf.Clamp(settings != null ? settings.MaxAsyncChunkTasks : 8, 1, 32);
     private int MaxTotalAsyncTasks => Mathf.Clamp(MaxAsyncChunkTasks, 1, cachedMaxHardwareConcurrency);
-    // Loading feeds meshing and meshing additionally re-meshes per neighbour load,
-    // so both stages carry comparable work. In hybrid mode both block and density
-    // meshers need workers; neither layer should starve the other.
     private int MaxLoadAsyncTasks => Mathf.Max(1, MaxTotalAsyncTasks / 2);
     private int MaxMeshAsyncTasks => Mathf.Max(1, MaxTotalAsyncTasks - MaxLoadAsyncTasks);
     private int MaxBlockAsyncTasks => IsBlockTerrainEnabled ? Mathf.Max(1, IsDensityTerrainEnabled ? MaxMeshAsyncTasks / 2 : MaxMeshAsyncTasks) : 0;
@@ -204,6 +186,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     public void SetViewer(Transform newViewer)
     {
       viewer = newViewer;
+      cachedVisibilityCamera = null;
+      hasLastVisibilityCameraState = false;
       worldRenderer?.SetCollisionViewer(newViewer);
       ForceRefreshStreamingSet();
     }
@@ -216,11 +200,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       EnsureLodStreamer();
     }
 
-    // The Distant-Horizon LOD lives in a sibling LodStreamer component. Ensure it
-    // exists when LOD terrain is enabled so far terrain fills in without manual
-    // scene wiring. If one was added/tuned by hand it is left untouched. The
-    // LodStreamer is fully gated (EnableLodTerrain + valid mode + world ready),
-    // so a stray instance does nothing when LOD is off.
     private void EnsureLodStreamer()
     {
       if (world == null || world.Settings == null || !world.Settings.EnableLodTerrain)
@@ -344,15 +323,13 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
       if (adaptiveThrottleFramesRemaining > 0)
       {
-        // Favor smooth frame time after a hitch by throttling how much NEW work we
-        // start, but keep applying already-built meshes at full budget so chunks
-        // the player is standing in front of still become visible promptly.
         loadBudget = Mathf.Max(1, loadBudget / 4);
         renderBudget = Mathf.Max(1, renderBudget / 2);
         unloadBudget = Mathf.Max(1, unloadBudget / 2);
       }
 
       UpdateStreamingSetIfNeeded();
+      RefreshVisibilitySchedulingIfNeeded();
       PrioritizePendingQueues();
       ProcessCompletedChunkLoads();
       ProcessRenderQueue(renderBudget);
@@ -362,14 +339,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       ReconcileRenderCoverageIfSettled();
     }
 
-    // QueueGeneratedChunksForRender only runs when the viewer chunk changes. If a
-    // build result is dropped mid-flight (generation bump or a chunk that briefly
-    // left the desired set during bootstrap), the chunk keeps its data but never
-    // gets a view, and a stationary viewer would never re-queue it. Once the
-    // streamer has fully drained its queues, run a single reconciliation pass to
-    // re-queue any desired chunk that still lacks a view. This converges: the pass
-    // only enqueues genuinely stuck chunks, and clears the flag once nothing is
-    // left to do.
     private void ReconcileRenderCoverageIfSettled()
     {
       bool busy =
@@ -419,6 +388,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       pendingDensityRenderRetryQueue.Clear(); pendingDensityRenderRetrySet.Clear();
       pendingUnload.Clear();
       hasLastViewerChunkCoord = false;
+      hasLastVisibilityCameraState = false;
       pendingLoadQueueNeedsPrioritization = false;
       pendingRenderQueueNeedsPrioritization = false;
       UpdateStreamingSetIfNeeded(true);
@@ -438,6 +408,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       knownEmptyChunks.Clear();
       buildQueue.IncrementGeneration(); densityBuildQueue.IncrementGeneration(); chunkLoadQueue.IncrementGeneration();
       hasLastViewerChunkCoord = false;
+      hasLastVisibilityCameraState = false;
       pendingLoadQueueNeedsPrioritization = false;
       pendingRenderQueueNeedsPrioritization = false;
     }
