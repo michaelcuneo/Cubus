@@ -175,6 +175,12 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       // Missing neighbour chunks are sampled deterministically by the density
       // build fallback instead of forcing full neighbour chunk generation before
       // this visible chunk can mesh.
+      if (!EnsureDensitySampleChunksAvailableForMesh(c))
+      {
+        QueueDensityRender(c, false);
+        return false;
+      }
+
       int totalActiveTasks = chunkLoadQueue.ActiveTaskCount + buildQueue.ActiveTaskCount + densityBuildQueue.ActiveTaskCount;
 
       if (densityBuildQueue.ActiveTaskCount >= MaxDensityAsyncTasks || totalActiveTasks >= MaxTotalAsyncTasks)

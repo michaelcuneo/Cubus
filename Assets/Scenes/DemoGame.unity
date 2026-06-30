@@ -150,8 +150,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Assets.Demo.Scripts.Multiplayer.CubusNetworkManager
   serverUri: http://cubus.michaelcuneo.com.au
   moduleName: cubus
-  subscribeToWorldChunks: 0
-  connectOnStart: 0
+  subscribeToWorldChunks: 1
+  connectOnStart: 1
   verboseLogging: 1
   enableChatOverlay: 1
   enableExitMenu: 1
@@ -439,6 +439,7 @@ MonoBehaviour:
   storage: {fileID: 1298388487}
   network: {fileID: 515115131}
   requireLauncherSelection: 1
+  spawnGate: {fileID: 0}
   launcherSceneName: DemoLauncher
   connectedWorldReadyTimeoutSeconds: 30
   logLoadingDiagnostics: 1
@@ -513,9 +514,9 @@ MonoBehaviour:
   settings:
     TerrainSystem: 0
     WorldSeed: 2147483647
-    ViewDistanceInChunks: 64
+    ViewDistanceInChunks: 12
     VoxelSize: 1
-    EnableLodTerrain: 1
+    EnableLodTerrain: 0
     LodLevelCount: 6
     LodRingWidthInTiles: 4
     LodVerticalRadiusInTiles: 4
@@ -609,7 +610,7 @@ MonoBehaviour:
     WorldMinChunkXZ: {x: -1024, y: -1024}
     WorldMaxChunkXZ: {x: 1024, y: 1024}
     MissingChunkPolicy: 1
-  generateOnStartWithoutStreamer: 1
+  generateOnStartWithoutStreamer: 0
 --- !u!114 &1298388479
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -641,7 +642,7 @@ MonoBehaviour:
   logRenderedChunkMeshes: 0
   collisionMode: 1
   collisionViewer: {fileID: 1517188426}
-  collisionActivationRadius: 64
+  collisionActivationRadius: 24
   collisionUpdateInterval: 0.1
 --- !u!114 &1298388482
 MonoBehaviour:
@@ -655,20 +656,19 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 836b08095ac3d7e48b4648a18074ee25, type: 3}
   m_Name: 
   m_EditorClassIdentifier: CubusCore.Runtime::CubusCore.Streaming.WorldStreamer
-  viewer: {fileID: 1517188426}
+  viewer: {fileID: 1453617041}
   settings:
     UnloadPaddingInChunks: 2
-    ChunksGeneratedPerFrame: 24
-    InitialChunksGeneratedPerFrame: 64
-    ChunksRenderedPerFrame: 48
-    MeshAppliesPerFrame: 24
-    MeshApplyTimeBudgetMs: 8
-    MaxAsyncChunkTasks: 16
-  desiredInitialSpawnLocation: {x: 0, y: 0, z: 0}
-  initialSpawnClearance: 2
+    ChunksGeneratedPerFrame: 96
+    InitialChunksGeneratedPerFrame: 192
+    ChunksRenderedPerFrame: 128
+    MeshAppliesPerFrame: 64
+    MeshApplyTimeBudgetMs: 12
+    MaxAsyncChunkTasks: 64
   evictCachedChunkDataOutsideKeepSet: 1
   generateWorldDatabaseBeforeStreaming: 0
-  persistStreamedChunks: 1
+  persistStreamedChunks: 0
+  initialStreamingRadiusInChunks: 1
   useInitialStreamingStage: 1
   initialKeepPaddingInChunks: 1
 --- !u!114 &1298388483
@@ -751,9 +751,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: CubusCore.Runtime::CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage.CubusWorldStorage
   backend: 1
   worldId: demo_world
-  autoSaveAfterGeneration: 1
+  autoSaveAfterGeneration: 0
   autoLoadOnStart: 1
-  autoLoadManifestOnlyOnStart: 0
+  autoLoadManifestOnlyOnStart: 1
   logCompressionStats: 0
   logTimingStats: 0
   logSingleChunkCompressionStats: 0
@@ -812,7 +812,7 @@ GameObject:
   - component: {fileID: 1453617042}
   m_Layer: 0
   m_Name: Camera
-  m_TagString: Untagged
+  m_TagString: MainCamera
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
