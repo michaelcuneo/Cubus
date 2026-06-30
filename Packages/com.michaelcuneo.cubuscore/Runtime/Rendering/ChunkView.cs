@@ -22,6 +22,13 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
     // toggled on when debugging.
     public static bool AssignDebugMeshNames;
 
+    // MeshCollider cooking is one of the nastiest main-thread spikes during
+    // streaming. Keep visual terrain fast and let collision catch up gradually
+    // instead of baking dozens of colliders in the same frame.
+    public static int MaxCollisionBakesPerFrame = 1;
+    private static int collisionBakeFrame = -1;
+    private static int collisionBakesThisFrame;
+
     private bool hasCollisionMesh;
 
     public Vector3Int ChunkCoord { get; private set; }
@@ -84,7 +91,9 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
       transform.localScale = Vector3.one;
       gameObject.layer = parent != null ? parent.gameObject.layer : gameObject.layer;
 
-      gameObject.name = $"Chunk {chunkCoord.x}, {chunkCoord.y}, {chunkCoord.z}";
+      gameObject.name = AssignDebugMeshNames
+        ? $"Chunk {chunkCoord.x}, {chunkCoord.y}, {chunkCoord.z}"
+        : "Chunk";
       gameObject.SetActive(true);
 
       if (meshRenderer != null)
@@ -123,11 +132,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
 
       if (generateCollision)
       {
-        meshCollider.enabled = false;
-        meshCollider.sharedMesh = null;
-        meshCollider.sharedMesh = currentMesh;
-        meshCollider.enabled = true;
-        hasCollisionMesh = true;
+        TryApplyCollisionMesh();
       }
       else
       {
@@ -175,11 +180,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
 
       if (generateCollision)
       {
-        meshCollider.enabled = false;
-        meshCollider.sharedMesh = null;
-        meshCollider.sharedMesh = currentMesh;
-        meshCollider.enabled = true;
-        hasCollisionMesh = true;
+        TryApplyCollisionMesh();
       }
       else
       {
@@ -204,10 +205,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
         currentMesh = oldMesh;
         DestroyMesh(currentMesh);
         currentMesh = newMesh;
-      }
-      else
-      {
-        DestroyImmediate(oldMesh);
       }
     }
 
@@ -311,13 +308,54 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
 
       if (!hasCollisionMesh || meshCollider.sharedMesh != currentMesh)
       {
-        meshCollider.enabled = false;
-        meshCollider.sharedMesh = null;
-        meshCollider.sharedMesh = currentMesh;
-        hasCollisionMesh = true;
+        TryApplyCollisionMesh();
+        return;
       }
 
       meshCollider.enabled = true;
+    }
+
+    private void TryApplyCollisionMesh()
+    {
+      if (meshCollider == null || currentMesh == null)
+      {
+        return;
+      }
+
+      if (!TryReserveCollisionBakeSlot())
+      {
+        meshCollider.enabled = false;
+        return;
+      }
+
+      meshCollider.enabled = false;
+      meshCollider.sharedMesh = null;
+      meshCollider.sharedMesh = currentMesh;
+      hasCollisionMesh = true;
+      meshCollider.enabled = true;
+    }
+
+    private static bool TryReserveCollisionBakeSlot()
+    {
+      if (MaxCollisionBakesPerFrame <= 0)
+      {
+        return false;
+      }
+
+      int frame = Time.frameCount;
+      if (collisionBakeFrame != frame)
+      {
+        collisionBakeFrame = frame;
+        collisionBakesThisFrame = 0;
+      }
+
+      if (collisionBakesThisFrame >= MaxCollisionBakesPerFrame)
+      {
+        return false;
+      }
+
+      collisionBakesThisFrame++;
+      return true;
     }
 
     public void Release(Transform poolParent)
