@@ -74,6 +74,13 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
         if (chunkLoadQueue.IsInFlight(c)) continue;
 
+        bool loadBlockLayer = ShouldLoadBlockLayerNow(c);
+        bool loadDensityLayer = ShouldLoadDensityLayerNow(c, loadBlockLayer);
+        if (!loadBlockLayer && !loadDensityLayer)
+        {
+          continue;
+        }
+
         int totalActiveAsyncTasks = chunkLoadQueue.ActiveTaskCount + buildQueue.ActiveTaskCount + densityBuildQueue.ActiveTaskCount;
         if (chunkLoadQueue.ActiveTaskCount >= maxLoadTasks || totalActiveAsyncTasks >= maxTotalTasks)
         {
@@ -86,8 +93,10 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
               storage != null ? storage.WorldId : null,
               c,
               MaxLoadAsyncTasks,
-              IsBlockTerrainEnabled ? world.CreateBlockOverrideSnapshot(c) : null,
-              IsDensityTerrainEnabled ? world.CreateDensityOverrideSnapshot(c) : null))
+              loadBlockLayer ? world.CreateBlockOverrideSnapshot(c) : null,
+              loadDensityLayer ? world.CreateDensityOverrideSnapshot(c) : null,
+              loadBlockLayer,
+              loadDensityLayer))
         {
           totalChunkLoadRequestsStarted++;
           count++;
@@ -148,6 +157,11 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
             }
           }
 
+          if (desiredChunkCoords.Contains(c) && (ShouldLoadBlockLayerNow(c) || ShouldLoadDensityLayerNow(c, false)))
+          {
+            QueueLoad(c);
+          }
+
           continue;
         }
 
@@ -173,6 +187,38 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       {
         QueueDensityRender(c);
       }
+    }
+
+    private bool ShouldLoadBlockLayerNow(Vector3Int c)
+    {
+      return IsBlockTerrainEnabled &&
+             !knownEmptyChunks.Contains(c) &&
+             !world.Data.BlockChunks.ContainsKey(c);
+    }
+
+    private bool ShouldLoadDensityLayerNow(Vector3Int c, bool blockLayerIsBeingLoadedNow)
+    {
+      if (!IsDensityTerrainEnabled || knownEmptyDensityChunks.Contains(c) || world.Data.DensityChunks.ContainsKey(c))
+      {
+        return false;
+      }
+
+      if (!IsBlockTerrainEnabled)
+      {
+        return true;
+      }
+
+      if (blockLayerIsBeingLoadedNow)
+      {
+        return false;
+      }
+
+      // In hybrid worlds, get block terrain visible/collidable first. Density
+      // loading begins once the block layer exists, and is allowed immediately
+      // if a block mesh is already rendered or the block layer no longer needs
+      // a render queue slot.
+      return world.Data.BlockChunks.ContainsKey(c) &&
+             (HasRenderedBlockChunk(c) || !NeedsBlockRenderOrLoad(c));
     }
 
     private bool HasRequiredChunkData(Vector3Int c)
