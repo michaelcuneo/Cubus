@@ -483,7 +483,7 @@ namespace Assets.Demo.Scripts.Multiplayer
     {
       string worldSummary = world == null
         ? "World=none"
-        : $"WorldReady={world.IsWorldReady}, InitialTerrainReady={world.IsInitialTerrainReady}, Generating={world.IsGeneratingWorld}, GenerationProgress={world.GenerationProgress:0.00}, GenerationStatus={world.GenerationStatus}, Spawn={world.InitialSpawnWorldPosition}";
+        : $"WorldReady={world.IsWorldReady}, InitialTerrainReady={world.IsInitialTerrainReady}, Generating={world.IsGeneratingWorld}, GenerationProgress={world.GenerationProgress:0.00}, GenerationStatus={world.GenerationStatus}";
 
       string streamerSummary = streamer == null
         ? "Streamer=none"
@@ -491,7 +491,7 @@ namespace Assets.Demo.Scripts.Multiplayer
 
       string networkSummary = network == null
         ? "Network=none"
-        : $"Network connected={network.IsConnected}, hasConn={network.Conn != null}, subscriptionApplied={network.HasAppliedWorldSubscription}, server={network.ServerUri}, module={network.ModuleName}, worldId={network.WorldId}";
+        : $"Network connected={network.IsConnected}, hasConn={network.Conn != null}, server={network.ServerUri}, module={network.ModuleName}, worldId={network.WorldId}";
 
       return $"{worldSummary}; {streamerSummary}; {networkSummary}";
     }
