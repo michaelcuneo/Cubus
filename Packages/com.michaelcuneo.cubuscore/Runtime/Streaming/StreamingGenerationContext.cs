@@ -29,7 +29,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
         terrainSystem = settings.TerrainSystem;
         worldSnapshot = WorldGenerationSnapshot.FromSettings(settings);
-        hybridBlockLayerMode = TerrainSystem == TerrainSystem.Hybrid
+        hybridBlockLayerMode = terrainSystem == TerrainSystem.Hybrid
           ? HybridTerrainLayerGenerationMode.SparseOnly
           : HybridTerrainLayerGenerationMode.ProceduralTerrain;
         hybridDensityLayerMode = HybridTerrainLayerGenerationMode.ProceduralTerrain;
