@@ -117,18 +117,13 @@ namespace Assets.Demo.Scripts.Core
       settings.DensityMaxChunkY = DemoGameLaunchContext.MaxChunkY;
       settings.InvalidateBiomeVariableCache();
 
-      if (DemoGameLaunchContext.TerrainSystem == TerrainSystem.Hybrid)
-      {
-        StreamingGenerationContext.SetHybridLayerGenerationModes(
-          HybridTerrainLayerGenerationMode.SparseOnly,
-          HybridTerrainLayerGenerationMode.ProceduralTerrain);
-      }
-      else
-      {
-        StreamingGenerationContext.SetHybridLayerGenerationModes(
-          HybridTerrainLayerGenerationMode.ProceduralTerrain,
-          HybridTerrainLayerGenerationMode.ProceduralTerrain);
-      }
+      // Hybrid used to force the block layer to SparseOnly here, which made the
+      // streamer generate empty block chunks and rely entirely on slow density
+      // meshes. Keep block terrain procedural so the fast voxel layer can reveal
+      // immediately, then let density detail stream on top.
+      StreamingGenerationContext.SetHybridLayerGenerationModes(
+        HybridTerrainLayerGenerationMode.ProceduralTerrain,
+        HybridTerrainLayerGenerationMode.ProceduralTerrain);
 
       if (network != null)
       {
@@ -221,42 +216,27 @@ namespace Assets.Demo.Scripts.Core
         yield break;
       }
 
-      SetStage($"Waiting for {label} terrain", "Waiting for DemoWorld.BroadcastInitialTerrainReady. Streaming details are logged to the console.");
-      float startTime = Time.realtimeSinceStartup;
-      int lastLoggedSecond = -1;
+      float startedAt = Time.realtimeSinceStartup;
+      float nextDiagnosticAt = startedAt;
+      SetStage($"Waiting for {label} initial terrain", "Waiting for DemoWorld.BroadcastInitialTerrainReady. Streaming details are logged to the console.");
 
       while (!world.IsInitialTerrainReady)
       {
-        float elapsed = Time.realtimeSinceStartup - startTime;
-        int elapsedSecond = Mathf.FloorToInt(elapsed);
-        if (elapsedSecond != lastLoggedSecond && elapsedSecond % 5 == 0)
+        if (timeoutSeconds > 0.0f && Time.realtimeSinceStartup - startedAt >= timeoutSeconds)
         {
-          lastLoggedSecond = elapsedSecond;
-          LogDiagnosticsSnapshot($"Still waiting for {label} initial terrain after {elapsed:0.0}s");
+          lastWarning = $"Timed out waiting for {label} initial terrain.";
+          Debug.LogWarning($"[DemoLaunch] {lastWarning}");
+          yield break;
         }
 
-        if (timeoutSeconds > 0.0f && elapsed > timeoutSeconds)
+        if (logLoadingDiagnostics && Time.realtimeSinceStartup >= nextDiagnosticAt)
         {
-          lastWarning = $"Timed out waiting for {label} terrain after {timeoutSeconds:0.0}s. Player remains gated until DemoWorld broadcasts initial terrain ready.";
-          Debug.LogWarning($"[DemoLaunch] {lastWarning} {BuildDebugSummary()}");
-          yield break;
+          LogDiagnosticsSnapshot($"Still waiting for {label} initial terrain after {Time.realtimeSinceStartup - startedAt:0.0}s");
+          nextDiagnosticAt = Time.realtimeSinceStartup + 5.0f;
         }
 
         yield return null;
       }
-    }
-
-    private void DisableStreamerAutoStartForLaunch()
-    {
-      WorldStreamer streamer = GetStreamer();
-      if (streamer == null || !streamer.enabled)
-      {
-        return;
-      }
-
-      streamer.enabled = false;
-      disabledStreamerAutoStartForLaunch = true;
-      Debug.Log("[DemoLaunch] WorldStreamer disabled before Start so launcher bootstrap can control terrain preparation.");
     }
 
     private IEnumerator EnableStreamerForBootstrap(WorldStreamer streamer)
@@ -268,26 +248,10 @@ namespace Assets.Demo.Scripts.Core
 
       if (!streamer.enabled)
       {
-        disabledStreamerAutoStartForLaunch = false;
         streamer.enabled = true;
-        yield return null;
-      }
-    }
-
-    private WorldStreamer GetStreamer()
-    {
-      if (cachedStreamer != null)
-      {
-        return cachedStreamer;
       }
 
-      if (world == null)
-      {
-        FindReferences();
-      }
-
-      cachedStreamer = world != null ? world.GetComponent<WorldStreamer>() : null;
-      return cachedStreamer;
+      yield return null;
     }
 
     private void FindReferences()
@@ -297,16 +261,14 @@ namespace Assets.Demo.Scripts.Core
         world = FindAnyObjectByType<CubusWorld>();
       }
 
-      if (storage == null && world != null)
+      if (storage == null)
       {
-        storage = world.GetComponent<CubusWorldStorage>();
+        storage = FindAnyObjectByType<CubusWorldStorage>();
       }
 
       if (network == null)
       {
-        network = DemoNetworkManager.Instance != null
-            ? DemoNetworkManager.Instance
-            : FindAnyObjectByType<DemoNetworkManager>();
+        network = FindAnyObjectByType<DemoNetworkManager>();
       }
 
       if (spawnGate == null)
@@ -315,49 +277,70 @@ namespace Assets.Demo.Scripts.Core
       }
     }
 
-    private void SetStage(string stage, string detail)
+    private WorldStreamer GetStreamer()
     {
-      loadingStage = stage;
-      loadingDetail = detail ?? string.Empty;
-      if (logLoadingDiagnostics)
+      if (cachedStreamer == null)
       {
-        Debug.Log($"[DemoLaunch] {loadingStage}: {loadingDetail}");
+        cachedStreamer = world != null ? world.GetComponent<WorldStreamer>() : FindAnyObjectByType<WorldStreamer>();
       }
+
+      return cachedStreamer;
+    }
+
+    private void DisableStreamerAutoStartForLaunch()
+    {
+      WorldStreamer streamer = GetStreamer();
+      if (streamer == null)
+      {
+        return;
+      }
+
+      if (!streamer.enabled)
+      {
+        return;
+      }
+
+      streamer.enabled = false;
+      disabledStreamerAutoStartForLaunch = true;
+      Debug.Log("[DemoLaunch] WorldStreamer disabled before Start so launcher bootstrap can control terrain preparation.");
     }
 
     private string DescribeLaunchSettings()
     {
-      return $"Mode={DemoGameLaunchContext.Mode}, Terrain={DemoGameLaunchContext.TerrainSystem}, " +
-             $"WorldId={DemoGameLaunchContext.WorldId}, Seed={DemoGameLaunchContext.WorldSeed}, " +
-             $"Y={DemoGameLaunchContext.MinChunkY}..{DemoGameLaunchContext.MaxChunkY}, " +
-             $"XZ={DemoGameLaunchContext.WorldMinChunkXZ}..{DemoGameLaunchContext.WorldMaxChunkXZ}";
+      return $"Mode={DemoGameLaunchContext.Mode}, Terrain={DemoGameLaunchContext.TerrainSystem}, WorldId={DemoGameLaunchContext.WorldId}, Seed={DemoGameLaunchContext.WorldSeed}, Y={DemoGameLaunchContext.MinChunkY}..{DemoGameLaunchContext.MaxChunkY}, XZ={DemoGameLaunchContext.WorldMinChunkXZ}..{DemoGameLaunchContext.WorldMaxChunkXZ}";
     }
 
-    private void LogDiagnosticsSnapshot(string reason)
+    private void SetStage(string stage, string detail)
+    {
+      loadingStage = stage ?? string.Empty;
+      loadingDetail = detail ?? string.Empty;
+      Debug.Log($"[DemoLaunch] {loadingStage}: {loadingDetail}");
+    }
+
+    private void LogDiagnosticsSnapshot(string label)
     {
       if (!logLoadingDiagnostics)
       {
         return;
       }
 
-      Debug.Log($"[DemoLaunch] {reason}. {BuildDebugSummary()}");
-    }
-
-    private string BuildDebugSummary()
-    {
       WorldStreamer streamer = GetStreamer();
-      if (streamer == null)
-      {
-        return $"Stage={loadingStage}, Detail={loadingDetail}, Warning={lastWarning}, Streamer=None";
-      }
-
-      return $"Stage={loadingStage}, Detail={loadingDetail}, Warning={lastWarning}, " +
-             $"Desired={streamer.DesiredChunkCount}, Keep={streamer.KeepChunkCount}, " +
-             $"PendingLoad={streamer.PendingLoadCount}/{streamer.PendingLoadSetCount}, " +
-             $"PendingRender={streamer.PendingRenderCount}/{streamer.PendingRenderSetCount}, " +
-             $"ActiveLoad={streamer.ActiveChunkLoadTaskCount}, ActiveBlock={streamer.ActiveBlockBuildTaskCount}, ActiveDensity={streamer.ActiveDensityBuildTaskCount}, " +
-             $"KnownEmpty={streamer.KnownEmptyChunkCount}, LastViewer={streamer.LastViewerChunkCoord}, HasLastViewer={streamer.HasLastViewerChunkCoord}, " +
-             $"InitialReady={(world != null && world.IsInitialTerrainReady)}, Finished={hasFinishedPreparation}, DisabledAutoStart={disabledStreamerAutoStartForLaunch}";
+      Debug.Log(
+        $"[DemoLaunch] {label}. Stage={loadingStage}, Detail={loadingDetail}, Warning={lastWarning}, " +
+        $"Desired={(streamer != null ? streamer.DesiredChunkCount : 0)}, " +
+        $"Keep={(streamer != null ? streamer.KeepChunkCount : 0)}, " +
+        $"PendingLoad={(streamer != null ? streamer.PendingLoadCount : 0)}/{(streamer != null ? streamer.PendingLoadSetCount : 0)}, " +
+        $"PendingRender={(streamer != null ? streamer.PendingRenderCount : 0)}/{(streamer != null ? streamer.PendingRenderSetCount : 0)}, " +
+        $"ActiveLoad={(streamer != null ? streamer.ActiveChunkLoadTaskCount : 0)}, " +
+        $"ActiveBlock={(streamer != null ? streamer.ActiveBlockBuildTaskCount : 0)}, " +
+        $"ActiveDensity={(streamer != null ? streamer.ActiveDensityBuildTaskCount : 0)}, " +
+        $"KnownEmpty={(streamer != null ? streamer.KnownEmptyChunkCount : 0)}, " +
+        $"LastViewer={(streamer != null && streamer.HasLastViewerChunkCoord ? streamer.LastViewerChunkCoord.ToString() : "none")}, " +
+        $"HasLastViewer={(streamer != null && streamer.HasLastViewerChunkCoord)}, " +
+        $"InitialReady={(world != null && world.IsInitialTerrainReady)}, " +
+        $"Finished={hasFinishedPreparation}, " +
+        $"DisabledAutoStart={disabledStreamerAutoStartForLaunch}"
+      );
     }
   }
 }
