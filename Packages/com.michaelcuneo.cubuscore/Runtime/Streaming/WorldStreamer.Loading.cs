@@ -66,7 +66,9 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
         if (!ShouldStartChunkLoadForCurrentVisibility(c))
         {
-          QueueLoad(c, false);
+          // Do not keep invisible chunks spinning through the load queue every
+          // frame. Visibility refresh / camera movement will enqueue them again
+          // when they become worth generating.
           continue;
         }
 
