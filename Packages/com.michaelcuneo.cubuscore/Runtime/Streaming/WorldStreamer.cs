@@ -306,6 +306,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       if (bootstrapCoroutine != null) return;
       if (!IsAnyTerrainEnabled) return;
 
+      float updateStart = NowMs();
+
       float frameMs = Time.unscaledDeltaTime * 1000.0f;
       if (frameMs >= AdaptiveThrottleTriggerFrameMs)
       {
@@ -328,15 +330,38 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         unloadBudget = Mathf.Max(1, unloadBudget / 2);
       }
 
+      float t0 = NowMs();
       UpdateStreamingSetIfNeeded();
+      float t1 = NowMs();
       RefreshVisibilitySchedulingIfNeeded();
+      float t2 = NowMs();
       PrioritizePendingQueues();
+      float t3 = NowMs();
       ProcessCompletedChunkLoads();
+      float t4 = NowMs();
       ProcessRenderQueue(renderBudget);
+      float t5 = NowMs();
       ProcessLoadQueue(loadBudget, renderBudget);
+      float t6 = NowMs();
       ProcessUnloadQueue(unloadBudget);
+      float t7 = NowMs();
       ProcessCompletedBuildResults(meshApplyBudget);
+      float t8 = NowMs();
       ReconcileRenderCoverageIfSettled();
+      float t9 = NowMs();
+
+      AccumulateStreamingPhaseTimings(
+        t1 - t0,
+        t2 - t1,
+        t3 - t2,
+        t4 - t3,
+        t5 - t4,
+        t6 - t5,
+        t7 - t6,
+        t8 - t7,
+        t9 - t8,
+        t9 - updateStart
+      );
     }
 
     private void ReconcileRenderCoverageIfSettled()
@@ -403,7 +428,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       pendingBlockRenderQueue.Clear(); pendingBlockRenderSet.Clear();
       pendingBlockRenderRetryQueue.Clear(); pendingBlockRenderRetrySet.Clear();
       pendingDensityRenderQueue.Clear(); pendingDensityRenderSet.Clear();
-      pendingDensityRenderRetryQueue.Clear(); pendingDensityRenderSet.Clear();
+      pendingDensityRenderRetryQueue.Clear(); pendingDensityRenderRetrySet.Clear();
       pendingUnload.Clear();
       knownEmptyChunks.Clear();
       buildQueue.IncrementGeneration(); densityBuildQueue.IncrementGeneration(); chunkLoadQueue.IncrementGeneration();
