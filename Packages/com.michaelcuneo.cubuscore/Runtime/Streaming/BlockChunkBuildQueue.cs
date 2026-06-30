@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Chunks;
+using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Core;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World;
@@ -204,11 +205,14 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       {
         if (request.BlockNeighborhood != null)
         {
-          meshData = BlockGreedyMesher.GenerateNeighbourAware(
-              chunkData,
-              request.BlockNeighborhood,
-              Mathf.Max(0.0001f, request.VoxelSize)
-          );
+          if (HasPotentiallyVisibleBlockFace(chunkData, request.BlockNeighborhood))
+          {
+            meshData = BlockGreedyMesher.GenerateNeighbourAware(
+                chunkData,
+                request.BlockNeighborhood,
+                Mathf.Max(0.0001f, request.VoxelSize)
+            );
+          }
         }
         else
         {
@@ -233,6 +237,41 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         IsEmpty = !hasAnySolidVoxel || meshData == null || meshData.IsEmpty,
         GenerationId = request.GenerationId
       };
+    }
+
+    private static bool HasPotentiallyVisibleBlockFace(BlockChunkData chunkData, BlockChunkNeighborhood neighborhood)
+    {
+      if (chunkData == null || neighborhood == null)
+      {
+        return true;
+      }
+
+      const int size = VoxelConstants.ChunkSize;
+      for (int z = 0; z < size; z++)
+      {
+        for (int y = 0; y < size; y++)
+        {
+          for (int x = 0; x < size; x++)
+          {
+            if (!chunkData.GetVoxel(x, y, z).IsSolid)
+            {
+              continue;
+            }
+
+            if (neighborhood.GetMaterial(x - 1, y, z) == 0 ||
+                neighborhood.GetMaterial(x + 1, y, z) == 0 ||
+                neighborhood.GetMaterial(x, y - 1, z) == 0 ||
+                neighborhood.GetMaterial(x, y + 1, z) == 0 ||
+                neighborhood.GetMaterial(x, y, z - 1) == 0 ||
+                neighborhood.GetMaterial(x, y, z + 1) == 0)
+            {
+              return true;
+            }
+          }
+        }
+      }
+
+      return false;
     }
 
     private static ushort ResolveMaterialForMeshing(
