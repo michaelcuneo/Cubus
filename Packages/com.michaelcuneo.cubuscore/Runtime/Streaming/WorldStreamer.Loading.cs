@@ -59,10 +59,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
         if (!isKeepChunk && !ShouldStartChunkLoadForCurrentVisibility(c))
         {
-          // Do not keep invisible desired chunks spinning through the load queue
-          // every frame. Density edge dependencies are allowed through from the
-          // keep set because marching cubes needs their boundary sample data even
-          // when the neighbour chunk is not currently visible/rendered.
           continue;
         }
 
@@ -140,7 +136,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
           if (desiredChunkCoords.Contains(c) && ShouldQueueMeshWorkForChunk(c))
           {
-            if (loadedBlock)
+            if (loadedBlock && !IsHybridTerrainEnabled)
             {
               QueueBlockRender(c);
             }
@@ -172,7 +168,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         return;
       }
 
-      if (IsBlockTerrainEnabled && world.Data.BlockChunks.ContainsKey(c))
+      if (IsBlockTerrainEnabled && !IsHybridTerrainEnabled && world.Data.BlockChunks.ContainsKey(c))
       {
         QueueBlockRender(c);
       }
@@ -186,6 +182,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     private bool ShouldLoadBlockLayerNow(Vector3Int c)
     {
       return IsBlockTerrainEnabled &&
+             !IsHybridTerrainEnabled &&
              !knownEmptyChunks.Contains(c) &&
              !world.Data.BlockChunks.ContainsKey(c);
     }
@@ -202,15 +199,12 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         return true;
       }
 
-      // In this game Hybrid means procedural density terrain plus sparse/block
-      // building data. Density terrain and its edge dependencies must not wait
-      // for the sparse block layer or block rendering before loading.
       return desiredChunkCoords.Contains(c) || keepChunkCoords.Contains(c);
     }
 
     private bool HasRequiredChunkData(Vector3Int c)
     {
-      if (IsBlockTerrainEnabled && !world.Data.BlockChunks.ContainsKey(c))
+      if (IsBlockTerrainEnabled && !IsHybridTerrainEnabled && !world.Data.BlockChunks.ContainsKey(c))
       {
         return false;
       }
