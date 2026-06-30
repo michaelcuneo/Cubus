@@ -5,8 +5,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 {
   public sealed partial class WorldStreamer
   {
-    private const int AlwaysMeshNearViewerHorizontalChunks = 2;
-    private const int AlwaysMeshNearViewerVerticalChunks = 1;
+    private const int AlwaysMeshNearViewerHorizontalChunks = 3;
+    private const int AlwaysMeshNearViewerVerticalChunks = 2;
     private const float VisibilityBoundsPaddingChunks = 0.5f;
     private const float VisibilityRefreshPositionEpsilon = 0.25f;
     private const float VisibilityRefreshDotThreshold = 0.9975f;
@@ -21,6 +21,11 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
     private bool ShouldQueueMeshWorkForChunk(Vector3Int chunkCoord)
     {
+      if (UseInitialStreamingStageNow)
+      {
+        return true;
+      }
+
       if (hasPriorityChunkCoord && chunkCoord == priorityChunkCoord)
       {
         return true;
@@ -39,6 +44,26 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
       Bounds bounds = GetChunkWorldBounds(chunkCoord);
       return GeometryUtility.TestPlanesAABB(visibilityFrustumPlanes, bounds);
+    }
+
+    private bool ShouldStartChunkLoadForCurrentVisibility(Vector3Int chunkCoord)
+    {
+      if (UseInitialStreamingStageNow)
+      {
+        return true;
+      }
+
+      if (hasPriorityChunkCoord && chunkCoord == priorityChunkCoord)
+      {
+        return true;
+      }
+
+      if (IsChunkNearViewerForImmediateMesh(chunkCoord))
+      {
+        return true;
+      }
+
+      return ShouldQueueMeshWorkForChunk(chunkCoord);
     }
 
     private bool IsChunkNearViewerForImmediateMesh(Vector3Int chunkCoord)
@@ -95,7 +120,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
     private void RefreshVisibilitySchedulingIfNeeded()
     {
-      if (!hasLastViewerChunkCoord || desiredChunkCoords.Count == 0)
+      if (UseInitialStreamingStageNow || !hasLastViewerChunkCoord || desiredChunkCoords.Count == 0)
       {
         return;
       }
