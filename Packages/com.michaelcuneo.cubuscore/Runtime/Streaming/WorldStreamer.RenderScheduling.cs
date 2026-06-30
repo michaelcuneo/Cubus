@@ -6,6 +6,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 {
   public sealed partial class WorldStreamer
   {
+    private const float RenderQueueScanBudgetSeconds = 0.0025f;
+
     private void ProcessRenderQueue(int renderBudget)
     {
       if (IsHybridTerrainEnabled)
@@ -53,8 +55,12 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       int scanned = 0;
       int retryScansRemaining = pendingBlockRenderRetryQueue.Count;
       int maxScans = Mathf.Max(renderBudget * 8, pendingBlockRenderQueue.Count + retryScansRemaining);
+      float scanStartedAt = Time.realtimeSinceStartup;
 
-      while ((pendingBlockRenderQueue.Count > 0 || pendingBlockRenderRetryQueue.Count > 0) && started < renderBudget && scanned < maxScans)
+      while ((pendingBlockRenderQueue.Count > 0 || pendingBlockRenderRetryQueue.Count > 0) &&
+             started < renderBudget &&
+             scanned < maxScans &&
+             (scanned == 0 || Time.realtimeSinceStartup - scanStartedAt < RenderQueueScanBudgetSeconds))
       {
         scanned++;
 
@@ -105,8 +111,12 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       int scanned = 0;
       int retryScansRemaining = pendingDensityRenderRetryQueue.Count;
       int maxScans = Mathf.Max(renderBudget * 12, pendingDensityRenderQueue.Count + retryScansRemaining);
+      float scanStartedAt = Time.realtimeSinceStartup;
 
-      while ((pendingDensityRenderRetryQueue.Count > 0 || pendingDensityRenderQueue.Count > 0) && started < renderBudget && scanned < maxScans)
+      while ((pendingDensityRenderRetryQueue.Count > 0 || pendingDensityRenderQueue.Count > 0) &&
+             started < renderBudget &&
+             scanned < maxScans &&
+             (scanned == 0 || Time.realtimeSinceStartup - scanStartedAt < RenderQueueScanBudgetSeconds))
       {
         scanned++;
 
@@ -165,7 +175,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       if (pendingBlockRenderSet.Contains(chunkCoord) || pendingBlockRenderRetrySet.Contains(chunkCoord)) return;
       pendingBlockRenderRetrySet.Add(chunkCoord);
       pendingBlockRenderRetryQueue.Enqueue(chunkCoord);
-      pendingRenderQueueNeedsPrioritization = true;
     }
 
     private void QueueDensityRenderRetry(Vector3Int chunkCoord)
@@ -173,7 +182,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       if (pendingDensityRenderSet.Contains(chunkCoord) || pendingDensityRenderRetrySet.Contains(chunkCoord)) return;
       pendingDensityRenderRetrySet.Add(chunkCoord);
       pendingDensityRenderRetryQueue.Enqueue(chunkCoord);
-      pendingRenderQueueNeedsPrioritization = true;
     }
 
     private bool TryDequeueRenderCandidate(
