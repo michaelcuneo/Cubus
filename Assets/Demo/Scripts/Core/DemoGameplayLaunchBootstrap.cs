@@ -117,13 +117,18 @@ namespace Assets.Demo.Scripts.Core
       settings.DensityMaxChunkY = DemoGameLaunchContext.MaxChunkY;
       settings.InvalidateBiomeVariableCache();
 
-      // Hybrid used to force the block layer to SparseOnly here, which made the
-      // streamer generate empty block chunks and rely entirely on slow density
-      // meshes. Keep block terrain procedural so the fast voxel layer can reveal
-      // immediately, then let density detail stream on top.
-      StreamingGenerationContext.SetHybridLayerGenerationModes(
-        HybridTerrainLayerGenerationMode.ProceduralTerrain,
-        HybridTerrainLayerGenerationMode.ProceduralTerrain);
+      if (DemoGameLaunchContext.TerrainSystem == TerrainSystem.Hybrid)
+      {
+        StreamingGenerationContext.SetHybridLayerGenerationModes(
+          HybridTerrainLayerGenerationMode.SparseOnly,
+          HybridTerrainLayerGenerationMode.ProceduralTerrain);
+      }
+      else
+      {
+        StreamingGenerationContext.SetHybridLayerGenerationModes(
+          HybridTerrainLayerGenerationMode.ProceduralTerrain,
+          HybridTerrainLayerGenerationMode.ProceduralTerrain);
+      }
 
       if (network != null)
       {
