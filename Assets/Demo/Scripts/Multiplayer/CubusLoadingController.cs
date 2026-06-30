@@ -25,10 +25,12 @@ namespace Assets.Demo.Scripts.Multiplayer
     [SerializeField] private int sortingOrder = 1200;
     [SerializeField] private float readyHoldSeconds = 0.35f;
     [SerializeField] private float preparationTimeoutSeconds = 180.0f;
-    [SerializeField] private float settledTerrainFallbackSeconds = 2.0f;
+    [SerializeField] private float settledTerrainFallbackSeconds = 0.25f;
     [SerializeField] private float fallbackSpawnClearance = 2.0f;
     [SerializeField] private float consoleDiagnosticsIntervalSeconds = 2.0f;
     [SerializeField] private bool unloadLoadingSceneWhenReady = true;
+    [SerializeField][Min(1)] private int minVisibleDensityMeshesBeforeRelease = 9;
+    [SerializeField][Min(0.0f)] private float minVisibleTerrainWaitSeconds = 2.0f;
 
     private static readonly Vector2 RuntimePanelSize = new(660.0f, 360.0f);
 
@@ -118,25 +120,16 @@ namespace Assets.Demo.Scripts.Multiplayer
     {
       if (!DemoGameLaunchContext.HasLaunch)
       {
-        Fail("No Demo launch context was found. Returning to launcher.");
-        yield return LoadLauncherScene();
+        status = "No launch context.";
+        detail = "Returning to launcher.";
+        UpdateLoadingUi();
+        SceneManager.LoadScene(launcherSceneName);
         yield break;
       }
 
-      if (string.IsNullOrWhiteSpace(gameplaySceneName))
-      {
-        Fail("Gameplay Scene Name is empty on DemoLoadingController.");
-        yield break;
-      }
-
-      if (!TryFindSceneInBuildSettings(gameplaySceneName.Trim(), out string gameplayScenePath))
-      {
-        Fail($"Scene '{gameplaySceneName}' is not in Build Settings. Add DemoGame and DemoLoading to Build Settings.");
-        yield break;
-      }
-
-      loadedGameplayScenePath = gameplayScenePath;
-      yield return LoadGameplaySceneAdditively(gameplayScenePath);
+      BuildLoadingUi();
+      UpdateLoadingUi();
+      yield return LoadGameplaySceneAdditively();
 
       if (failed)
       {
@@ -144,6 +137,12 @@ namespace Assets.Demo.Scripts.Multiplayer
       }
 
       yield return WaitForGameplayReferences();
+
+      if (failed)
+      {
+        yield break;
+      }
+
       yield return WaitForInitialTerrainReady();
 
       if (failed)
@@ -151,46 +150,39 @@ namespace Assets.Demo.Scripts.Multiplayer
         yield break;
       }
 
-      preparationDone = true;
       status = "Ready";
       detail = "Initial terrain is ready. Entering CubusGame.";
+      sceneLoadProgress = 1.0f;
       terrainProgress = 1.0f;
       UpdateLoadingUi();
       LogDiagnosticsSnapshot("Ready to enter game", true);
 
-      if (readyHoldSeconds > 0.0f)
-      {
-        yield return new WaitForSecondsRealtime(readyHoldSeconds);
-      }
+      yield return new WaitForSecondsRealtime(Mathf.Max(0.0f, readyHoldSeconds));
 
-      Cursor.lockState = CursorLockMode.Locked;
-      Cursor.visible = false;
-      CubusSceneBackdrop.RemoveAllBackdrops();
-
+      preparationDone = true;
       if (unloadLoadingSceneWhenReady)
       {
-        Scene sceneToUnload = loadingScene;
-        Destroy(gameObject);
-        if (sceneToUnload.IsValid() && sceneToUnload.isLoaded)
-        {
-          SceneManager.UnloadSceneAsync(sceneToUnload);
-        }
+        yield return UnloadLoadingScene();
+      }
+      else if (canvasGroup != null)
+      {
+        canvasGroup.alpha = 0.0f;
+        canvasGroup.blocksRaycasts = false;
+        canvasGroup.interactable = false;
       }
     }
 
-    private IEnumerator LoadGameplaySceneAdditively(string gameplayScenePath)
+    private IEnumerator LoadGameplaySceneAdditively()
     {
       status = "Loading gameplay scene";
-      detail = gameplayScenePath;
-      sceneLoadProgress = 0.0f;
-      terrainProgress = 0.0f;
+      detail = gameplaySceneName;
       UpdateLoadingUi();
+      Debug.Log($"[CubusLoading] Loading gameplay scene additively: {gameplaySceneName}");
 
-      Debug.Log($"[CubusLoading] Loading gameplay scene additively: {gameplayScenePath}");
-      AsyncOperation operation = SceneManager.LoadSceneAsync(gameplayScenePath, LoadSceneMode.Additive);
+      AsyncOperation operation = SceneManager.LoadSceneAsync(gameplaySceneName, LoadSceneMode.Additive);
       if (operation == null)
       {
-        Fail($"Failed to start loading gameplay scene '{gameplayScenePath}'.");
+        Fail($"Could not start loading gameplay scene '{gameplaySceneName}'. Check Build Settings.");
         yield break;
       }
 
@@ -198,22 +190,16 @@ namespace Assets.Demo.Scripts.Multiplayer
       while (!operation.isDone)
       {
         sceneLoadProgress = Mathf.Clamp01(operation.progress / 0.9f);
-        detail = $"Scene load {sceneLoadProgress * 100.0f:0}%";
         UpdateLoadingUi();
         yield return null;
       }
 
-      sceneLoadProgress = 1.0f;
       sceneLoadDone = true;
-
-      Scene gameplayScene = SceneManager.GetSceneByPath(gameplayScenePath);
-      if (!gameplayScene.IsValid())
+      sceneLoadProgress = 1.0f;
+      Scene gameplayScene = SceneManager.GetSceneByName(Path.GetFileNameWithoutExtension(gameplaySceneName));
+      if (gameplayScene.IsValid())
       {
-        gameplayScene = SceneManager.GetSceneByName(Path.GetFileNameWithoutExtension(gameplayScenePath));
-      }
-
-      if (gameplayScene.IsValid() && gameplayScene.isLoaded)
-      {
+        loadedGameplayScenePath = gameplayScene.path;
         SceneManager.SetActiveScene(gameplayScene);
       }
 
@@ -221,14 +207,16 @@ namespace Assets.Demo.Scripts.Multiplayer
       detail = "Preparing terrain...";
       UpdateLoadingUi();
       LogDiagnosticsSnapshot("Gameplay scene loaded", true);
+      yield return null;
     }
 
     private IEnumerator WaitForGameplayReferences()
     {
       status = "Finding gameplay systems";
-      float start = Time.realtimeSinceStartup;
+      detail = "Preparing terrain...";
       UpdateLoadingUi();
 
+      float start = Time.realtimeSinceStartup;
       while (world == null)
       {
         FindRuntimeReferences();
@@ -316,8 +304,12 @@ namespace Assets.Demo.Scripts.Multiplayer
 
       if (desired > 0.0f)
       {
-        float nonEmptyTarget = Mathf.Max(1.0f, desired - streamer.KnownEmptyChunkCount);
-        terrainProgress = Mathf.Clamp01(applied / nonEmptyTarget);
+        float visibleFirstTarget = Mathf.Max(1.0f, minVisibleDensityMeshesBeforeRelease);
+        float fullTarget = Mathf.Max(1.0f, desired - streamer.KnownEmptyChunkCount);
+        float progressTarget = DemoGameLaunchContext.Mode == DemoGameLaunchMode.Local
+          ? Mathf.Min(fullTarget, visibleFirstTarget)
+          : fullTarget;
+        terrainProgress = Mathf.Clamp01(applied / progressTarget);
       }
       else if (world.IsGeneratingWorld)
       {
@@ -364,10 +356,14 @@ namespace Assets.Demo.Scripts.Multiplayer
       bool workersSettled = active <= 0.0f;
       bool loadsSettled = streamer.PendingLoadCount == 0;
       bool enoughChunksApplied = desired <= 0.0f || applied >= Mathf.Min(requiredApplied, desired);
+      bool visibleLocalTerrainReady =
+        DemoGameLaunchContext.Mode == DemoGameLaunchMode.Local &&
+        elapsed >= Mathf.Max(0.0f, minVisibleTerrainWaitSeconds) &&
+        applied >= Mathf.Max(1, minVisibleDensityMeshesBeforeRelease);
       bool longEnoughToTrustVisibleTerrain = elapsed >= 5.0f && hasUsefulTerrain && workersSettled && loadsSettled;
       bool fullySettled = hasUsefulTerrain && workersSettled && loadsSettled && enoughChunksApplied;
 
-      if (!fullySettled && !longEnoughToTrustVisibleTerrain)
+      if (!fullySettled && !visibleLocalTerrainReady && !longEnoughToTrustVisibleTerrain)
       {
         settledTerrainFallbackStartedAt = -1.0f;
         return;
@@ -376,8 +372,9 @@ namespace Assets.Demo.Scripts.Multiplayer
       if (settledTerrainFallbackStartedAt < 0.0f)
       {
         settledTerrainFallbackStartedAt = Time.realtimeSinceStartup;
-        detail = "Terrain ready. Entering shortly...";
-        LogDiagnosticsSnapshot(fullySettled ? "Streamer settled" : "Visible terrain fallback armed", true);
+        detail = "Visible terrain ready. Entering shortly...";
+        string label = fullySettled ? "Streamer settled" : visibleLocalTerrainReady ? "Visible local terrain ready" : "Visible terrain fallback armed";
+        LogDiagnosticsSnapshot(label, true);
         return;
       }
 
@@ -386,7 +383,7 @@ namespace Assets.Demo.Scripts.Multiplayer
         return;
       }
 
-      ForceBroadcastInitialTerrainReady(fullySettled ? "settled streamer fallback" : "visible terrain fallback");
+      ForceBroadcastInitialTerrainReady(fullySettled ? "settled streamer fallback" : visibleLocalTerrainReady ? "visible local terrain" : "visible terrain fallback");
     }
 
     private void ForceBroadcastInitialTerrainReady(string reason)
@@ -418,112 +415,34 @@ namespace Assets.Demo.Scripts.Multiplayer
 
       float localVoxelX = spawnChunkCoord.x * VoxelConstants.ChunkSize + VoxelConstants.ChunkSize * 0.5f;
       float localVoxelZ = spawnChunkCoord.z * VoxelConstants.ChunkSize + VoxelConstants.ChunkSize * 0.5f;
+      int sampleX = Mathf.RoundToInt(localVoxelX);
+      int sampleZ = Mathf.RoundToInt(localVoxelZ);
+      int sampleY = Mathf.RoundToInt((world.Settings.DensityMinChunkY + world.Settings.DensityMaxChunkY) * 0.5f * VoxelConstants.ChunkSize);
 
-      Vector3Int sampleVoxel = new(
-        Mathf.FloorToInt(localVoxelX),
-        0,
-        Mathf.FloorToInt(localVoxelZ)
-      );
+      TerrainSample sample = BiomeTerrainSampler.Sample(
+        world.Settings,
+        new Vector3Int(sampleX, sampleY, sampleZ),
+        densityScale);
 
-      TerrainSample sample = BiomeTerrainSampler.Sample(world.Settings, sampleVoxel, densityScale);
-      float localVoxelY = sample.SurfaceHeight + Mathf.Max(0.0f, fallbackSpawnClearance);
-
-      return world.transform.TransformPoint(new Vector3(
+      Vector3 local = new(
         localVoxelX * voxelSize,
-        localVoxelY * voxelSize,
-        localVoxelZ * voxelSize
-      ));
+        (sample.SurfaceHeight + Mathf.Max(0.0f, fallbackSpawnClearance)) * voxelSize,
+        localVoxelZ * voxelSize);
+
+      return world.transform.TransformPoint(local);
     }
 
-    private void LogDiagnosticsSnapshot(string reason, bool force)
+    private IEnumerator UnloadLoadingScene()
     {
-      float now = Time.realtimeSinceStartup;
-      if (!force && now - lastConsoleDiagnosticsAt < Mathf.Max(0.25f, consoleDiagnosticsIntervalSeconds))
+      if (loadingScene.IsValid() && loadingScene.isLoaded)
       {
-        return;
-      }
-
-      lastConsoleDiagnosticsAt = now;
-      Debug.Log($"[CubusLoading] {reason}. Status={status}; Detail={detail}; SceneLoaded={sceneLoadDone}; SceneProgress={sceneLoadProgress:0.00}; TerrainProgress={terrainProgress:0.00}; {BuildDebugSummary()}");
-    }
-
-    private string BuildDebugSummary()
-    {
-      string worldSummary = world == null
-          ? "World=none"
-          : $"WorldReady={world.IsWorldReady}, InitialTerrainReady={world.IsInitialTerrainReady}, Generating={world.IsGeneratingWorld}, GenerationProgress={world.GenerationProgress:0.00}, GenerationStatus={world.GenerationStatus}, Spawn={world.SuggestedSpawnLocation}";
-
-      string streamerSummary = streamer == null
-          ? "Streamer=none"
-          : $"Streamer enabled={streamer.enabled}, initialStage={streamer.IsInitialStreamingStageActive}, viewerChunk={(streamer.HasLastViewerChunkCoord ? streamer.LastViewerChunkCoord.ToString() : "none")}, desired={streamer.DesiredChunkCount}, keep={streamer.KeepChunkCount}, knownEmpty={streamer.KnownEmptyChunkCount}, pendingLoad={streamer.PendingLoadCount}, pendingRender={streamer.PendingRenderCount}, pendingUnload={streamer.PendingUnloadCount}, activeLoads={streamer.ActiveChunkLoadTaskCount}, activeBlockBuilds={streamer.ActiveBlockBuildTaskCount}, activeDensityBuilds={streamer.ActiveDensityBuildTaskCount}, loadedTotal={streamer.TotalChunkLoadsCompleted}, loadFailures={streamer.TotalChunkLoadFailures}, blockApplies={streamer.TotalBlockMeshApplies}, densityApplies={streamer.TotalDensityMeshApplies}";
-
-      string networkSummary = network == null
-          ? "Network=none"
-          : $"Network connected={network.IsConnected}, hasConn={network.Conn != null}, subscriptionApplied={network.IsSubscriptionApplied}, server={network.ServerUri}, module={network.ModuleName}, worldId={network.WorldId}";
-
-      return $"{worldSummary}; {streamerSummary}; {networkSummary}";
-    }
-
-    private void UpdateLoadingUi()
-    {
-      if (canvasGroup == null)
-      {
-        return;
-      }
-
-      canvasGroup.alpha = DemoUiInput.ConsoleOpen ? 0.0f : 1.0f;
-      canvasGroup.interactable = !DemoUiInput.ConsoleOpen;
-      canvasGroup.blocksRaycasts = !DemoUiInput.ConsoleOpen;
-
-      float elapsed = Time.realtimeSinceStartup - startedAt;
-      float combinedProgress = GetCombinedProgress();
-
-      if (statusText != null)
-      {
-        statusText.text = status;
-      }
-
-      if (detailText != null)
-      {
-        detailText.text = detail;
-      }
-
-      if (elapsedText != null)
-      {
-        elapsedText.text = $"Elapsed: {elapsed:0.0}s";
-      }
-
-      if (progressText != null)
-      {
-        progressText.text = $"Progress: {combinedProgress * 100.0f:0}%";
-      }
-
-      if (progressFill != null)
-      {
-        progressFill.fillAmount = combinedProgress;
-      }
-
-      if (hintText != null)
-      {
-        hintText.text = failed
-            ? "Loading failed. Check the runtime console."
-            : "Detailed diagnostics are in the runtime console. Press Enter to force release if terrain is visibly ready.";
-      }
-
-      if (forceReleaseButton != null)
-      {
-        forceReleaseButton.interactable = !preparationDone && !failed && !DemoUiInput.ConsoleOpen;
+        yield return SceneManager.UnloadSceneAsync(loadingScene);
       }
     }
 
-    private float GetCombinedProgress()
+    private void RequestForceRelease()
     {
-      if (failed || preparationDone)
-      {
-        return 1.0f;
-      }
-
-      return Mathf.Clamp01((sceneLoadProgress * 0.25f) + (terrainProgress * 0.75f));
+      forceReleaseRequested = true;
     }
 
     private void FindRuntimeReferences()
@@ -538,23 +457,43 @@ namespace Assets.Demo.Scripts.Multiplayer
         streamer = world.GetComponent<WorldStreamer>();
       }
 
+      if (streamer == null)
+      {
+        streamer = FindAnyObjectByType<WorldStreamer>();
+      }
+
       if (network == null)
       {
-        network = DemoNetworkManager.Instance != null
-            ? DemoNetworkManager.Instance
-            : FindAnyObjectByType<DemoNetworkManager>();
+        network = FindAnyObjectByType<DemoNetworkManager>();
       }
     }
 
-    private IEnumerator LoadLauncherScene()
+    private void LogDiagnosticsSnapshot(string label, bool force)
     {
-      if (string.IsNullOrWhiteSpace(launcherSceneName))
+      if (!force && Time.realtimeSinceStartup - lastConsoleDiagnosticsAt < Mathf.Max(0.1f, consoleDiagnosticsIntervalSeconds))
       {
-        yield break;
+        return;
       }
 
-      yield return null;
-      SceneManager.LoadScene(launcherSceneName);
+      lastConsoleDiagnosticsAt = Time.realtimeSinceStartup;
+      Debug.Log($"[CubusLoading] {label}. Status={status}; Detail={detail}; SceneLoaded={sceneLoadDone}; SceneProgress={sceneLoadProgress:0.00}; TerrainProgress={terrainProgress:0.00}; {BuildDebugSummary()}");
+    }
+
+    private string BuildDebugSummary()
+    {
+      string worldSummary = world == null
+        ? "World=none"
+        : $"WorldReady={world.IsWorldReady}, InitialTerrainReady={world.IsInitialTerrainReady}, Generating={world.IsGeneratingWorld}, GenerationProgress={world.GenerationProgress:0.00}, GenerationStatus={world.GenerationStatus}, Spawn={world.InitialSpawnWorldPosition}";
+
+      string streamerSummary = streamer == null
+        ? "Streamer=none"
+        : $"Streamer enabled={streamer.enabled}, initialStage={streamer.IsInitialStreamingStageActive}, viewerChunk={(streamer.HasLastViewerChunkCoord ? streamer.LastViewerChunkCoord.ToString() : "none")}, desired={streamer.DesiredChunkCount}, keep={streamer.KeepChunkCount}, knownEmpty={streamer.KnownEmptyChunkCount}, pendingLoad={streamer.PendingLoadCount}, pendingRender={streamer.PendingRenderCount}, pendingUnload={streamer.PendingUnloadCount}, activeLoads={streamer.ActiveChunkLoadTaskCount}, activeBlockBuilds={streamer.ActiveBlockBuildTaskCount}, activeDensityBuilds={streamer.ActiveDensityBuildTaskCount}, loadedTotal={streamer.TotalChunkLoadsCompleted}, loadFailures={streamer.TotalChunkLoadFailures}, blockApplies={streamer.TotalBlockMeshApplies}, densityApplies={streamer.TotalDensityMeshApplies}";
+
+      string networkSummary = network == null
+        ? "Network=none"
+        : $"Network connected={network.IsConnected}, hasConn={network.Conn != null}, subscriptionApplied={network.HasAppliedWorldSubscription}, server={network.ServerUri}, module={network.ModuleName}, worldId={network.WorldId}";
+
+      return $"{worldSummary}; {streamerSummary}; {networkSummary}";
     }
 
     private void Fail(string message)
@@ -562,272 +501,139 @@ namespace Assets.Demo.Scripts.Multiplayer
       failed = true;
       status = "Loading failed";
       detail = message;
-      UpdateLoadingUi();
-      Debug.LogError($"[CubusLoading] {message} {BuildDebugSummary()}");
-    }
-
-    private void RequestForceRelease()
-    {
-      if (preparationDone || failed || DemoUiInput.ConsoleOpen)
-      {
-        return;
-      }
-
-      forceReleaseRequested = true;
+      Debug.LogError($"[CubusLoading] {message}");
       UpdateLoadingUi();
     }
 
     private void BuildLoadingUi()
     {
-      DemoInputSystemUiGuard.EnsureEventSystem();
+      if (canvasGroup != null)
+      {
+        return;
+      }
 
-      GameObject canvasObject = new("Demo Loading Canvas");
-      canvasObject.transform.SetParent(transform, false);
-
-      Canvas canvas = canvasObject.AddComponent<Canvas>();
+      GameObject root = new("Cubus Loading UI");
+      root.transform.SetParent(transform, false);
+      Canvas canvas = root.AddComponent<Canvas>();
       canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-      canvas.overrideSorting = true;
       canvas.sortingOrder = sortingOrder;
+      root.AddComponent<GraphicRaycaster>();
+      canvasGroup = root.AddComponent<CanvasGroup>();
 
-      CanvasScaler scaler = canvasObject.AddComponent<CanvasScaler>();
-      scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-      scaler.referenceResolution = new Vector2(1920.0f, 1080.0f);
-      scaler.matchWidthOrHeight = 0.5f;
+      GameObject panel = new("Panel");
+      panel.transform.SetParent(root.transform, false);
+      Image panelImage = panel.AddComponent<Image>();
+      panelImage.color = new Color(0.02f, 0.025f, 0.035f, 0.96f);
+      RectTransform panelRect = panel.GetComponent<RectTransform>();
+      panelRect.anchorMin = new Vector2(0.5f, 0.5f);
+      panelRect.anchorMax = new Vector2(0.5f, 0.5f);
+      panelRect.pivot = new Vector2(0.5f, 0.5f);
+      panelRect.sizeDelta = RuntimePanelSize;
+      panelRect.anchoredPosition = Vector2.zero;
 
-      canvasObject.AddComponent<GraphicRaycaster>();
-      RectTransform root = canvasObject.GetComponent<RectTransform>();
-      Stretch(root);
+      statusText = CreateText(panel.transform, "Status", 28, FontStyle.Bold, new Vector2(0.5f, 1.0f), new Vector2(0.5f, 1.0f), new Vector2(0.5f, 1.0f), new Vector2(0, -48), new Vector2(-56, 36));
+      detailText = CreateText(panel.transform, "Detail", 16, FontStyle.Normal, new Vector2(0.5f, 1.0f), new Vector2(0.5f, 1.0f), new Vector2(0.5f, 1.0f), new Vector2(0, -96), new Vector2(-56, 72));
+      elapsedText = CreateText(panel.transform, "Elapsed", 14, FontStyle.Normal, new Vector2(0.5f, 1.0f), new Vector2(0.5f, 1.0f), new Vector2(0.5f, 1.0f), new Vector2(0, -176), new Vector2(-56, 26));
+      progressText = CreateText(panel.transform, "Progress", 14, FontStyle.Bold, new Vector2(0.5f, 1.0f), new Vector2(0.5f, 1.0f), new Vector2(0.5f, 1.0f), new Vector2(0, -216), new Vector2(-56, 26));
+      hintText = CreateText(panel.transform, "Hint", 13, FontStyle.Italic, new Vector2(0.5f, 0.0f), new Vector2(0.5f, 0.0f), new Vector2(0.5f, 0.0f), new Vector2(0, 68), new Vector2(-56, 36));
 
-      canvasGroup = canvasObject.AddComponent<CanvasGroup>();
-      canvasGroup.alpha = 1.0f;
-      canvasGroup.interactable = true;
-      canvasGroup.blocksRaycasts = true;
+      GameObject track = new("Progress Track");
+      track.transform.SetParent(panel.transform, false);
+      Image trackImage = track.AddComponent<Image>();
+      trackImage.color = new Color(0.12f, 0.14f, 0.18f, 1.0f);
+      RectTransform trackRect = track.GetComponent<RectTransform>();
+      trackRect.anchorMin = new Vector2(0.5f, 1.0f);
+      trackRect.anchorMax = new Vector2(0.5f, 1.0f);
+      trackRect.pivot = new Vector2(0.5f, 0.5f);
+      trackRect.sizeDelta = new Vector2(RuntimePanelSize.x - 96.0f, 18.0f);
+      trackRect.anchoredPosition = new Vector2(0, -256);
 
-      Image baseLayer = CreateImage(root, "Background Base", new Color(0.006f, 0.010f, 0.018f, 1.0f));
-      Stretch(baseLayer.rectTransform);
-      baseLayer.raycastTarget = false;
+      GameObject fill = new("Progress Fill");
+      fill.transform.SetParent(track.transform, false);
+      progressFill = fill.AddComponent<Image>();
+      progressFill.color = new Color(0.35f, 0.7f, 1.0f, 1.0f);
+      RectTransform fillRect = fill.GetComponent<RectTransform>();
+      fillRect.anchorMin = new Vector2(0.0f, 0.0f);
+      fillRect.anchorMax = new Vector2(0.0f, 1.0f);
+      fillRect.pivot = new Vector2(0.0f, 0.5f);
+      fillRect.sizeDelta = new Vector2(0.0f, 0.0f);
+      fillRect.anchoredPosition = Vector2.zero;
 
-      Image upperGlow = CreateImage(root, "Background Glow", new Color(0.025f, 0.120f, 0.185f, 0.85f));
-      RectTransform glowRect = upperGlow.rectTransform;
-      glowRect.anchorMin = new Vector2(0.0f, 0.56f);
-      glowRect.anchorMax = new Vector2(1.0f, 1.0f);
-      glowRect.offsetMin = Vector2.zero;
-      glowRect.offsetMax = Vector2.zero;
-      upperGlow.raycastTarget = false;
+      GameObject buttonObject = new("Force Release Button");
+      buttonObject.transform.SetParent(panel.transform, false);
+      Image buttonImage = buttonObject.AddComponent<Image>();
+      buttonImage.color = new Color(0.18f, 0.22f, 0.28f, 1.0f);
+      forceReleaseButton = buttonObject.AddComponent<Button>();
+      forceReleaseButton.onClick.AddListener(RequestForceRelease);
+      RectTransform buttonRect = buttonObject.GetComponent<RectTransform>();
+      buttonRect.anchorMin = new Vector2(0.5f, 0.0f);
+      buttonRect.anchorMax = new Vector2(0.5f, 0.0f);
+      buttonRect.pivot = new Vector2(0.5f, 0.5f);
+      buttonRect.sizeDelta = new Vector2(220.0f, 42.0f);
+      buttonRect.anchoredPosition = new Vector2(0.0f, 28.0f);
 
-      Image horizon = CreateImage(root, "Horizon Band", new Color(0.10f, 0.32f, 0.43f, 0.26f));
-      RectTransform horizonRect = horizon.rectTransform;
-      horizonRect.anchorMin = new Vector2(0.0f, 0.46f);
-      horizonRect.anchorMax = new Vector2(1.0f, 0.52f);
-      horizonRect.offsetMin = Vector2.zero;
-      horizonRect.offsetMax = Vector2.zero;
-      horizon.raycastTarget = false;
-
-      Image shadow = CreateImage(root, "Loading Panel Shadow", new Color(0.0f, 0.0f, 0.0f, 0.35f));
-      RectTransform shadowRect = shadow.rectTransform;
-      shadowRect.anchorMin = new Vector2(0.5f, 0.5f);
-      shadowRect.anchorMax = new Vector2(0.5f, 0.5f);
-      shadowRect.pivot = new Vector2(0.5f, 0.5f);
-      shadowRect.sizeDelta = RuntimePanelSize + new Vector2(18.0f, 18.0f);
-      shadowRect.anchoredPosition = new Vector2(10.0f, -10.0f);
-      shadow.raycastTarget = false;
-
-      GameObject panelObject = new("Loading Panel");
-      panelObject.transform.SetParent(root, false);
-      RectTransform panel = panelObject.AddComponent<RectTransform>();
-      panel.anchorMin = new Vector2(0.5f, 0.5f);
-      panel.anchorMax = new Vector2(0.5f, 0.5f);
-      panel.pivot = new Vector2(0.5f, 0.5f);
-      panel.sizeDelta = RuntimePanelSize;
-      panel.anchoredPosition = Vector2.zero;
-
-      Image panelImage = panelObject.AddComponent<Image>();
-      panelImage.color = new Color(0.018f, 0.026f, 0.038f, 0.98f);
-      panelImage.raycastTarget = true;
-      panelObject.AddComponent<RectMask2D>();
-
-      Image accent = CreateImage(panel, "Top Accent", new Color(0.12f, 0.58f, 0.82f, 1.0f));
-      RectTransform accentRect = accent.rectTransform;
-      accentRect.anchorMin = new Vector2(0.0f, 1.0f);
-      accentRect.anchorMax = new Vector2(1.0f, 1.0f);
-      accentRect.pivot = new Vector2(0.5f, 1.0f);
-      accentRect.anchoredPosition = Vector2.zero;
-      accentRect.sizeDelta = new Vector2(0.0f, 4.0f);
-      accent.raycastTarget = false;
-
-      GameObject contentObject = new("Loading Content");
-      contentObject.transform.SetParent(panel, false);
-      RectTransform content = contentObject.AddComponent<RectTransform>();
-      content.anchorMin = Vector2.zero;
-      content.anchorMax = Vector2.one;
-      content.offsetMin = new Vector2(34.0f, 30.0f);
-      content.offsetMax = new Vector2(-34.0f, -30.0f);
-
-      VerticalLayoutGroup layout = contentObject.AddComponent<VerticalLayoutGroup>();
-      layout.childAlignment = TextAnchor.UpperCenter;
-      layout.childControlWidth = true;
-      layout.childControlHeight = true;
-      layout.childForceExpandWidth = true;
-      layout.childForceExpandHeight = false;
-      layout.spacing = 10.0f;
-      layout.padding = new RectOffset(0, 0, 6, 0);
-
-      AddText(content, "CUBUS LOADING", 30, FontStyle.Bold, TextAnchor.MiddleCenter, new Color(0.88f, 0.96f, 1.0f, 1.0f), 42.0f);
-      statusText = AddText(content, string.Empty, 18, FontStyle.Bold, TextAnchor.MiddleCenter, new Color(0.88f, 0.96f, 1.0f, 1.0f), 30.0f);
-      detailText = AddText(content, string.Empty, 14, FontStyle.Bold, TextAnchor.MiddleCenter, new Color(0.62f, 0.74f, 0.84f, 1.0f), 42.0f);
-
-      RectTransform statsRow = AddRow(content, 28.0f, 10.0f);
-      elapsedText = AddText(statsRow, string.Empty, 13, FontStyle.Bold, TextAnchor.MiddleLeft, new Color(0.78f, 0.86f, 0.93f, 1.0f), 28.0f);
-      progressText = AddText(statsRow, string.Empty, 13, FontStyle.Bold, TextAnchor.MiddleRight, new Color(0.78f, 0.86f, 0.93f, 1.0f), 28.0f);
-
-      progressFill = AddProgressBar(content, 18.0f);
-      forceReleaseButton = AddButton(content, "Enter Game Now", RequestForceRelease, -1.0f, 38.0f, true);
-      hintText = AddText(content, string.Empty, 12, FontStyle.Bold, TextAnchor.MiddleCenter, new Color(0.58f, 0.70f, 0.80f, 1.0f), 42.0f);
+      CreateText(buttonObject.transform, "Button Text", 14, FontStyle.Bold, Vector2.zero, Vector2.one, new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero).text = "Enter now";
     }
 
-    private static RectTransform AddRow(RectTransform parent, float height, float spacing)
-    {
-      GameObject go = new("Row");
-      go.transform.SetParent(parent, false);
-      RectTransform rect = go.AddComponent<RectTransform>();
-      LayoutElement element = go.AddComponent<LayoutElement>();
-      element.preferredHeight = height;
-      element.minHeight = height;
-      HorizontalLayoutGroup layout = go.AddComponent<HorizontalLayoutGroup>();
-      layout.childAlignment = TextAnchor.MiddleCenter;
-      layout.childControlWidth = true;
-      layout.childControlHeight = true;
-      layout.childForceExpandWidth = true;
-      layout.childForceExpandHeight = true;
-      layout.spacing = spacing;
-      return rect;
-    }
-
-    private static Text AddText(RectTransform parent, string value, int size, FontStyle style, TextAnchor alignment, Color color, float height)
-    {
-      GameObject go = new("Text");
-      go.transform.SetParent(parent, false);
-      Text text = go.AddComponent<Text>();
-      text.text = value ?? string.Empty;
-      text.font = UiFont;
-      text.fontSize = size;
-      text.fontStyle = style;
-      text.alignment = alignment;
-      text.color = color;
-      text.raycastTarget = false;
-      text.horizontalOverflow = HorizontalWrapMode.Wrap;
-      text.verticalOverflow = VerticalWrapMode.Overflow;
-      LayoutElement element = go.AddComponent<LayoutElement>();
-      element.preferredHeight = height;
-      element.minHeight = height;
-      element.flexibleWidth = 1.0f;
-      return text;
-    }
-
-    private static Button AddButton(RectTransform parent, string label, UnityEngine.Events.UnityAction onClick, float width = -1.0f, float height = 34.0f, bool primary = false)
-    {
-      GameObject go = new("Button");
-      go.transform.SetParent(parent, false);
-      Image image = go.AddComponent<Image>();
-      image.color = primary ? new Color(0.10f, 0.36f, 0.58f, 1.0f) : new Color(0.045f, 0.095f, 0.145f, 1.0f);
-      image.raycastTarget = true;
-
-      LayoutElement element = go.AddComponent<LayoutElement>();
-      element.preferredHeight = height;
-      element.minHeight = height;
-      if (width > 0.0f)
-      {
-        element.preferredWidth = width;
-        element.minWidth = width;
-        element.flexibleWidth = 0.0f;
-      }
-      else
-      {
-        element.flexibleWidth = 1.0f;
-      }
-
-      Button button = go.AddComponent<Button>();
-      button.targetGraphic = image;
-      ColorBlock colors = button.colors;
-      colors.normalColor = image.color;
-      colors.highlightedColor = primary ? new Color(0.16f, 0.52f, 0.78f, 1.0f) : new Color(0.08f, 0.18f, 0.26f, 1.0f);
-      colors.pressedColor = new Color(0.025f, 0.055f, 0.085f, 1.0f);
-      colors.selectedColor = colors.highlightedColor;
-      colors.disabledColor = new Color(0.035f, 0.040f, 0.050f, 0.65f);
-      button.colors = colors;
-
-      if (onClick != null)
-      {
-        button.onClick.AddListener(onClick);
-      }
-
-      Text text = AddText(go.GetComponent<RectTransform>(), label, primary ? 15 : 14, FontStyle.Bold, TextAnchor.MiddleCenter, new Color(0.88f, 0.96f, 1.0f, 1.0f), height);
-      Stretch(text.rectTransform);
-      return button;
-    }
-
-    private static Image AddProgressBar(RectTransform parent, float height)
-    {
-      GameObject backObject = new("Progress Back");
-      backObject.transform.SetParent(parent, false);
-      Image back = backObject.AddComponent<Image>();
-      back.color = new Color(0.0f, 0.0f, 0.0f, 1.0f);
-      back.raycastTarget = false;
-      LayoutElement element = backObject.AddComponent<LayoutElement>();
-      element.preferredHeight = height;
-      element.minHeight = height;
-      element.flexibleWidth = 1.0f;
-
-      GameObject fillObject = new("Progress Fill");
-      fillObject.transform.SetParent(backObject.transform, false);
-      Image fill = fillObject.AddComponent<Image>();
-      fill.color = new Color(0.20f, 0.75f, 1.0f, 1.0f);
-      fill.type = Image.Type.Filled;
-      fill.fillMethod = Image.FillMethod.Horizontal;
-      fill.fillOrigin = 0;
-      fill.raycastTarget = false;
-      Stretch(fill.rectTransform);
-      return fill;
-    }
-
-    private static Image CreateImage(RectTransform parent, string name, Color color)
+    private Text CreateText(Transform parent, string name, int fontSize, FontStyle style, Vector2 anchorMin, Vector2 anchorMax, Vector2 pivot, Vector2 anchoredPosition, Vector2 sizeDelta)
     {
       GameObject go = new(name);
       go.transform.SetParent(parent, false);
-      Image image = go.AddComponent<Image>();
-      image.color = color;
-      return image;
+      Text text = go.AddComponent<Text>();
+      text.font = UiFont;
+      text.fontSize = fontSize;
+      text.fontStyle = style;
+      text.alignment = TextAnchor.MiddleCenter;
+      text.color = Color.white;
+      text.horizontalOverflow = HorizontalWrapMode.Wrap;
+      text.verticalOverflow = VerticalWrapMode.Overflow;
+      RectTransform rect = go.GetComponent<RectTransform>();
+      rect.anchorMin = anchorMin;
+      rect.anchorMax = anchorMax;
+      rect.pivot = pivot;
+      rect.anchoredPosition = anchoredPosition;
+      rect.sizeDelta = sizeDelta;
+      return text;
     }
 
-    private static void Stretch(RectTransform rect)
+    private void UpdateLoadingUi()
     {
-      rect.anchorMin = Vector2.zero;
-      rect.anchorMax = Vector2.one;
-      rect.pivot = new Vector2(0.5f, 0.5f);
-      rect.anchoredPosition = Vector2.zero;
-      rect.sizeDelta = Vector2.zero;
-      rect.offsetMin = Vector2.zero;
-      rect.offsetMax = Vector2.zero;
-      rect.localScale = Vector3.one;
-    }
-
-    private static bool TryFindSceneInBuildSettings(string requestedSceneName, out string scenePath)
-    {
-      scenePath = string.Empty;
-      if (string.IsNullOrWhiteSpace(requestedSceneName)) return false;
-
-      for (int i = 0; i < SceneManager.sceneCountInBuildSettings; i++)
+      if (statusText != null)
       {
-        string path = SceneUtility.GetScenePathByBuildIndex(i);
-        string name = Path.GetFileNameWithoutExtension(path);
-        if (string.Equals(name, requestedSceneName, System.StringComparison.OrdinalIgnoreCase) || string.Equals(path, requestedSceneName, System.StringComparison.OrdinalIgnoreCase))
-        {
-          scenePath = path;
-          return true;
-        }
+        statusText.text = status;
       }
 
-      return false;
+      if (detailText != null)
+      {
+        detailText.text = detail;
+      }
+
+      if (elapsedText != null)
+      {
+        elapsedText.text = $"Elapsed {Time.realtimeSinceStartup - startedAt:0.0}s";
+      }
+
+      float combinedProgress = Mathf.Clamp01(sceneLoadProgress * 0.35f + terrainProgress * 0.65f);
+      if (progressText != null)
+      {
+        progressText.text = $"{combinedProgress * 100.0f:0}%";
+      }
+
+      if (progressFill != null)
+      {
+        RectTransform fillRect = progressFill.GetComponent<RectTransform>();
+        Transform parent = progressFill.transform.parent;
+        RectTransform parentRect = parent != null ? parent.GetComponent<RectTransform>() : null;
+        float width = parentRect != null ? parentRect.rect.width : RuntimePanelSize.x - 96.0f;
+        fillRect.sizeDelta = new Vector2(width * combinedProgress, 0.0f);
+      }
+
+      if (hintText != null)
+      {
+        hintText.text = failed
+          ? "Return to launcher and try again."
+          : "Press Enter or click Enter now to skip waiting once terrain has started.";
+      }
     }
   }
 }
