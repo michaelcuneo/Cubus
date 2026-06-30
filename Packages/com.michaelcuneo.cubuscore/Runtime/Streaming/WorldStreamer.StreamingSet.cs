@@ -8,6 +8,9 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 {
   public sealed partial class WorldStreamer
   {
+    private const int SurfaceVerticalChunkMargin = 2;
+    private const int ViewerVerticalChunkMargin = 1;
+
     private void BuildChunkSet(Vector3Int viewerChunkCoord, int horizontalRadius, HashSet<Vector3Int> targetSet)
     {
       targetSet.Clear();
@@ -19,15 +22,37 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
           int chunkX = viewerChunkCoord.x + x;
           int chunkZ = viewerChunkCoord.z + z;
 
-          for (int y = minChunkY; y <= maxChunkY; y++)
-          {
-            Vector3Int chunkCoord = new(chunkX, y, chunkZ);
-            if (world.Settings.IsInsideEffectiveWorldBounds3D(chunkCoord))
-            {
-              targetSet.Add(chunkCoord);
-            }
-          }
+          int surfaceChunkY = GetSurfaceChunkYForColumn(
+            chunkX,
+            chunkZ,
+            maxChunkY * VoxelConstants.ChunkSize
+          );
+
+          AddVerticalChunkRange(targetSet, chunkX, chunkZ, surfaceChunkY - SurfaceVerticalChunkMargin, surfaceChunkY + SurfaceVerticalChunkMargin, minChunkY, maxChunkY);
+          AddVerticalChunkRange(targetSet, chunkX, chunkZ, viewerChunkCoord.y - ViewerVerticalChunkMargin, viewerChunkCoord.y + ViewerVerticalChunkMargin, minChunkY, maxChunkY);
         }
+    }
+
+    private void AddVerticalChunkRange(
+      HashSet<Vector3Int> targetSet,
+      int chunkX,
+      int chunkZ,
+      int requestedMinY,
+      int requestedMaxY,
+      int minChunkY,
+      int maxChunkY)
+    {
+      int fromY = Mathf.Clamp(Mathf.Min(requestedMinY, requestedMaxY), minChunkY, maxChunkY);
+      int toY = Mathf.Clamp(Mathf.Max(requestedMinY, requestedMaxY), minChunkY, maxChunkY);
+
+      for (int y = fromY; y <= toY; y++)
+      {
+        Vector3Int chunkCoord = new(chunkX, y, chunkZ);
+        if (world.Settings.IsInsideEffectiveWorldBounds3D(chunkCoord))
+        {
+          targetSet.Add(chunkCoord);
+        }
+      }
     }
 
     private void QueueGeneratedChunksForRender(Vector3Int viewerChunkCoord)
