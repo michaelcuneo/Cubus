@@ -22,7 +22,8 @@ namespace Assets.Demo.Scripts.Core
     [SerializeField] private string launcherSceneName = "DemoLauncher";
     [SerializeField] private float connectedWorldReadyTimeoutSeconds = 30.0f;
     [SerializeField] private bool logLoadingDiagnostics = true;
-    [SerializeField] private bool prewarmFullViewDistanceBeforeLocalSpawn = true;
+    [SerializeField] private bool prewarmFullViewDistanceBeforeLocalSpawn = false;
+    [SerializeField][Min(1)] private int localVisibleFirstPrewarmRadiusInChunks = 2;
 
     private string loadingStage = "Waiting for launch context";
     private string loadingDetail = string.Empty;
@@ -155,7 +156,7 @@ namespace Assets.Demo.Scripts.Core
       if (streamer != null)
       {
         int prewarmRadius = ResolveLocalPrewarmRadius();
-        SetStage("Prewarming streamed terrain", $"Generating/loading spawn bubble before release. Radius={prewarmRadius} chunks.");
+        SetStage("Prewarming visible streamed terrain", $"Generating/loading a small spawn bubble before release. Radius={prewarmRadius} chunks.");
         Debug.Log($"[DemoLaunch] Preparing local streamed world '{DemoGameLaunchContext.WorldId}' before spawning. PrewarmRadius={prewarmRadius}.");
         yield return EnableStreamerForBootstrap(streamer);
         streamer.ConfigureInitialStreamingStage(prewarmRadius, 0, true);
@@ -184,12 +185,21 @@ namespace Assets.Demo.Scripts.Core
 
     private int ResolveLocalPrewarmRadius()
     {
-      if (!prewarmFullViewDistanceBeforeLocalSpawn || world == null || world.Settings == null)
+      int visibleFirstRadius = Mathf.Max(1, localVisibleFirstPrewarmRadiusInChunks);
+      if (world == null || world.Settings == null)
       {
-        return 1;
+        return visibleFirstRadius;
       }
 
-      return Mathf.Max(1, world.Settings.ViewDistanceInChunks);
+      int fullRadius = Mathf.Max(1, world.Settings.ViewDistanceInChunks);
+      bool densityStartup = world.Settings.TerrainSystem == TerrainSystem.Hybrid || world.Settings.TerrainSystem == TerrainSystem.SmoothDensity;
+
+      if (!prewarmFullViewDistanceBeforeLocalSpawn || densityStartup)
+      {
+        return Mathf.Min(visibleFirstRadius, fullRadius);
+      }
+
+      return fullRadius;
     }
 
     private IEnumerator PrepareConnectedWorldThenSpawn()
