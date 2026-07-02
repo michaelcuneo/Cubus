@@ -72,6 +72,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
     private Vector3Int lastCollisionViewerChunkCoord;
     private bool hasLastCollisionViewerChunkCoord;
     private float timeSinceLastCollisionUpdate;
+    private readonly ChunkCollisionBaker collisionBaker = new();
 
     private const int LookupTextureSize = 256;
 
@@ -93,6 +94,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
       NormalizeCollisionMode();
       world = GetComponent<CubusWorld>();
       chunkPool = new ChunkPool(transform);
+      collisionBaker.Configure(Mathf.Max(2, SystemInfo.processorCount / 2));
       EnsureBlockWorldMaterial();
       EnsureDensityWorldMaterial();
     }
@@ -104,6 +106,10 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
 
     private void Update()
     {
+      // Apply any collision meshes that finished cooking on a worker thread. Pumped
+      // every frame regardless of collision mode; it is a no-op when nothing is baking.
+      collisionBaker.Update();
+
       if (collisionMode != WorldCollisionMode.NearViewerOnly || collisionViewer == null || world == null)
       {
         return;
@@ -321,6 +327,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
     [ContextMenu("Clear Rendered Chunks")]
     public void ClearAll()
     {
+      collisionBaker.Clear();
       ClearLayerViews(activeBlockChunkViews);
       ClearLayerViews(activeDensityChunkViews);
       activeChunkViews.Clear();
@@ -393,6 +400,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
       }
 
       ChunkView chunkView = chunkPool.Acquire(chunkCoord, world.Settings.VoxelSize, material);
+      chunkView.SetCollisionBaker(collisionBaker);
       layerViews[chunkCoord] = chunkView;
       UpdateActiveChunkViewIndex(chunkCoord);
       ApplyCollisionStateToChunk(chunkView);

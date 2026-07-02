@@ -23,10 +23,24 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
     public static bool AssignDebugMeshNames;
 
     private bool hasCollisionMesh;
+    private bool collisionDesired;
+    private ChunkCollisionBaker collisionBaker;
 
     public Vector3Int ChunkCoord { get; private set; }
     public bool IsActive { get; private set; }
     public MeshRenderer MeshRenderer => meshRenderer;
+
+    /// <summary>The Unity mesh currently applied to this view, or null.</summary>
+    public Mesh CurrentMesh => currentMesh;
+
+    /// <summary>
+    /// Assigns the shared baker that cooks collision meshes off the main thread. When
+    /// null, collision falls back to a synchronous cook.
+    /// </summary>
+    internal void SetCollisionBaker(ChunkCollisionBaker baker)
+    {
+      collisionBaker = baker;
+    }
 
     /// <summary>
     /// True when the streamer has deliberately hidden this chunk because it is
@@ -155,14 +169,11 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
 
       if (generateCollision)
       {
-        meshCollider.enabled = false;
-        meshCollider.sharedMesh = null;
-        meshCollider.sharedMesh = currentMesh;
-        meshCollider.enabled = true;
-        hasCollisionMesh = true;
+        RequestCollisionBake();
       }
       else
       {
+        collisionDesired = false;
         meshCollider.enabled = false;
         meshCollider.sharedMesh = null;
         hasCollisionMesh = false;
@@ -177,7 +188,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
       {
         Mesh newMesh = currentMesh;
         currentMesh = oldMesh;
-        DestroyMesh(currentMesh);
+        SafeDestroyMesh(currentMesh);
         currentMesh = newMesh;
       }
     }
@@ -207,14 +218,11 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
 
       if (generateCollision)
       {
-        meshCollider.enabled = false;
-        meshCollider.sharedMesh = null;
-        meshCollider.sharedMesh = currentMesh;
-        meshCollider.enabled = true;
-        hasCollisionMesh = true;
+        RequestCollisionBake();
       }
       else
       {
+        collisionDesired = false;
         meshCollider.enabled = false;
         meshCollider.sharedMesh = null;
         hasCollisionMesh = false;
@@ -234,7 +242,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
       {
         Mesh newMesh = currentMesh;
         currentMesh = oldMesh;
-        DestroyMesh(currentMesh);
+        SafeDestroyMesh(currentMesh);
         currentMesh = newMesh;
       }
       else
@@ -298,18 +306,11 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
       }
 
       hasCollisionMesh = false;
+      collisionDesired = false;
 
       if (currentMesh != null)
       {
-        if (Application.isPlaying)
-        {
-          Destroy(currentMesh);
-        }
-        else
-        {
-          DestroyImmediate(currentMesh);
-        }
-
+        SafeDestroyMesh(currentMesh);
         currentMesh = null;
       }
 
@@ -330,9 +331,23 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
 
       if (!enabled)
       {
+        // Keep the (already-baked) shared mesh so re-enabling later is instant.
+        collisionDesired = false;
         meshCollider.enabled = false;
         return;
       }
+
+      RequestCollisionBake();
+    }
+
+    /// <summary>
+    /// Requests collision for the current mesh. If a baker is available the physics
+    /// cook runs off the main thread and the collider is enabled later via
+    /// <see cref="OnCollisionMeshBaked"/>; otherwise it cooks synchronously.
+    /// </summary>
+    private void RequestCollisionBake()
+    {
+      collisionDesired = true;
 
       if (currentMesh == null)
       {
@@ -341,15 +356,68 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
         return;
       }
 
-      if (!hasCollisionMesh || meshCollider.sharedMesh != currentMesh)
+      if (hasCollisionMesh && meshCollider.sharedMesh == currentMesh)
       {
-        meshCollider.enabled = false;
-        meshCollider.sharedMesh = null;
-        meshCollider.sharedMesh = currentMesh;
-        hasCollisionMesh = true;
+        meshCollider.enabled = true;
+        return;
       }
 
+      if (collisionBaker != null)
+      {
+        meshCollider.enabled = false;
+        collisionBaker.RequestBake(this, currentMesh);
+        return;
+      }
+
+      meshCollider.enabled = false;
+      meshCollider.sharedMesh = null;
+      meshCollider.sharedMesh = currentMesh;
       meshCollider.enabled = true;
+      hasCollisionMesh = true;
+    }
+
+    /// <summary>
+    /// True while this view still wants a collider for <paramref name="mesh"/> and that
+    /// mesh is still the active one. Used by the baker to skip stale bake requests.
+    /// </summary>
+    public bool WantsCollisionBakeFor(Mesh mesh)
+    {
+      return collisionDesired && IsActive && ReferenceEquals(currentMesh, mesh);
+    }
+
+    /// <summary>
+    /// Called on the main thread once the baker has cooked <paramref name="mesh"/>.
+    /// Assigning the already-baked mesh reuses the cooked data (no main-thread cook).
+    /// </summary>
+    public void OnCollisionMeshBaked(Mesh mesh)
+    {
+      EnsureComponents();
+
+      if (!collisionDesired || meshCollider == null || !ReferenceEquals(currentMesh, mesh))
+      {
+        return;
+      }
+
+      meshCollider.sharedMesh = mesh;
+      meshCollider.enabled = true;
+      hasCollisionMesh = true;
+    }
+
+    private void SafeDestroyMesh(Mesh mesh)
+    {
+      if (mesh == null)
+      {
+        return;
+      }
+
+      if (collisionBaker != null)
+      {
+        collisionBaker.SafeDestroyMesh(mesh);
+      }
+      else
+      {
+        DestroyMesh(mesh);
+      }
     }
 
     public void Release(Transform poolParent)

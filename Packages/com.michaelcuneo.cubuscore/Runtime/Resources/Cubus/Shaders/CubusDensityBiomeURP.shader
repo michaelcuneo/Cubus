@@ -10,6 +10,13 @@ Shader "Cubus/DensityBiomeURP"
     _MaterialBlendWidth("Material Blend Width", Range(0.01, 1)) = 0.35
     _MaterialBlendNoiseScale("Material Blend Noise Scale", Float) = 0.14
     _MaterialBlendNoiseStrength("Material Blend Noise Strength", Range(0, 1)) = 0.45
+
+    _Smoothness("Smoothness", Range(0, 1)) = 0.12
+    _SpecularStrength("Specular Strength", Range(0, 2)) = 0.25
+    _FresnelStrength("Fresnel Rim", Range(0, 2)) = 0.15
+    _AmbientStrength("Ambient Strength", Range(0, 1)) = 0.28
+    _DirectLightStrength("Direct Sun Strength", Range(0, 2)) = 1.15
+    _UseSceneFog("Use Scene Fog", Range(0, 1)) = 0
   }
 
   SubShader
@@ -36,6 +43,9 @@ Shader "Cubus/DensityBiomeURP"
       HLSLPROGRAM
       #pragma vertex vert
       #pragma fragment frag
+      #pragma multi_compile _ _MAIN_LIGHT_SHADOWS _MAIN_LIGHT_SHADOWS_CASCADE _MAIN_LIGHT_SHADOWS_SCREEN
+      #pragma multi_compile_fragment _ _SHADOWS_SOFT
+      #pragma multi_compile_fog
 
       #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
       #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
@@ -69,6 +79,7 @@ Shader "Cubus/DensityBiomeURP"
         float4 splatWeights : TEXCOORD2;
         float2 materialIds01 : TEXCOORD3;
         float2 materialIds23 : TEXCOORD4;
+        float fogCoord : TEXCOORD5;
       };
 
       CBUFFER_START(UnityPerMaterial)
@@ -78,6 +89,12 @@ Shader "Cubus/DensityBiomeURP"
       float _MaterialBlendWidth;
       float _MaterialBlendNoiseScale;
       float _MaterialBlendNoiseStrength;
+      float _Smoothness;
+      float _SpecularStrength;
+      float _FresnelStrength;
+      float _AmbientStrength;
+      float _DirectLightStrength;
+      float _UseSceneFog;
       int _TerrainMaterialCount;
       float4 _TerrainMaterialParams[128];
       CBUFFER_END
@@ -276,20 +293,39 @@ Shader "Cubus/DensityBiomeURP"
         return NormalizeSplatWeights(weights);
       }
 
-      float3 ApplyLighting(float3 albedoRgb, float3 normalWS, float roughness)
+      float3 ApplyLighting(float3 albedoRgb, float3 positionWS, float3 normalWS, float roughness)
       {
         float3 n = normalize(normalWS);
+        float3 viewDir = SafeNormalize(_WorldSpaceCameraPos - positionWS);
 
-        Light mainLight = GetMainLight();
+        float4 shadowCoord = TransformWorldToShadowCoord(positionWS);
+        Light mainLight = GetMainLight(shadowCoord);
 
+        float atten = mainLight.shadowAttenuation * mainLight.distanceAttenuation;
         float ndl = saturate(dot(n, mainLight.direction));
+        float3 direct = mainLight.color * ndl * atten * _DirectLightStrength;
 
-        float ambient = lerp(0.42, 0.25, saturate(1.0 - roughness));
-        float direct = lerp(0.58, 0.75, saturate(1.0 - roughness));
+        // Real sky ambient (spherical harmonics) so the terrain reacts to the scene
+        // and sky lighting instead of a flat constant. A small floor keeps shaded
+        // faces readable.
+        float3 skyAmbient = SampleSH(n) * _AmbientStrength;
+        float3 floorAmbient = 0.06.xxx;
+        float3 ambient = max(skyAmbient, floorAmbient);
 
-        float litFactor = ambient + ndl * direct;
+        // Terrain is matte: drive the highlight from the low uniform smoothness (the
+        // material mask roughness is often unauthored/zero, which would otherwise make
+        // everything look like wet plastic). Mask roughness can only make it more matte.
+        float smoothness = saturate(_Smoothness) * saturate(1.0 - roughness);
+        float3 halfVec = SafeNormalize(mainLight.direction + viewDir);
+        float ndh = saturate(dot(n, halfVec));
+        float shininess = exp2(lerp(3.0, 11.0, smoothness));
+        float specTerm = pow(ndh, shininess) * _SpecularStrength * ndl * atten;
+        float3 specular = mainLight.color * specTerm;
 
-        return albedoRgb * litFactor * mainLight.color;
+        float fresnel = pow(1.0 - saturate(dot(n, viewDir)), 5.0) * _FresnelStrength;
+        float3 rim = skyAmbient * fresnel;
+
+        return albedoRgb * (ambient + direct) + specular + rim;
       }
 
       Varyings vert(Attributes IN)
@@ -306,6 +342,7 @@ Shader "Cubus/DensityBiomeURP"
         OUT.splatWeights = IN.color;
         OUT.materialIds01 = IN.uv0;
         OUT.materialIds23 = IN.uv1;
+        OUT.fogCoord = ComputeFogFactor(pos.positionCS.z);
 
         return OUT;
       }
@@ -362,13 +399,23 @@ Shader "Cubus/DensityBiomeURP"
         // G = Roughness
         // B = Metallic
         // A = Height
-        float ao = saturate(mask.r);
+        //
+        // AO (mask.r) is intentionally NOT multiplied into the diffuse albedo: the
+        // terrain mask array is frequently unauthored (all zero), which would multiply
+        // the whole surface to black regardless of lighting. The block shader ignores
+        // AO for the same reason; when authored it belongs on the ambient term only.
         float roughness = saturate(mask.g);
 
         float3 lit = ApplyLighting(
-          albedo.rgb * _Tint.rgb * ao,
+          albedo.rgb * _Tint.rgb,
+          IN.positionWS,
           normalWS,
           roughness);
+
+        if (_UseSceneFog > 0.5)
+        {
+          lit = MixFog(lit, IN.fogCoord);
+        }
 
         return half4(lit, 1.0);
       }
