@@ -23,18 +23,28 @@ MonoBehaviour:
     Albedo: {fileID: 2800000, guid: 04ff5a6d4ab5a454e85b542302f61c68, type: 3}
     Normal: {fileID: 2800000, guid: a327df10cb85f7943b834504095fe085, type: 3}
     Mask: {fileID: 2800000, guid: ecf58b58ebe347b4fb545d4f6c868e8a, type: 3}
-    Tiling: 0
-    NormalStrength: 0
-    RoughnessFallback: 0
+    Tiling: 1
+    NormalStrength: 1
+    RoughnessFallback: 0.66
     MetallicFallback: 0
     HeightStrength: 0
-  - MaterialId: 0
+  - MaterialId: 2
     DisplayName: Grass
     Albedo: {fileID: 2800000, guid: c455f4853af941f4ab1663f7f42a2187, type: 3}
     Normal: {fileID: 2800000, guid: f79bbd2b5c72c3a40a5b9ff4b101af25, type: 3}
     Mask: {fileID: 2800000, guid: 86c00680a28ac304c8f41a83c69a8e02, type: 3}
-    Tiling: 0
-    NormalStrength: 0
-    RoughnessFallback: 0
+    Tiling: 1
+    NormalStrength: 1
+    RoughnessFallback: 0.8
+    MetallicFallback: 0
+    HeightStrength: 0
+  - MaterialId: 3
+    DisplayName: Grass
+    Albedo: {fileID: 2800000, guid: 887e49c4b96d26944a0d5da1c0812eb1, type: 3}
+    Normal: {fileID: 2800000, guid: 806b023c60a22b24783cd3d6c29bcc68, type: 3}
+    Mask: {fileID: 2800000, guid: 55ac18675b360c741981417187a4b4f6, type: 3}
+    Tiling: 1
+    NormalStrength: 1
+    RoughnessFallback: 0.75
     MetallicFallback: 0
     HeightStrength: 0
