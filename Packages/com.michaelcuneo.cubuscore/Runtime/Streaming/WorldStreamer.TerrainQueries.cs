@@ -7,7 +7,20 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 {
   public sealed partial class WorldStreamer
   {
+    private bool hasSavedInitialStreamingStageForFocus;
+    private bool savedUseInitialStreamingStageForFocus;
+
     public int ActiveChunkViewCount => worldRenderer != null ? worldRenderer.ActiveChunkViews.Count : 0;
+
+    public bool IsStreamingSettled =>
+      PendingLoadCount == 0 &&
+      PendingRenderCount == 0 &&
+      PendingUnloadCount == 0 &&
+      PendingLoadSetCount == 0 &&
+      PendingRenderSetCount == 0 &&
+      ActiveChunkLoadTaskCount == 0 &&
+      ActiveBlockBuildTaskCount == 0 &&
+      ActiveDensityBuildTaskCount == 0;
 
     public bool HasChunkView(Vector3Int chunkCoord)
     {
@@ -152,17 +165,48 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       }
     }
 
-    public void SetStreamingFocusVoxel(Vector3Int voxelCoord)
+    public void SetStreamingFocusVoxel(Vector3Int voxelCoord, bool useFullViewDistance = false)
     {
       overrideStreamingFocusVoxel = voxelCoord;
       hasOverrideStreamingFocusVoxel = true;
+
+      if (useFullViewDistance)
+      {
+        if (!hasSavedInitialStreamingStageForFocus)
+        {
+          savedUseInitialStreamingStageForFocus = useInitialStreamingStage;
+          hasSavedInitialStreamingStageForFocus = true;
+        }
+
+        // Spawn prewarm wants the real ViewDistanceInChunks, not the tiny initial
+        // bootstrap radius. Temporarily disabling the initial stage makes the normal
+        // streaming-set builder fill the whole requested view radius around the focus.
+        useInitialStreamingStage = false;
+      }
+      else
+      {
+        RestoreInitialStreamingStageAfterFocusPrewarm();
+      }
+
       ForceRefreshStreamingSet();
     }
 
     public void ClearStreamingFocusVoxel()
     {
       hasOverrideStreamingFocusVoxel = false;
+      RestoreInitialStreamingStageAfterFocusPrewarm();
       ForceRefreshStreamingSet();
+    }
+
+    private void RestoreInitialStreamingStageAfterFocusPrewarm()
+    {
+      if (!hasSavedInitialStreamingStageForFocus)
+      {
+        return;
+      }
+
+      useInitialStreamingStage = savedUseInitialStreamingStageForFocus;
+      hasSavedInitialStreamingStageForFocus = false;
     }
 
     private Vector3Int GetStreamingFocusChunkCoord()
