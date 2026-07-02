@@ -61,5 +61,39 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain.Material
     }
 
     public int MaterialCount => Materials != null ? Materials.Count : 0;
+
+#if UNITY_EDITOR
+    private void OnValidate()
+    {
+      TextureSize = Mathf.Max(16, TextureSize);
+
+      if (Materials == null)
+      {
+        Materials = new List<CubusTerrainMaterial>();
+        return;
+      }
+
+      for (int i = 0; i < Materials.Count; i++)
+      {
+        CubusTerrainMaterial material = Materials[i];
+
+        if (material == null)
+        {
+          continue;
+        }
+
+        if (material.MaterialId <= 0)
+        {
+          material.MaterialId = i + 1;
+        }
+
+        material.Tiling = Mathf.Max(0.001f, material.Tiling <= 0.0f ? 1.0f : material.Tiling);
+        material.NormalStrength = Mathf.Max(0.0f, material.NormalStrength <= 0.0f ? 1.0f : material.NormalStrength);
+        material.RoughnessFallback = Mathf.Clamp01(material.RoughnessFallback <= 0.0f ? 0.8f : material.RoughnessFallback);
+        material.MetallicFallback = Mathf.Clamp01(material.MetallicFallback);
+        material.HeightStrength = Mathf.Clamp01(material.HeightStrength);
+      }
+    }
+#endif
   }
 }
