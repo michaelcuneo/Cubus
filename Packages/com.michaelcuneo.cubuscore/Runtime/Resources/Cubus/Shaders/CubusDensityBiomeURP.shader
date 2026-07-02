@@ -49,6 +49,9 @@ Shader "Cubus/DensityBiomeURP"
       TEXTURE2D_ARRAY(_TerrainMaskArray);
       SAMPLER(sampler_TerrainMaskArray);
 
+      TEXTURE2D(_TerrainMaterialSliceLookup);
+      SAMPLER(sampler_TerrainMaterialSliceLookup);
+
       struct Attributes
       {
         float4 positionOS : POSITION;
@@ -81,8 +84,25 @@ Shader "Cubus/DensityBiomeURP"
 
       float MaterialIdToSlice(float materialId)
       {
+        float id = clamp(round(materialId), 1.0, 65535.0);
+        float x = fmod(id, 256.0);
+        float y = floor(id / 256.0);
+        float2 uv = (float2(x, y) + 0.5) / 256.0;
+        half4 encoded = SAMPLE_TEXTURE2D_LOD(
+          _TerrainMaterialSliceLookup,
+          sampler_TerrainMaterialSliceLookup,
+          uv,
+          0.0);
+
+        float encodedSlice = round(encoded.r * 255.0) + round(encoded.g * 255.0) * 256.0;
+
+        if (encodedSlice <= 0.5)
+        {
+          return 0.0;
+        }
+
         float count = max(1.0, (float)_TerrainMaterialCount);
-        return clamp(round(materialId) - 1.0, 0.0, count - 1.0);
+        return clamp(encodedSlice - 1.0, 0.0, count - 1.0);
       }
 
       float4 GetTerrainMaterialParams(float slice)
@@ -121,6 +141,14 @@ Shader "Cubus/DensityBiomeURP"
           gradY);
       }
 
+      float3 TriplanarWeights(float3 normalWS)
+      {
+        float3 n = abs(normalize(normalWS));
+        float sharpness = max(0.001, _TriplanarSharpness);
+        n = pow(n, sharpness);
+        return n / max(n.x + n.y + n.z, 0.0001);
+      }
+
       half4 SampleTriplanarAlbedo(
         float materialId,
         float3 positionWS,
@@ -130,13 +158,7 @@ Shader "Cubus/DensityBiomeURP"
         float4 materialParams = GetTerrainMaterialParams(slice);
 
         float tiling = max(0.0001, materialParams.x);
-
-        float3 n = abs(normalize(normalWS));
-        float sharpness = max(0.001, _TriplanarSharpness);
-
-        n = pow(n, sharpness);
-        n /= max(n.x + n.y + n.z, 0.0001);
-
+        float3 n = TriplanarWeights(normalWS);
         float scale = max(0.0001, _TextureScale) * tiling;
 
         float2 uvX = positionWS.zy * scale;
@@ -159,13 +181,7 @@ Shader "Cubus/DensityBiomeURP"
         float4 materialParams = GetTerrainMaterialParams(slice);
 
         float tiling = max(0.0001, materialParams.x);
-
-        float3 n = abs(normalize(normalWS));
-        float sharpness = max(0.001, _TriplanarSharpness);
-
-        n = pow(n, sharpness);
-        n /= max(n.x + n.y + n.z, 0.0001);
-
+        float3 n = TriplanarWeights(normalWS);
         float scale = max(0.0001, _TextureScale) * tiling;
 
         float2 uvX = positionWS.zy * scale;
