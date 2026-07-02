@@ -89,24 +89,32 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         return;
       }
 
+      if (!pendingLoadQueueNeedsPrioritization && !pendingRenderQueueNeedsPrioritization)
+      {
+        return;
+      }
+
+      // The sort pivot is identical for every queue in this pass, so compute it once.
+      Vector3Int pivot = ComputeSortPivot();
+
       if (pendingLoadQueueNeedsPrioritization)
       {
-        PrioritizeQueue(pendingLoadQueue, pendingLoadSet, true);
+        PrioritizeQueue(pendingLoadQueue, pendingLoadSet, true, pivot);
         pendingLoadQueueNeedsPrioritization = false;
       }
 
       if (pendingRenderQueueNeedsPrioritization)
       {
-        PrioritizeQueue(pendingRenderQueue, pendingRenderSet, false);
-        PrioritizeQueue(pendingBlockRenderQueue, pendingBlockRenderSet, false);
-        PrioritizeQueue(pendingBlockRenderRetryQueue, pendingBlockRenderRetrySet, false);
-        PrioritizeQueue(pendingDensityRenderQueue, pendingDensityRenderSet, false);
-        PrioritizeQueue(pendingDensityRenderRetryQueue, pendingDensityRenderRetrySet, false);
+        PrioritizeQueue(pendingRenderQueue, pendingRenderSet, false, pivot);
+        PrioritizeQueue(pendingBlockRenderQueue, pendingBlockRenderSet, false, pivot);
+        PrioritizeQueue(pendingBlockRenderRetryQueue, pendingBlockRenderRetrySet, false, pivot);
+        PrioritizeQueue(pendingDensityRenderQueue, pendingDensityRenderSet, false, pivot);
+        PrioritizeQueue(pendingDensityRenderRetryQueue, pendingDensityRenderRetrySet, false, pivot);
         pendingRenderQueueNeedsPrioritization = false;
       }
     }
 
-    private void PrioritizeQueue(Queue<Vector3Int> queue, HashSet<Vector3Int> membership, bool allowKeepOnlyChunks)
+    private void PrioritizeQueue(Queue<Vector3Int> queue, HashSet<Vector3Int> membership, bool allowKeepOnlyChunks, Vector3Int pivot)
     {
       if (queue.Count < 2) return;
       queueSortBuffer.Clear();
@@ -118,7 +126,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         queueSortBuffer.Add(c);
       }
 
-      queueSortBuffer.Sort(GetChunkPriorityComparison(ComputeSortPivot()));
+      SortChunksByPriority(queueSortBuffer, pivot);
       for (int i = 0; i < queueSortBuffer.Count; i++) queue.Enqueue(queueSortBuffer[i]);
     }
 

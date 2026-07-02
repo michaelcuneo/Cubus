@@ -90,7 +90,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     private bool renderReconciliationPending;
     private int cachedMaxHardwareConcurrency = 1;
     private Vector3Int sortPivotChunkCoord;
-    private Comparison<Vector3Int> chunkPriorityComparison;
+    private Comparison<Vector3Int> cachedChunkPriorityComparison;
+    private readonly Dictionary<Vector3Int, int> chunkScoreCache = new();
     private long totalChunkLoadRequestsStarted;
     private long totalChunkLoadsCompleted;
     private long totalChunkLoadFailures;
@@ -235,7 +236,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     private void Awake()
     {
       cachedMaxHardwareConcurrency = Mathf.Max(1, SystemInfo.processorCount - 1);
-      chunkPriorityComparison = CompareChunkPriorityByPivot;
+      cachedChunkPriorityComparison = CompareChunkPriorityCached;
       EnsureRuntimeReferences();
       EnsureLodStreamer();
     }

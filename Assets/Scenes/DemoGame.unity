@@ -516,9 +516,9 @@ MonoBehaviour:
     TerrainSystem: 0
     WorldSeed: 2147483647
     TerrainMaterialLibrary: {fileID: 0}
-    ViewDistanceInChunks: 64
+    ViewDistanceInChunks: 12
     VoxelSize: 1
-    EnableLodTerrain: 1
+    EnableLodTerrain: 0
     LodLevelCount: 6
     LodRingWidthInTiles: 4
     LodVerticalRadiusInTiles: 4
@@ -644,7 +644,7 @@ MonoBehaviour:
   logRenderedChunkMeshes: 0
   collisionMode: 1
   collisionViewer: {fileID: 1517188426}
-  collisionActivationRadius: 64
+  collisionActivationRadius: 32
   collisionUpdateInterval: 0.1
 --- !u!114 &1298388482
 MonoBehaviour:
@@ -817,9 +817,11 @@ MonoBehaviour:
   m_EditorClassIdentifier: CubusCore.Runtime::CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain.Materials.CubusTerrainMaterialLibraryBinder
   MaterialLibrary: {fileID: 11400000, guid: 14dc2a1f5bc3cf8469ae23ae29c3db97, type: 2}
   TargetMaterial: {fileID: 2100000, guid: 31783bb5d288e484394d7bd775e74406, type: 2}
+  WorldRenderer: {fileID: 0}
   albedoArray: {fileID: 0}
   normalArray: {fileID: 0}
   maskArray: {fileID: 0}
+  materialSliceLookup: {fileID: 0}
 --- !u!1 &1453617040
 GameObject:
   m_ObjectHideFlags: 0

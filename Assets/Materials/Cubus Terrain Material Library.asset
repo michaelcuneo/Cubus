@@ -26,8 +26,8 @@ MonoBehaviour:
     Tiling: 1
     NormalStrength: 1
     RoughnessFallback: 0.66
-    MetallicFallback: 0
-    HeightStrength: 0
+    MetallicFallback: 0.4
+    HeightStrength: 0.5
   - MaterialId: 11
     DisplayName: Green Shallow Soil
     Albedo: {fileID: 2800000, guid: c455f4853af941f4ab1663f7f42a2187, type: 3}

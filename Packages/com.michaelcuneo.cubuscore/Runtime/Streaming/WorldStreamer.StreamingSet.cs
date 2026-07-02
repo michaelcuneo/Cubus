@@ -16,11 +16,28 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       targetSet.Clear();
       world.Settings.GetActiveVerticalChunkBounds(out int minChunkY, out int maxChunkY);
 
+      // Resolve the world XZ bounds once per rebuild instead of re-deriving them for
+      // every chunk inside the inner loop. World bounds are unbounded in Y (the
+      // vertical extent is already clamped to [minChunkY, maxChunkY]), so a column
+      // that passes this XZ test needs no further per-chunk bounds check.
+      bool useWorldBounds = world.Settings.UseWorldBounds;
+      world.Settings.GetEffectiveWorldChunkBounds3D(
+        out int worldMinChunkX, out int worldMaxChunkX,
+        out _, out _,
+        out int worldMinChunkZ, out int worldMaxChunkZ);
+
       for (int z = -horizontalRadius; z <= horizontalRadius; z++)
         for (int x = -horizontalRadius; x <= horizontalRadius; x++)
         {
           int chunkX = viewerChunkCoord.x + x;
           int chunkZ = viewerChunkCoord.z + z;
+
+          if (useWorldBounds &&
+              (chunkX < worldMinChunkX || chunkX > worldMaxChunkX ||
+               chunkZ < worldMinChunkZ || chunkZ > worldMaxChunkZ))
+          {
+            continue;
+          }
 
           int surfaceChunkY = GetSurfaceChunkYForColumn(
             chunkX,
@@ -45,13 +62,11 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       int fromY = Mathf.Clamp(Mathf.Min(requestedMinY, requestedMaxY), minChunkY, maxChunkY);
       int toY = Mathf.Clamp(Mathf.Max(requestedMinY, requestedMaxY), minChunkY, maxChunkY);
 
+      // The column's XZ has already been bounds-checked by BuildChunkSet, and world
+      // bounds are unbounded in Y, so every chunk in [fromY, toY] is in-bounds.
       for (int y = fromY; y <= toY; y++)
       {
-        Vector3Int chunkCoord = new(chunkX, y, chunkZ);
-        if (world.Settings.IsInsideEffectiveWorldBounds3D(chunkCoord))
-        {
-          targetSet.Add(chunkCoord);
-        }
+        targetSet.Add(new Vector3Int(chunkX, y, chunkZ));
       }
     }
 
@@ -95,7 +110,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         candidateChunksBuffer.Add(chunkCoord);
       }
 
-      candidateChunksBuffer.Sort(GetChunkPriorityComparison(ComputeSortPivot()));
+      SortChunksByPriority(candidateChunksBuffer, ComputeSortPivot());
       for (int i = 0; i < candidateChunksBuffer.Count; i++)
       {
         QueueNeededRenderOrLoadLayers(candidateChunksBuffer[i]);
@@ -154,11 +169,24 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       }
     }
 
-    private Comparison<Vector3Int> GetChunkPriorityComparison(Vector3Int pivotChunkCoord)
+    private void SortChunksByPriority(List<Vector3Int> chunks, Vector3Int pivotChunkCoord)
     {
       sortPivotChunkCoord = pivotChunkCoord;
-      chunkPriorityComparison ??= CompareChunkPriorityByPivot;
-      return chunkPriorityComparison;
+      cachedChunkPriorityComparison ??= CompareChunkPriorityCached;
+
+      // The score is expensive (camera projection + frustum test), so evaluate it
+      // once per chunk here instead of O(n log n) times inside the sort comparator.
+      chunkScoreCache.Clear();
+      for (int i = 0; i < chunks.Count; i++)
+      {
+        Vector3Int c = chunks[i];
+        if (!chunkScoreCache.ContainsKey(c))
+        {
+          chunkScoreCache[c] = GetChunkPriorityScore(c, pivotChunkCoord);
+        }
+      }
+
+      chunks.Sort(cachedChunkPriorityComparison);
     }
 
     private Vector3Int ComputeSortPivot()
@@ -193,24 +221,24 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         lastViewerChunkCoord.z + Mathf.RoundToInt(heading.z * fallbackLead));
     }
 
-    private int CompareChunkPriorityByPivot(Vector3Int a, Vector3Int b) => CompareChunkPriority(a, b, sortPivotChunkCoord);
-
-    private int CompareChunkPriority(Vector3Int a, Vector3Int b, Vector3Int viewerChunkCoord)
+    private int CompareChunkPriorityCached(Vector3Int a, Vector3Int b)
     {
-      int aScore = GetChunkPriorityScore(a, viewerChunkCoord);
-      int bScore = GetChunkPriorityScore(b, viewerChunkCoord);
+      int aScore = chunkScoreCache[a];
+      int bScore = chunkScoreCache[b];
       if (aScore != bScore) return aScore.CompareTo(bScore);
 
-      int ad = ChunkDistanceSquared(a, viewerChunkCoord);
-      int bd = ChunkDistanceSquared(b, viewerChunkCoord);
+      Vector3Int pivot = sortPivotChunkCoord;
+
+      int ad = ChunkDistanceSquared(a, pivot);
+      int bd = ChunkDistanceSquared(b, pivot);
       if (ad != bd) return ad.CompareTo(bd);
 
-      int av = Mathf.Abs(a.y - viewerChunkCoord.y);
-      int bv = Mathf.Abs(b.y - viewerChunkCoord.y);
+      int av = Mathf.Abs(a.y - pivot.y);
+      int bv = Mathf.Abs(b.y - pivot.y);
       if (av != bv) return av.CompareTo(bv);
 
-      int ah = HorizontalChunkDistanceSquared(a, viewerChunkCoord);
-      int bh = HorizontalChunkDistanceSquared(b, viewerChunkCoord);
+      int ah = HorizontalChunkDistanceSquared(a, pivot);
+      int bh = HorizontalChunkDistanceSquared(b, pivot);
       return ah.CompareTo(bh);
     }
 
