@@ -16,6 +16,7 @@ namespace Assets.Demo.Scripts.Spawn
     [SerializeField][Min(0.0f)] private float spawnClearance = 2.0f;
 
     [Header("Readiness")]
+    [SerializeField] private bool requireFullViewDistanceBeforeSpawn = true;
     [SerializeField][Min(1)] private int requiredRenderedChunks = 9;
 
     public Vector3Int DesiredSpawnVoxel
@@ -34,6 +35,12 @@ namespace Assets.Demo.Scripts.Spawn
     {
       get => spawnClearance;
       set => spawnClearance = Mathf.Max(0.0f, value);
+    }
+
+    public bool RequireFullViewDistanceBeforeSpawn
+    {
+      get => requireFullViewDistanceBeforeSpawn;
+      set => requireFullViewDistanceBeforeSpawn = value;
     }
 
     public int RequiredRenderedChunks
@@ -60,7 +67,7 @@ namespace Assets.Demo.Scripts.Spawn
 
       IsWaiting = true;
 
-      streamer.SetStreamingFocusVoxel(desiredSpawnVoxel);
+      streamer.SetStreamingFocusVoxel(desiredSpawnVoxel, requireFullViewDistanceBeforeSpawn);
 
       while (!world.IsInitialTerrainReady)
       {
@@ -76,6 +83,12 @@ namespace Assets.Demo.Scripts.Spawn
         }
 
         if (streamer.ActiveChunkViewCount < requiredRenderedChunks)
+        {
+          yield return null;
+          continue;
+        }
+
+        if (requireFullViewDistanceBeforeSpawn && !streamer.IsStreamingSettled)
         {
           yield return null;
           continue;
