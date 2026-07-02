@@ -197,11 +197,9 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
     private int CompareChunkPriority(Vector3Int a, Vector3Int b, Vector3Int viewerChunkCoord)
     {
-      if (hasPriorityChunkCoord)
-      {
-        if (a == priorityChunkCoord) return -1;
-        if (b == priorityChunkCoord) return 1;
-      }
+      int aScore = GetChunkPriorityScore(a, viewerChunkCoord);
+      int bScore = GetChunkPriorityScore(b, viewerChunkCoord);
+      if (aScore != bScore) return aScore.CompareTo(bScore);
 
       int ad = ChunkDistanceSquared(a, viewerChunkCoord);
       int bd = ChunkDistanceSquared(b, viewerChunkCoord);
