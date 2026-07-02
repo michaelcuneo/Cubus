@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Chunks;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Core;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing;
+using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain.Materials;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World;
 using UnityEngine;
@@ -52,6 +53,17 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
     private Texture2D sideLookupTexture;
     private Texture2D bottomLookupTexture;
     private Texture2D propsLookupTexture;
+
+    private Texture2DArray densityTerrainAlbedoArray;
+    private Texture2DArray densityTerrainNormalArray;
+    private Texture2DArray densityTerrainMaskArray;
+    private CubusTerrainMaterialLibrary appliedDensityTerrainMaterialLibrary;
+
+    private static readonly int TerrainAlbedoArrayId = Shader.PropertyToID("_TerrainAlbedoArray");
+    private static readonly int TerrainNormalArrayId = Shader.PropertyToID("_TerrainNormalArray");
+    private static readonly int TerrainMaskArrayId = Shader.PropertyToID("_TerrainMaskArray");
+    private static readonly int TerrainMaterialCountId = Shader.PropertyToID("_TerrainMaterialCount");
+    private static readonly int TerrainMaterialParamsId = Shader.PropertyToID("_TerrainMaterialParams");
 
     private CubusWorld world;
     private ChunkPool chunkPool;
@@ -564,7 +576,93 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
     private void ConfigureDensityMaterial(Material material)
     {
       ApplyCommonAtlasProperties(material);
+
+      // Legacy atlas lookup path. Safe to leave for older shaders.
       ApplyDensityMaterialLookups(material);
+
+      // New density terrain texture-array path.
+      ApplyDensityTerrainMaterialLibrary(material);
+    }
+
+    private void ApplyDensityTerrainMaterialLibrary(Material material)
+    {
+      if (material == null || world == null || world.Settings == null)
+      {
+        return;
+      }
+
+      CubusTerrainMaterialLibrary library = world.Settings.TerrainMaterialLibrary;
+
+      if (library == null)
+      {
+        Debug.LogWarning(
+          "WorldSettings.TerrainMaterialLibrary is not assigned. Density terrain texture arrays will not be bound.",
+          this);
+        return;
+      }
+
+      if (densityTerrainAlbedoArray == null ||
+          densityTerrainNormalArray == null ||
+          densityTerrainMaskArray == null ||
+          appliedDensityTerrainMaterialLibrary != library)
+      {
+        CubusTerrainTextureArrayBuilder.Build(
+          library,
+          out densityTerrainAlbedoArray,
+          out densityTerrainNormalArray,
+          out densityTerrainMaskArray);
+
+        appliedDensityTerrainMaterialLibrary = library;
+
+        Debug.Log(
+          $"Built density terrain texture arrays. Materials={library.MaterialCount}, Size={library.TextureSize}",
+          this);
+      }
+
+      material.SetTexture(TerrainAlbedoArrayId, densityTerrainAlbedoArray);
+      material.SetTexture(TerrainNormalArrayId, densityTerrainNormalArray);
+      material.SetTexture(TerrainMaskArrayId, densityTerrainMaskArray);
+      material.SetInt(TerrainMaterialCountId, library.MaterialCount);
+      material.SetVectorArray(
+        TerrainMaterialParamsId,
+        BuildTerrainMaterialParams(library));
+    }
+
+    private static Vector4[] BuildTerrainMaterialParams(CubusTerrainMaterialLibrary library)
+    {
+      const int MaxMaterialParams = 128;
+
+      Vector4[] result = new Vector4[MaxMaterialParams];
+
+      for (int i = 0; i < MaxMaterialParams; i++)
+      {
+        result[i] = new Vector4(1.0f, 1.0f, 0.8f, 0.0f);
+      }
+
+      if (library == null || library.Materials == null)
+      {
+        return result;
+      }
+
+      int count = Mathf.Min(library.Materials.Count, MaxMaterialParams);
+
+      for (int i = 0; i < count; i++)
+      {
+        CubusTerrainMaterial terrainMaterial = library.Materials[i];
+
+        if (terrainMaterial == null)
+        {
+          continue;
+        }
+
+        result[i] = new Vector4(
+          Mathf.Max(0.001f, terrainMaterial.Tiling),
+          Mathf.Max(0.0f, terrainMaterial.NormalStrength),
+          Mathf.Clamp01(terrainMaterial.RoughnessFallback),
+          Mathf.Clamp01(terrainMaterial.HeightStrength));
+      }
+
+      return result;
     }
 
     private void ApplyCommonAtlasProperties(Material material)
