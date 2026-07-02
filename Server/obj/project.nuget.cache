@@ -1,12 +1,12 @@
 {
   "version": 2,
-  "dgSpecHash": "E3SJ/x36ufM=",
+  "dgSpecHash": "/ivF3icFBnY=",
   "success": true,
-  "projectFilePath": "/Users/michaelcuneo/Desktop/Cubus/Server/StdbModule.csproj",
+  "projectFilePath": "F:\\GitHub\\Cubus\\Server\\StdbModule.csproj",
   "expectedPackageFiles": [
-    "/Users/michaelcuneo/.nuget/packages/microsoft.net.illink.tasks/8.0.28/microsoft.net.illink.tasks.8.0.28.nupkg.sha512",
-    "/Users/michaelcuneo/.nuget/packages/spacetimedb.bsatn.runtime/2.6.0/spacetimedb.bsatn.runtime.2.6.0.nupkg.sha512",
-    "/Users/michaelcuneo/.nuget/packages/spacetimedb.runtime/2.6.0/spacetimedb.runtime.2.6.0.nupkg.sha512"
+    "C:\\Users\\Michael\\.nuget\\packages\\microsoft.net.illink.tasks\\8.0.28\\microsoft.net.illink.tasks.8.0.28.nupkg.sha512",
+    "C:\\Users\\Michael\\.nuget\\packages\\spacetimedb.bsatn.runtime\\2.6.1\\spacetimedb.bsatn.runtime.2.6.1.nupkg.sha512",
+    "C:\\Users\\Michael\\.nuget\\packages\\spacetimedb.runtime\\2.6.1\\spacetimedb.runtime.2.6.1.nupkg.sha512"
   ],
   "logs": []
 }

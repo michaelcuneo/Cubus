@@ -1,25 +1,27 @@
 {
   "format": 1,
   "restore": {
-    "/Users/michaelcuneo/Desktop/Cubus/Server/StdbModule.csproj": {}
+    "F:\\GitHub\\Cubus\\Server\\StdbModule.csproj": {}
   },
   "projects": {
-    "/Users/michaelcuneo/Desktop/Cubus/Server/StdbModule.csproj": {
+    "F:\\GitHub\\Cubus\\Server\\StdbModule.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "/Users/michaelcuneo/Desktop/Cubus/Server/StdbModule.csproj",
+        "projectUniqueName": "F:\\GitHub\\Cubus\\Server\\StdbModule.csproj",
         "projectName": "StdbModule",
-        "projectPath": "/Users/michaelcuneo/Desktop/Cubus/Server/StdbModule.csproj",
-        "packagesPath": "/Users/michaelcuneo/.nuget/packages/",
-        "outputPath": "/Users/michaelcuneo/Desktop/Cubus/Server/obj/",
+        "projectPath": "F:\\GitHub\\Cubus\\Server\\StdbModule.csproj",
+        "packagesPath": "C:\\Users\\Michael\\.nuget\\packages\\",
+        "outputPath": "F:\\GitHub\\Cubus\\Server\\obj\\",
         "projectStyle": "PackageReference",
         "configFilePaths": [
-          "/Users/michaelcuneo/.nuget/NuGet/NuGet.Config"
+          "C:\\Users\\Michael\\AppData\\Roaming\\NuGet\\NuGet.Config",
+          "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
         ],
         "originalTargetFrameworks": [
           "net8.0"
         ],
         "sources": {
+          "C:\\Program Files (x86)\\Microsoft SDKs\\NuGetPackages\\": {},
           "https://api.nuget.org/v3/index.json": {}
         },
         "frameworks": {
@@ -70,7 +72,7 @@
               "privateAssets": "all"
             }
           },
-          "runtimeIdentifierGraphPath": "/usr/local/share/dotnet/sdk/8.0.422/PortableRuntimeIdentifierGraph.json"
+          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\8.0.422/PortableRuntimeIdentifierGraph.json"
         }
       },
       "runtimes": {

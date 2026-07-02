@@ -28,6 +28,7 @@ namespace SpacetimeDB.Types
         public RemoteTables(DbConnection conn)
         {
             AddTable(ChatMessage = new(conn));
+            AddTable(DensityEdit = new(conn));
             AddTable(Player = new(conn));
             AddTable(VoxelEdit = new(conn));
             AddTable(WorldChunk = new(conn));
@@ -529,6 +530,7 @@ namespace SpacetimeDB.Types
         internal static string[] AllTablesSqlQueries() => new string[]
         {
             new QueryBuilder().From.ChatMessage().ToSql(),
+            new QueryBuilder().From.DensityEdit().ToSql(),
             new QueryBuilder().From.Player().ToSql(),
             new QueryBuilder().From.VoxelEdit().ToSql(),
             new QueryBuilder().From.WorldChunk().ToSql(),
@@ -540,6 +542,7 @@ namespace SpacetimeDB.Types
     public sealed class From
     {
         public global::SpacetimeDB.Table<ChatMessage, ChatMessageCols, ChatMessageIxCols> ChatMessage() => new("chat_message", new ChatMessageCols("chat_message"), new ChatMessageIxCols("chat_message"));
+        public global::SpacetimeDB.Table<DensityEdit, DensityEditCols, DensityEditIxCols> DensityEdit() => new("density_edit", new DensityEditCols("density_edit"), new DensityEditIxCols("density_edit"));
         public global::SpacetimeDB.Table<Player, PlayerCols, PlayerIxCols> Player() => new("player", new PlayerCols("player"), new PlayerIxCols("player"));
         public global::SpacetimeDB.Table<VoxelEdit, VoxelEditCols, VoxelEditIxCols> VoxelEdit() => new("voxel_edit", new VoxelEditCols("voxel_edit"), new VoxelEditIxCols("voxel_edit"));
         public global::SpacetimeDB.Table<WorldChunk, WorldChunkCols, WorldChunkIxCols> WorldChunk() => new("world_chunk", new WorldChunkCols("world_chunk"), new WorldChunkIxCols("world_chunk"));
@@ -628,6 +631,7 @@ namespace SpacetimeDB.Types
                 Reducer.ClearWorld args => Reducers.InvokeClearWorld(eventContext, args),
                 Reducer.DeleteWorldInstance args => Reducers.InvokeDeleteWorldInstance(eventContext, args),
                 Reducer.EditBlock args => Reducers.InvokeEditBlock(eventContext, args),
+                Reducer.EditDensity args => Reducers.InvokeEditDensity(eventContext, args),
                 Reducer.ResetWorldState args => Reducers.InvokeResetWorldState(eventContext, args),
                 Reducer.SendChat args => Reducers.InvokeSendChat(eventContext, args),
                 Reducer.SetPlayerName args => Reducers.InvokeSetPlayerName(eventContext, args),

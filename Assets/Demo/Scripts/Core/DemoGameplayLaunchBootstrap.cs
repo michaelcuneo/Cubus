@@ -135,6 +135,11 @@ namespace Assets.Demo.Scripts.Core
         network.WorldId = DemoGameLaunchContext.WorldId;
       }
 
+      if (storage != null)
+      {
+        storage.SetWorldId(DemoGameLaunchContext.WorldId);
+      }
+
       return true;
     }
 

@@ -47,6 +47,32 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage
       activeStore = CreateStore();
     }
 
+    /// <summary>
+    /// Rebinds this storage to a different world id and recreates the backing store so that
+    /// saves and loads target that world's own folder/tables. Call before streaming begins
+    /// (e.g. from a launcher) so each named world is an independent, persistent save.
+    /// </summary>
+    public void SetWorldId(string newWorldId)
+    {
+      string sanitized = string.IsNullOrWhiteSpace(newWorldId) ? "demo_world" : newWorldId.Trim();
+      if (string.Equals(sanitized, WorldId, StringComparison.Ordinal) && activeStore != null)
+      {
+        return;
+      }
+
+      worldId = sanitized;
+      loadedManifest = null;
+      storageReadsDisabledForTerrainSystem = false;
+
+      if (activeStore is IDisposable disposable)
+      {
+        disposable.Dispose();
+      }
+
+      world ??= GetComponent<CubusWorld>();
+      activeStore = CreateStore();
+    }
+
     private void Start()
     {
       if (!autoLoadOnStart)

@@ -209,6 +209,65 @@ public static partial class Module
     }
   }
 
+  // Applies a batch of smooth-density voxel edits (one brush stroke touches many
+  // voxels). Each edited voxel is upserted into density_edit keyed by position so
+  // repeated sculpting of the same spot updates rows instead of appending - the row
+  // count reflects the edited surface, not the number of strokes. Absolute density +
+  // material values make replication order-independent (last-write-wins).
+  [Reducer]
+  public static void EditDensity(
+      ReducerContext ctx,
+      string worldId,
+      int[] xs,
+      int[] ys,
+      int[] zs,
+      float[] densities,
+      uint[] materials)
+  {
+    if (string.IsNullOrEmpty(worldId))
+    {
+      throw new Exception("EditDensity requires a worldId.");
+    }
+
+    var count = xs?.Length ?? 0;
+    if (count == 0)
+    {
+      return;
+    }
+
+    if (ys is null || zs is null || densities is null || materials is null ||
+        ys.Length != count || zs.Length != count || densities.Length != count || materials.Length != count)
+    {
+      throw new Exception("EditDensity array arguments must all be the same length.");
+    }
+
+    for (var i = 0; i < count; i++)
+    {
+      var key = VoxelKey(worldId, xs[i], ys[i], zs[i]);
+      var edit = new DensityEdit
+      {
+        Key = key,
+        WorldId = worldId,
+        X = xs[i],
+        Y = ys[i],
+        Z = zs[i],
+        Density = densities[i],
+        Material = materials[i],
+        EditedBy = ctx.Sender,
+        EditedAt = ctx.Timestamp,
+      };
+
+      if (ctx.Db.density_edit.Key.Find(key) is not null)
+      {
+        ctx.Db.density_edit.Key.Update(edit);
+      }
+      else
+      {
+        ctx.Db.density_edit.Insert(edit);
+      }
+    }
+  }
+
   [Reducer]
   public static void UploadChunk(
       ReducerContext ctx,
@@ -280,6 +339,13 @@ public static partial class Module
       editsRemoved++;
     }
 
+    var densityEditsRemoved = 0;
+    foreach (var edit in ctx.Db.density_edit.WorldId.Filter(worldId))
+    {
+      ctx.Db.density_edit.Key.Delete(edit.Key);
+      densityEditsRemoved++;
+    }
+
     var chunksRemoved = 0;
     foreach (var chunk in ctx.Db.world_chunk.WorldId.Filter(worldId))
     {
@@ -287,7 +353,7 @@ public static partial class Module
       chunksRemoved++;
     }
 
-    Log.Info($"ClearWorld '{worldId}': removed {editsRemoved} voxel edits and {chunksRemoved} chunks.");
+    Log.Info($"ClearWorld '{worldId}': removed {editsRemoved} voxel edits, {densityEditsRemoved} density edits and {chunksRemoved} chunks.");
   }
 
   [Reducer]

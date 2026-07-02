@@ -127,7 +127,11 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Editing
         return false;
       }
 
-      if (world.Settings.TerrainSystem != TerrainSystem.Block)
+      // Block editing operates on the block layer. That layer exists in Block
+      // mode and as the sparse buildable layer in Hybrid mode; pure SmoothDensity
+      // has no block layer to edit.
+      if (world.Settings.TerrainSystem != TerrainSystem.Block &&
+          world.Settings.TerrainSystem != TerrainSystem.Hybrid)
       {
         return false;
       }
