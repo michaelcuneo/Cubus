@@ -163,9 +163,11 @@ namespace Assets.Demo.Scripts.Core
         yield return EnableStreamerForBootstrap(streamer);
         streamer.ClearStreamingState();
         streamer.RegenerateStreamedWorld();
-        if (spawnGate != null)
+
+        DemoInitialTerrainSpawnGate gate = ResolveSpawnGate();
+        if (gate != null)
         {
-          yield return spawnGate.WaitAndRelease();
+          yield return gate.WaitAndRelease();
         }
         else
         {
@@ -216,7 +218,16 @@ namespace Assets.Demo.Scripts.Core
       network.Connect();
 
       Debug.Log($"[DemoLaunch] Connecting to {DemoGameLaunchContext.ServerUri} / {DemoGameLaunchContext.ModuleName} / {DemoGameLaunchContext.WorldId}. Waiting for authoritative terrain before spawning.");
-      yield return WaitForInitialTerrainReady("connected world", connectedWorldReadyTimeoutSeconds);
+
+      DemoInitialTerrainSpawnGate gate = streamer != null ? ResolveSpawnGate() : null;
+      if (gate != null)
+      {
+        yield return gate.WaitAndRelease();
+      }
+      else
+      {
+        yield return WaitForInitialTerrainReady("connected world", connectedWorldReadyTimeoutSeconds);
+      }
     }
 
     private IEnumerator WaitForInitialTerrainReady(string label, float timeoutSeconds)
@@ -295,6 +306,32 @@ namespace Assets.Demo.Scripts.Core
       return cachedStreamer;
     }
 
+    private DemoInitialTerrainSpawnGate ResolveSpawnGate()
+    {
+      FindReferences();
+
+      if (spawnGate != null)
+      {
+        spawnGate.RequireFullViewDistanceBeforeSpawn = true;
+        return spawnGate;
+      }
+
+      if (world == null)
+      {
+        return null;
+      }
+
+      spawnGate = world.GetComponent<DemoInitialTerrainSpawnGate>();
+      if (spawnGate == null)
+      {
+        spawnGate = world.gameObject.AddComponent<DemoInitialTerrainSpawnGate>();
+        Debug.Log("[DemoLaunch] Added DemoInitialTerrainSpawnGate at runtime because the scene reference was not wired.");
+      }
+
+      spawnGate.RequireFullViewDistanceBeforeSpawn = true;
+      return spawnGate;
+    }
+
     private void FindReferences()
     {
       if (world == null)
@@ -312,6 +349,11 @@ namespace Assets.Demo.Scripts.Core
         network = DemoNetworkManager.Instance != null
             ? DemoNetworkManager.Instance
             : FindAnyObjectByType<DemoNetworkManager>();
+      }
+
+      if (spawnGate == null && world != null)
+      {
+        spawnGate = world.GetComponent<DemoInitialTerrainSpawnGate>();
       }
 
       if (spawnGate == null)
