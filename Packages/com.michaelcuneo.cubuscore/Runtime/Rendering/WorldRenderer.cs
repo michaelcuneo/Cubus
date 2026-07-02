@@ -321,6 +321,34 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
       return activeBlockChunkViews.ContainsKey(chunkCoord) || activeDensityChunkViews.ContainsKey(chunkCoord);
     }
 
+    public bool HasBlockChunkView(Vector3Int chunkCoord)
+    {
+      return activeBlockChunkViews.ContainsKey(chunkCoord);
+    }
+
+    public bool HasDensityChunkView(Vector3Int chunkCoord)
+    {
+      return activeDensityChunkViews.ContainsKey(chunkCoord);
+    }
+
+    /// <summary>
+    /// Shows or hides the renderers for a chunk (both block and density layers) for
+    /// view-frustum culling. The chunk keeps its mesh, collider, and active state so
+    /// it can be shown again instantly with no re-meshing.
+    /// </summary>
+    public void SetChunkRenderVisible(Vector3Int chunkCoord, bool visible)
+    {
+      if (activeBlockChunkViews.TryGetValue(chunkCoord, out ChunkView blockView) && blockView != null)
+      {
+        blockView.SetRenderVisible(visible);
+      }
+
+      if (activeDensityChunkViews.TryGetValue(chunkCoord, out ChunkView densityView) && densityView != null)
+      {
+        densityView.SetRenderVisible(visible);
+      }
+    }
+
     private void EnsureRuntimeReferences()
     {
       if (world == null) world = GetComponent<CubusWorld>();

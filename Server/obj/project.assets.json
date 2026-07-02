@@ -8,7 +8,7 @@
           "build/Microsoft.NET.ILLink.Tasks.props": {}
         }
       },
-      "SpacetimeDB.BSATN.Runtime/2.6.0": {
+      "SpacetimeDB.BSATN.Runtime/2.6.1": {
         "type": "package",
         "compile": {
           "lib/net8.0/SpacetimeDB.BSATN.Runtime.dll": {
@@ -21,10 +21,10 @@
           }
         }
       },
-      "SpacetimeDB.Runtime/2.6.0": {
+      "SpacetimeDB.Runtime/2.6.1": {
         "type": "package",
         "dependencies": {
-          "SpacetimeDB.BSATN.Runtime": "2.6.0"
+          "SpacetimeDB.BSATN.Runtime": "2.6.1"
         },
         "compile": {
           "lib/net8.0/SpacetimeDB.Runtime.dll": {
@@ -49,7 +49,7 @@
           "build/Microsoft.NET.ILLink.Tasks.props": {}
         }
       },
-      "SpacetimeDB.BSATN.Runtime/2.6.0": {
+      "SpacetimeDB.BSATN.Runtime/2.6.1": {
         "type": "package",
         "compile": {
           "lib/net8.0/SpacetimeDB.BSATN.Runtime.dll": {
@@ -62,10 +62,10 @@
           }
         }
       },
-      "SpacetimeDB.Runtime/2.6.0": {
+      "SpacetimeDB.Runtime/2.6.1": {
         "type": "package",
         "dependencies": {
-          "SpacetimeDB.BSATN.Runtime": "2.6.0"
+          "SpacetimeDB.BSATN.Runtime": "2.6.1"
         },
         "compile": {
           "lib/net8.0/SpacetimeDB.Runtime.dll": {
@@ -136,10 +136,10 @@
         "useSharedDesignerContext.txt"
       ]
     },
-    "SpacetimeDB.BSATN.Runtime/2.6.0": {
-      "sha512": "lYHsHH9VGP96AwQFcu1D5XETYpk0RAE6JP42UYC2ngBSzcAKZRbvdL4mt60u1x7qrxfuqduAfRsQxaLCWGYVIw==",
+    "SpacetimeDB.BSATN.Runtime/2.6.1": {
+      "sha512": "uC+vPbZI4e1TTmw2uaMgNwWdziUjBWelPJHtBJlviIUobQkb4ASfVrxVAwSXZEQbcEulrQWnYtQLMSI4BUQbmQ==",
       "type": "package",
-      "path": "spacetimedb.bsatn.runtime/2.6.0",
+      "path": "spacetimedb.bsatn.runtime/2.6.1",
       "files": [
         ".nupkg.metadata",
         ".signature.p7s",
@@ -151,14 +151,14 @@
         "lib/netstandard2.1/SpacetimeDB.BSATN.Runtime.dll",
         "lib/netstandard2.1/SpacetimeDB.BSATN.Runtime.xml",
         "logo.png",
-        "spacetimedb.bsatn.runtime.2.6.0.nupkg.sha512",
+        "spacetimedb.bsatn.runtime.2.6.1.nupkg.sha512",
         "spacetimedb.bsatn.runtime.nuspec"
       ]
     },
-    "SpacetimeDB.Runtime/2.6.0": {
-      "sha512": "264HClC4SVP6g/jGf434QvQbm92aibZAUXYF0vGhQrtyPnvg7hsStymCVzoSTPJVHtlllnZZT88COqMxgvK0vg==",
+    "SpacetimeDB.Runtime/2.6.1": {
+      "sha512": "03WGLzTOH8Tz0CADNl6iCG4SnBRZ/Yf3H2Q77OmB6tGHcC5n4nYK0d9y3TiqdkSkkXw8fevMDxBz4CD2Ghj/dg==",
       "type": "package",
-      "path": "spacetimedb.runtime/2.6.0",
+      "path": "spacetimedb.runtime/2.6.1",
       "files": [
         ".nupkg.metadata",
         ".signature.p7s",
@@ -172,7 +172,7 @@
         "lib/net8.0/SpacetimeDB.Runtime.dll",
         "lib/net8.0/SpacetimeDB.Runtime.xml",
         "logo.png",
-        "spacetimedb.runtime.2.6.0.nupkg.sha512",
+        "spacetimedb.runtime.2.6.1.nupkg.sha512",
         "spacetimedb.runtime.nuspec"
       ]
     }
@@ -184,24 +184,26 @@
     ]
   },
   "packageFolders": {
-    "/Users/michaelcuneo/.nuget/packages/": {}
+    "C:\\Users\\Michael\\.nuget\\packages\\": {}
   },
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "/Users/michaelcuneo/Desktop/Cubus/Server/StdbModule.csproj",
+      "projectUniqueName": "F:\\GitHub\\Cubus\\Server\\StdbModule.csproj",
       "projectName": "StdbModule",
-      "projectPath": "/Users/michaelcuneo/Desktop/Cubus/Server/StdbModule.csproj",
-      "packagesPath": "/Users/michaelcuneo/.nuget/packages/",
-      "outputPath": "/Users/michaelcuneo/Desktop/Cubus/Server/obj/",
+      "projectPath": "F:\\GitHub\\Cubus\\Server\\StdbModule.csproj",
+      "packagesPath": "C:\\Users\\Michael\\.nuget\\packages\\",
+      "outputPath": "F:\\GitHub\\Cubus\\Server\\obj\\",
       "projectStyle": "PackageReference",
       "configFilePaths": [
-        "/Users/michaelcuneo/.nuget/NuGet/NuGet.Config"
+        "C:\\Users\\Michael\\AppData\\Roaming\\NuGet\\NuGet.Config",
+        "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
       ],
       "originalTargetFrameworks": [
         "net8.0"
       ],
       "sources": {
+        "C:\\Program Files (x86)\\Microsoft SDKs\\NuGetPackages\\": {},
         "https://api.nuget.org/v3/index.json": {}
       },
       "frameworks": {
@@ -252,7 +254,7 @@
             "privateAssets": "all"
           }
         },
-        "runtimeIdentifierGraphPath": "/usr/local/share/dotnet/sdk/8.0.422/PortableRuntimeIdentifierGraph.json"
+        "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\8.0.422/PortableRuntimeIdentifierGraph.json"
       }
     },
     "runtimes": {

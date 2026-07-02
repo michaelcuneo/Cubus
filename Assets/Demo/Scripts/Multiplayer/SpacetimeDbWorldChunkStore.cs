@@ -18,7 +18,7 @@ namespace Assets.Demo.Scripts.Multiplayer
   /// uploaded to the DB - only edits replicate via <c>voxel_edit</c>. Missing chunks return
   /// <c>false</c> so the streamer generates them locally, then they are cached to disk.
   /// </summary>
-  public sealed class SpacetimeDbWorldChunkStore : IAuthoritativeWorldChunkStore
+  public sealed class SpacetimeDbWorldChunkStore : IAuthoritativeWorldChunkStore, IDisposable
   {
     private readonly DemoNetworkManager net;
     private readonly string worldId;
@@ -27,12 +27,15 @@ namespace Assets.Demo.Scripts.Multiplayer
 
     private bool callbacksRegistered;
 
-    public SpacetimeDbWorldChunkStore(DemoNetworkManager net, string worldId)
+    public SpacetimeDbWorldChunkStore(DemoNetworkManager net, string worldId, string worldsSubfolder = "Worlds")
     {
       this.net = net;
       this.worldId = string.IsNullOrWhiteSpace(worldId) ? "demo_world" : worldId;
       this.localCache = new FileWorldChunkStore(
-          Path.Combine(Application.persistentDataPath, "CubusCore", "Worlds"));
+          Path.Combine(
+              Application.persistentDataPath,
+              "CubusCore",
+              string.IsNullOrWhiteSpace(worldsSubfolder) ? "Worlds" : worldsSubfolder));
 
       if (net != null)
       {
@@ -54,6 +57,25 @@ namespace Assets.Demo.Scripts.Multiplayer
 
     private void HandleDisconnected()
     {
+      callbacksRegistered = false;
+      cache.Clear();
+    }
+
+    public void Dispose()
+    {
+      if (net != null)
+      {
+        net.Connected -= HandleConnected;
+        net.Disconnected -= HandleDisconnected;
+      }
+
+      if (callbacksRegistered && net?.Conn != null)
+      {
+        net.Conn.Db.WorldChunk.OnInsert -= HandleChunkInsert;
+        net.Conn.Db.WorldChunk.OnUpdate -= HandleChunkUpdate;
+        net.Conn.Db.WorldChunk.OnDelete -= HandleChunkDelete;
+      }
+
       callbacksRegistered = false;
       cache.Clear();
     }

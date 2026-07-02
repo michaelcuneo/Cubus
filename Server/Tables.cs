@@ -77,7 +77,31 @@ public static partial class Module
     public Timestamp EditedAt;
   }
 
-  // An authoritative compressed chunk payload owned by the server.
+  // A single authoritative smooth-density voxel override (sculpt edit). Stores the
+  // absolute density value plus material so edits are idempotent and converge with
+  // last-write-wins, exactly like voxel_edit but for the smooth density layer.
+  // Base terrain is deterministic; only these edited voxels are shared - never
+  // whole chunks (that path bloated world_chunk and is disabled).
+  [Table(Accessor = "density_edit", Public = true)]
+  public partial struct DensityEdit
+  {
+    // Composite key encoded as "worldId:x:y:z" so edits are idempotent.
+    [PrimaryKey]
+    public string Key;
+
+    [SpacetimeDB.Index.BTree]
+    public string WorldId;
+
+    public int X;
+    public int Y;
+    public int Z;
+
+    public float Density;
+    public uint Material;
+
+    public Identity EditedBy;
+    public Timestamp EditedAt;
+  }
   // Used by the SpacetimeDb world chunk store on the client.
   [Table(Accessor = "world_chunk", Public = true)]
   public partial struct WorldChunk

@@ -198,6 +198,7 @@ namespace Assets.Demo.Scripts.Multiplayer
         "SELECT * FROM chat_message",
         $"SELECT * FROM world_state WHERE WorldId = '{WorldId}'",
         $"SELECT * FROM voxel_edit WHERE WorldId = '{WorldId}'",
+        $"SELECT * FROM density_edit WHERE WorldId = '{WorldId}'",
       };
 
       if (subscribeToWorldChunks)

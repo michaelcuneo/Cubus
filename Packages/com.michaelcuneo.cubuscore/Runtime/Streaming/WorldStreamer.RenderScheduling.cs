@@ -109,7 +109,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
           break;
         }
 
-        if (!desiredChunkCoords.Contains(c))
+        if (!desiredChunkCoords.Contains(c) && !densityEditRenderSet.Contains(c))
         {
           continue;
         }
@@ -130,18 +130,27 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
           QueueLoad(c, false);
         }
 
+        // An edited chunk is only covered by the edit render pass, not reconciliation, so it
+        // must keep retrying until its data is present - otherwise it leaves a permanent hole.
+        RetryDensityEditChunk(c);
         return true;
       }
 
       if (densityBuildQueue.IsInFlight(c))
       {
+        // A build is already running for this chunk but it was snapshotted before this
+        // re-queue (e.g. an edit changed the data underneath it). Rebuild it once that
+        // stale build finishes so boundary edits don't leave a lingering crack.
+        densityRebuildAfterInFlight.Add(c);
         return true;
       }
 
       if (!EnsureDensitySampleChunksAvailableForMesh(c))
       {
         // Missing +X/+Y/+Z sample chunks were queued for load. Reconciliation will
-        // queue this root chunk again once the load/build queues settle.
+        // queue this root chunk again once the load/build queues settle - but only for
+        // desired chunks, so an edited keep-only chunk must retry itself.
+        RetryDensityEditChunk(c);
         return true;
       }
 
@@ -149,6 +158,9 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
       if (densityBuildQueue.ActiveTaskCount >= MaxDensityAsyncTasks || totalActiveTasks >= MaxTotalAsyncTasks)
       {
+        // Async capacity is full. Desired chunks recover via reconciliation; edited keep-only
+        // chunks do not, so retry them until a task slot frees.
+        RetryDensityEditChunk(c);
         return true;
       }
 
@@ -159,6 +171,17 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
       QueueDensityRenderRetry(c);
       return true;
+    }
+
+    // An edited chunk that was dropped from the render pass (waiting on data, sample chunks or a
+    // task slot) must be re-queued because reconciliation only re-visits desired chunks, not the
+    // keep ring. Without this an edit near the keep boundary leaves a permanent terrain hole.
+    private void RetryDensityEditChunk(Vector3Int c)
+    {
+      if (densityEditRenderSet.Contains(c))
+      {
+        QueueDensityRenderRetry(c);
+      }
     }
 
     private void QueueBlockRenderRetry(Vector3Int chunkCoord)

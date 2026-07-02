@@ -1,5 +1,3 @@
-using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Chunks;
-using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World;
 using UnityEngine;
 
@@ -164,6 +162,17 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
             }
           }
 
+          // A newly loaded density chunk may have been the last missing sample of a
+          // visible neighbour's mesh shell. Re-queue those dependents directly rather
+          // than waiting for ReconcileRenderCoverageIfSettled, which only fires when
+          // the whole pipeline is idle and therefore never runs while a large load
+          // backlog is draining. This also covers keep-only sample chunks that are
+          // not desired themselves but unblock a desired root.
+          if (loadedDensity)
+          {
+            RequeueDensityDependentsForMesh(c);
+          }
+
           continue;
         }
 
@@ -188,6 +197,35 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       if (IsDensityTerrainEnabled && world.Data.DensityChunks.ContainsKey(c))
       {
         QueueDensityRender(c);
+      }
+    }
+
+    private void RequeueDensityDependentsForMesh(Vector3Int loadedChunk)
+    {
+      if (!IsDensityTerrainEnabled)
+      {
+        return;
+      }
+
+      // A density mesh samples the +X/+Y/+Z neighbour shell, so the chunks that
+      // depend on loadedChunk are the ones offset by the inverse (-X/-Y/-Z) shell.
+      for (int i = 0; i < DensityEditAffectedChunkOffsets.Length; i++)
+      {
+        Vector3Int dependent = loadedChunk + DensityEditAffectedChunkOffsets[i];
+        if (dependent == loadedChunk)
+        {
+          continue;
+        }
+
+        if ((!desiredChunkCoords.Contains(dependent) && !densityEditRenderSet.Contains(dependent)) ||
+            !world.Data.DensityChunks.ContainsKey(dependent) ||
+            HasRenderedDensityChunk(dependent) ||
+            !ShouldQueueMeshWorkForChunk(dependent))
+        {
+          continue;
+        }
+
+        QueueDensityRender(dependent);
       }
     }
 

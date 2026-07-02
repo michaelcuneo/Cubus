@@ -48,6 +48,19 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     private readonly Queue<Vector3Int> pendingDensityRenderRetryQueue = new();
     private readonly HashSet<Vector3Int> pendingDensityRenderRetrySet = new();
 
+    // Density chunks re-queued for render while a build was already in flight. That in-flight
+    // build snapshotted stale (pre-edit) data, so the chunk is rebuilt once the build completes
+    // - otherwise an edit near a chunk boundary leaves a permanent crack (and a matching collider
+    // gap you fall through) until another edit happens to catch the neighbour idle.
+    private readonly HashSet<Vector3Int> densityRebuildAfterInFlight = new();
+
+    // Density chunks that an EDIT dirtied and must re-mesh even if they are only in the keep ring
+    // (not the desired set). Normal streaming meshes desired-only; without this pass an edit that
+    // touches a keep-ring chunk (or its sampled neighbours) is queued then silently dropped by the
+    // desired-only render filter, leaving a permanent gap. Entries are cleared once the chunk's
+    // build applies.
+    private readonly HashSet<Vector3Int> densityEditRenderSet = new();
+
     private readonly WorldStreamingQueueSet pendingUnload = new();
     private readonly HashSet<Vector3Int> knownEmptyChunks = new();
     private readonly Dictionary<Vector2Int, int> surfaceChunkYCache = new();
@@ -155,8 +168,35 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     private int MeshAppliesPerFrame => Mathf.Clamp(settings != null ? settings.MeshAppliesPerFrame : 32, 1, 128);
     private int MaxAsyncChunkTasks => Mathf.Clamp(settings != null ? settings.MaxAsyncChunkTasks : 8, 1, 32);
     private int MaxTotalAsyncTasks => Mathf.Clamp(MaxAsyncChunkTasks, 1, cachedMaxHardwareConcurrency);
-    private int MaxLoadAsyncTasks => Mathf.Max(1, MaxTotalAsyncTasks / 2);
-    private int MaxMeshAsyncTasks => Mathf.Max(1, MaxTotalAsyncTasks - MaxLoadAsyncTasks);
+
+    // Async worker slots are shared elastically between the load stage and the mesh
+    // stages against the single MaxTotalAsyncTasks budget. Each stage may borrow the
+    // other's currently-idle slots but always leaves AsyncStageReserve free so the
+    // other stage can spin back up. This keeps the whole machine busy whether the
+    // pipeline is load-bound (exploring fresh terrain, where density meshing is
+    // starved waiting on neighbour-shell loads) or mesh-bound (revisiting cached
+    // terrain), instead of stranding half the cores on a fixed 50/50 split. The
+    // per-frame dispatch gates still enforce MaxTotalAsyncTasks, so the elastic
+    // caps can never oversubscribe the total.
+    private int AsyncStageReserve => Mathf.Max(1, MaxTotalAsyncTasks / 4);
+    private int MaxLoadAsyncTasks
+    {
+      get
+      {
+        int total = MaxTotalAsyncTasks;
+        int meshActive = (buildQueue?.ActiveTaskCount ?? 0) + (densityBuildQueue?.ActiveTaskCount ?? 0);
+        return Mathf.Clamp(total - Mathf.Max(meshActive, AsyncStageReserve), 1, total);
+      }
+    }
+    private int MaxMeshAsyncTasks
+    {
+      get
+      {
+        int total = MaxTotalAsyncTasks;
+        int loadActive = chunkLoadQueue?.ActiveTaskCount ?? 0;
+        return Mathf.Clamp(total - Mathf.Max(loadActive, AsyncStageReserve), 1, total);
+      }
+    }
     private int MaxBlockAsyncTasks => IsBlockTerrainEnabled ? Mathf.Max(1, IsDensityTerrainEnabled ? MaxMeshAsyncTasks / 2 : MaxMeshAsyncTasks) : 0;
     private int MaxDensityAsyncTasks => IsDensityTerrainEnabled ? Mathf.Max(1, IsBlockTerrainEnabled ? MaxMeshAsyncTasks - Mathf.Max(1, MaxMeshAsyncTasks / 2) : MaxMeshAsyncTasks) : 0;
     private float MeshApplyTimeBudgetSeconds => Mathf.Max(0.001f, (settings != null ? settings.MeshApplyTimeBudgetMs : 2) / 1000.0f);
@@ -337,6 +377,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       ProcessUnloadQueue(unloadBudget);
       ProcessCompletedBuildResults(meshApplyBudget);
       ReconcileRenderCoverageIfSettled();
+      UpdateChunkRenderVisibility();
     }
 
     private void ReconcileRenderCoverageIfSettled()
@@ -386,6 +427,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       pendingBlockRenderRetryQueue.Clear(); pendingBlockRenderRetrySet.Clear();
       pendingDensityRenderQueue.Clear(); pendingDensityRenderSet.Clear();
       pendingDensityRenderRetryQueue.Clear(); pendingDensityRenderRetrySet.Clear();
+      densityRebuildAfterInFlight.Clear();
+      densityEditRenderSet.Clear();
       pendingUnload.Clear();
       hasLastViewerChunkCoord = false;
       hasLastVisibilityCameraState = false;
@@ -404,6 +447,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       pendingBlockRenderRetryQueue.Clear(); pendingBlockRenderRetrySet.Clear();
       pendingDensityRenderQueue.Clear(); pendingDensityRenderSet.Clear();
       pendingDensityRenderRetryQueue.Clear(); pendingDensityRenderRetrySet.Clear();
+      densityRebuildAfterInFlight.Clear();
+      densityEditRenderSet.Clear();
       pendingUnload.Clear();
       knownEmptyChunks.Clear();
       buildQueue.IncrementGeneration(); densityBuildQueue.IncrementGeneration(); chunkLoadQueue.IncrementGeneration();

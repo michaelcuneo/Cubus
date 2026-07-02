@@ -4,6 +4,7 @@ using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Core;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Lod;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage;
+using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain.Materials;
 using UnityEngine;
 
 namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World
@@ -17,6 +18,9 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World
     [Tooltip("Global world seed. Changing it reshuffles all procedural noise " +
              "(terrain, caves, biome placement) deterministically.")]
     public int WorldSeed = 0;
+
+    [Header("Terrain Materials")]
+    public CubusTerrainMaterialLibrary TerrainMaterialLibrary;
 
     [Header("View Distance")]
     [Min(1)]

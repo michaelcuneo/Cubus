@@ -2,14 +2,11 @@ Shader "Cubus/DensityBiomeURP"
 {
   Properties
   {
-    _Atlas("Biome Texture Atlas", 2D) = "white" {}
-    _DensityLookup("Density Tile Lookup", 2D) = "black" {}
-    _TopLookup("Fallback Tile Lookup", 2D) = "black" {}
-    _PropsLookup("Props Lookup", 2D) = "black" {}
-    _AtlasGrid("Atlas Grid (X Columns, Y Rows)", Vector) = (4, 4, 0, 0)
     _Tint("Tint", Color) = (1, 1, 1, 1)
-    _TextureScale("Texture Scale", Float) = 0.25
+
+    _TextureScale("Global Texture Scale", Float) = 0.25
     _TriplanarSharpness("Triplanar Sharpness", Float) = 4.0
+
     _MaterialBlendWidth("Material Blend Width", Range(0.01, 1)) = 0.35
     _MaterialBlendNoiseScale("Material Blend Noise Scale", Float) = 0.14
     _MaterialBlendNoiseStrength("Material Blend Noise Strength", Range(0, 1)) = 0.45
@@ -43,17 +40,14 @@ Shader "Cubus/DensityBiomeURP"
       #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
       #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
 
-      TEXTURE2D(_Atlas);
-      SAMPLER(sampler_Atlas);
+      TEXTURE2D_ARRAY(_TerrainAlbedoArray);
+      SAMPLER(sampler_TerrainAlbedoArray);
 
-      TEXTURE2D(_DensityLookup);
-      SAMPLER(sampler_DensityLookup);
+      TEXTURE2D_ARRAY(_TerrainNormalArray);
+      SAMPLER(sampler_TerrainNormalArray);
 
-      TEXTURE2D(_TopLookup);
-      SAMPLER(sampler_TopLookup);
-
-      TEXTURE2D(_PropsLookup);
-      SAMPLER(sampler_PropsLookup);
+      TEXTURE2D_ARRAY(_TerrainMaskArray);
+      SAMPLER(sampler_TerrainMaskArray);
 
       struct Attributes
       {
@@ -75,142 +69,112 @@ Shader "Cubus/DensityBiomeURP"
       };
 
       CBUFFER_START(UnityPerMaterial)
-      float4 _AtlasGrid;
       float4 _Tint;
-      float4 _Atlas_TexelSize;
       float _TextureScale;
       float _TriplanarSharpness;
       float _MaterialBlendWidth;
       float _MaterialBlendNoiseScale;
       float _MaterialBlendNoiseStrength;
+      int _TerrainMaterialCount;
+      float4 _TerrainMaterialParams[128];
       CBUFFER_END
 
-      float DecodeU16(float2 rg)
+      float MaterialIdToSlice(float materialId)
       {
-        float low = round(saturate(rg.x) * 255.0);
-        float high = round(saturate(rg.y) * 255.0);
-        return low + (high * 256.0);
+        float count = max(1.0, (float)_TerrainMaterialCount);
+        return clamp(round(materialId) - 1.0, 0.0, count - 1.0);
       }
 
-      float LinearToSrgbChannel(float value)
+      float4 GetTerrainMaterialParams(float slice)
       {
-        value = saturate(value);
-        return value <= 0.0031308
-          ? value * 12.92
-          : (1.055 * pow(value, 1.0 / 2.4)) - 0.055;
+        int index = clamp((int)round(slice), 0, 127);
+        return _TerrainMaterialParams[index];
       }
 
-      float DecodeLookupU16(float2 rg)
+      half4 SampleTerrainAlbedoArray(
+        float slice,
+        float2 uv,
+        float2 gradX,
+        float2 gradY)
       {
-        float low = round(LinearToSrgbChannel(rg.x) * 255.0);
-        float high = round(LinearToSrgbChannel(rg.y) * 255.0);
-        return low + (high * 256.0);
+        return SAMPLE_TEXTURE2D_ARRAY_GRAD(
+          _TerrainAlbedoArray,
+          sampler_TerrainAlbedoArray,
+          uv,
+          slice,
+          gradX,
+          gradY);
       }
 
-      float DecodeLookupByte(float value)
+      half4 SampleTerrainMaskArray(
+        float slice,
+        float2 uv,
+        float2 gradX,
+        float2 gradY)
       {
-        return round(LinearToSrgbChannel(value) * 255.0);
+        return SAMPLE_TEXTURE2D_ARRAY_GRAD(
+          _TerrainMaskArray,
+          sampler_TerrainMaskArray,
+          uv,
+          slice,
+          gradX,
+          gradY);
       }
 
-      float2 MaterialLookupUv(float materialId)
+      half4 SampleTriplanarAlbedo(
+        float materialId,
+        float3 positionWS,
+        float3 normalWS)
       {
-        float clampedId = clamp(round(materialId), 0.0, 65535.0);
-        float low = fmod(clampedId, 256.0);
-        float high = floor(clampedId / 256.0);
-        return (float2(low, high) + 0.5) / 256.0;
-      }
+        float slice = MaterialIdToSlice(materialId);
+        float4 materialParams = GetTerrainMaterialParams(slice);
 
-      float DecodeMaterialId(float4 color)
-      {
-        return max(1.0, DecodeU16(color.rg));
-      }
+        float tiling = max(0.0001, materialParams.x);
 
-      float SampleRenderCategory(float materialId)
-      {
-        float2 uv = MaterialLookupUv(materialId);
-        float4 encoded = SAMPLE_TEXTURE2D(_PropsLookup, sampler_PropsLookup, uv);
-        return DecodeLookupByte(encoded.r);
-      }
-
-      float SampleDensityTileId(float materialId)
-      {
-        float2 uv = MaterialLookupUv(materialId);
-
-        float4 encoded = SAMPLE_TEXTURE2D(_DensityLookup, sampler_DensityLookup, uv);
-        float tileId = DecodeLookupU16(encoded.rg);
-
-        // Fallback for early wiring where _DensityLookup is not bound.
-        if (tileId < 1.0)
-        {
-          encoded = SAMPLE_TEXTURE2D(_TopLookup, sampler_TopLookup, uv);
-          tileId = DecodeLookupU16(encoded.rg);
-        }
-
-        return max(1.0, tileId);
-      }
-
-      void AtlasTileInfo(float tileId, out float2 atlasGrid, out float2 tileOffset)
-      {
-        float columns = max(1.0, floor(_AtlasGrid.x + 0.5));
-        float rows = max(1.0, floor(_AtlasGrid.y + 0.5));
-        float totalTiles = max(1.0, columns * rows);
-
-        float tile = fmod(tileId - 1.0, totalTiles);
-        float sourceRowTopToBottom = floor(tile / columns);
-        float row = rows - 1.0 - sourceRowTopToBottom;
-        float col = tile - (sourceRowTopToBottom * columns);
-
-        atlasGrid = float2(columns, rows);
-        tileOffset = float2(col, row);
-      }
-
-      float2 AtlasUv(float2 localTileUv, float2 atlasGrid, float2 tileOffset)
-      {
-        float2 tileUv = frac(localTileUv);
-
-        float2 tilePixelSize = max(_Atlas_TexelSize.zw / atlasGrid, 1.0);
-        float2 halfTexelInTile = 0.5 / tilePixelSize;
-        tileUv = clamp(tileUv, halfTexelInTile, 1.0 - halfTexelInTile);
-
-        return (tileUv + tileOffset) / atlasGrid;
-      }
-
-      half4 SampleAtlasTile(float tileId, float2 localTileUv, float2 gradX, float2 gradY)
-      {
-        float2 atlasGrid;
-        float2 tileOffset;
-        AtlasTileInfo(tileId, atlasGrid, tileOffset);
-
-        float2 atlasUv = AtlasUv(localTileUv, atlasGrid, tileOffset);
-        float2 atlasDx = gradX / atlasGrid;
-        float2 atlasDy = gradY / atlasGrid;
-
-        return SAMPLE_TEXTURE2D_GRAD(
-            _Atlas,
-            sampler_Atlas,
-            atlasUv,
-            atlasDx,
-            atlasDy
-        );
-      }
-
-      half4 SampleTriplanar(float tileId, float3 positionWS, float3 normalWS)
-      {
         float3 n = abs(normalize(normalWS));
         float sharpness = max(0.001, _TriplanarSharpness);
 
         n = pow(n, sharpness);
         n /= max(n.x + n.y + n.z, 0.0001);
 
-        float scale = max(0.0001, _TextureScale);
+        float scale = max(0.0001, _TextureScale) * tiling;
 
         float2 uvX = positionWS.zy * scale;
         float2 uvY = positionWS.xz * scale;
         float2 uvZ = positionWS.xy * scale;
 
-        half4 sampleX = SampleAtlasTile(tileId, uvX, ddx(uvX), ddy(uvX));
-        half4 sampleY = SampleAtlasTile(tileId, uvY, ddx(uvY), ddy(uvY));
-        half4 sampleZ = SampleAtlasTile(tileId, uvZ, ddx(uvZ), ddy(uvZ));
+        half4 sampleX = SampleTerrainAlbedoArray(slice, uvX, ddx(uvX), ddy(uvX));
+        half4 sampleY = SampleTerrainAlbedoArray(slice, uvY, ddx(uvY), ddy(uvY));
+        half4 sampleZ = SampleTerrainAlbedoArray(slice, uvZ, ddx(uvZ), ddy(uvZ));
+
+        return sampleX * n.x + sampleY * n.y + sampleZ * n.z;
+      }
+
+      half4 SampleTriplanarMask(
+        float materialId,
+        float3 positionWS,
+        float3 normalWS)
+      {
+        float slice = MaterialIdToSlice(materialId);
+        float4 materialParams = GetTerrainMaterialParams(slice);
+
+        float tiling = max(0.0001, materialParams.x);
+
+        float3 n = abs(normalize(normalWS));
+        float sharpness = max(0.001, _TriplanarSharpness);
+
+        n = pow(n, sharpness);
+        n /= max(n.x + n.y + n.z, 0.0001);
+
+        float scale = max(0.0001, _TextureScale) * tiling;
+
+        float2 uvX = positionWS.zy * scale;
+        float2 uvY = positionWS.xz * scale;
+        float2 uvZ = positionWS.xy * scale;
+
+        half4 sampleX = SampleTerrainMaskArray(slice, uvX, ddx(uvX), ddy(uvX));
+        half4 sampleY = SampleTerrainMaskArray(slice, uvY, ddx(uvY), ddy(uvY));
+        half4 sampleZ = SampleTerrainMaskArray(slice, uvZ, ddx(uvZ), ddy(uvZ));
 
         return sampleX * n.x + sampleY * n.y + sampleZ * n.z;
       }
@@ -263,9 +227,12 @@ Shader "Cubus/DensityBiomeURP"
         return weights / total;
       }
 
-      float4 BreakupSplatWeights(float4 weights, float3 positionWS)
+      float4 BreakupSplatWeights(
+        float4 weights,
+        float4 activeMask,
+        float3 positionWS)
       {
-        weights = NormalizeSplatWeights(weights);
+        weights = NormalizeSplatWeights(weights * activeMask);
 
         float noiseScale = max(0.0001, _MaterialBlendNoiseScale);
 
@@ -288,16 +255,23 @@ Shader "Cubus/DensityBiomeURP"
         weights.z += noise.z * strength;
         weights.w -= (noise.x + noise.y + noise.z) * 0.3333333 * strength;
 
+        weights = max(weights * activeMask, 0.0);
+
         return NormalizeSplatWeights(weights);
       }
 
-      float3 ApplyLighting(float3 albedoRgb, float3 normalWS)
+      float3 ApplyLighting(float3 albedoRgb, float3 normalWS, float roughness)
       {
         float3 n = normalize(normalWS);
+
         Light mainLight = GetMainLight();
 
         float ndl = saturate(dot(n, mainLight.direction));
-        float litFactor = 0.35 + ndl * 0.65;
+
+        float ambient = lerp(0.42, 0.25, saturate(1.0 - roughness));
+        float direct = lerp(0.58, 0.75, saturate(1.0 - roughness));
+
+        float litFactor = ambient + ndl * direct;
 
         return albedoRgb * litFactor * mainLight.color;
       }
@@ -322,25 +296,38 @@ Shader "Cubus/DensityBiomeURP"
 
       half4 frag(Varyings IN) : SV_Target
       {
-        float4 weights = BreakupSplatWeights(IN.splatWeights, IN.positionWS);
+        float material0 = round(IN.materialIds01.x);
+        float material1 = round(IN.materialIds01.y);
+        float material2 = round(IN.materialIds23.x);
+        float material3 = round(IN.materialIds23.y);
 
-        float material0 = max(1.0, round(IN.materialIds01.x));
-        float material1 = max(1.0, round(IN.materialIds01.y));
-        float material2 = max(1.0, round(IN.materialIds23.x));
-        float material3 = max(1.0, round(IN.materialIds23.y));
+        float4 activeMask = float4(
+          material0 > 0.5 ? 1.0 : 0.0,
+          material1 > 0.5 ? 1.0 : 0.0,
+          material2 > 0.5 ? 1.0 : 0.0,
+          material3 > 0.5 ? 1.0 : 0.0);
 
-        float tile0 = SampleDensityTileId(material0);
-        float tile1 = SampleDensityTileId(material1);
-        float tile2 = SampleDensityTileId(material2);
-        float tile3 = SampleDensityTileId(material3);
+        material0 = max(1.0, material0);
+        material1 = max(1.0, material1);
+        material2 = max(1.0, material2);
+        material3 = max(1.0, material3);
 
-        float renderCategory0 = SampleRenderCategory(material0);
+        float4 weights = BreakupSplatWeights(
+          IN.splatWeights,
+          activeMask,
+          IN.positionWS);
+
         float3 normalWS = normalize(IN.normalWS);
 
-        half4 albedo0 = SampleTriplanar(tile0, IN.positionWS, normalWS);
-        half4 albedo1 = SampleTriplanar(tile1, IN.positionWS, normalWS);
-        half4 albedo2 = SampleTriplanar(tile2, IN.positionWS, normalWS);
-        half4 albedo3 = SampleTriplanar(tile3, IN.positionWS, normalWS);
+        half4 albedo0 = SampleTriplanarAlbedo(material0, IN.positionWS, normalWS);
+        half4 albedo1 = SampleTriplanarAlbedo(material1, IN.positionWS, normalWS);
+        half4 albedo2 = SampleTriplanarAlbedo(material2, IN.positionWS, normalWS);
+        half4 albedo3 = SampleTriplanarAlbedo(material3, IN.positionWS, normalWS);
+
+        half4 mask0 = SampleTriplanarMask(material0, IN.positionWS, normalWS);
+        half4 mask1 = SampleTriplanarMask(material1, IN.positionWS, normalWS);
+        half4 mask2 = SampleTriplanarMask(material2, IN.positionWS, normalWS);
+        half4 mask3 = SampleTriplanarMask(material3, IN.positionWS, normalWS);
 
         half4 albedo =
           albedo0 * weights.x +
@@ -348,12 +335,25 @@ Shader "Cubus/DensityBiomeURP"
           albedo2 * weights.z +
           albedo3 * weights.w;
 
-        if (renderCategory0 == 1.0 && albedo.a < 0.5)
-        {
-          discard;
-        }
+        half4 mask =
+          mask0 * weights.x +
+          mask1 * weights.y +
+          mask2 * weights.z +
+          mask3 * weights.w;
 
-        float3 lit = ApplyLighting(albedo.rgb * _Tint.rgb, normalWS);
+        // Mask convention:
+        // R = AO
+        // G = Roughness
+        // B = Metallic
+        // A = Height
+        float ao = saturate(mask.r);
+        float roughness = saturate(mask.g);
+
+        float3 lit = ApplyLighting(
+          albedo.rgb * _Tint.rgb * ao,
+          normalWS,
+          roughness);
+
         return half4(lit, 1.0);
       }
 

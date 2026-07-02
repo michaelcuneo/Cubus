@@ -439,6 +439,7 @@ MonoBehaviour:
   storage: {fileID: 1298388487}
   network: {fileID: 515115131}
   requireLauncherSelection: 1
+  spawnGate: {fileID: 0}
   launcherSceneName: DemoLauncher
   connectedWorldReadyTimeoutSeconds: 30
   logLoadingDiagnostics: 1
@@ -476,6 +477,7 @@ GameObject:
   - component: {fileID: 1298388487}
   - component: {fileID: 1298388488}
   - component: {fileID: 1298388489}
+  - component: {fileID: 1298388490}
   m_Layer: 0
   m_Name: VoxelWorld
   m_TagString: Untagged
@@ -513,6 +515,7 @@ MonoBehaviour:
   settings:
     TerrainSystem: 0
     WorldSeed: 2147483647
+    TerrainMaterialLibrary: {fileID: 0}
     ViewDistanceInChunks: 64
     VoxelSize: 1
     EnableLodTerrain: 1
@@ -623,7 +626,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: CubusCore.Runtime::CubusCore.Rendering.WorldRenderer
   blockWorldMaterial: {fileID: 0}
-  densityWorldMaterial: {fileID: 0}
+  densityWorldMaterial: {fileID: 2100000, guid: 31783bb5d288e484394d7bd775e74406, type: 2}
   useBlockBiomeAtlasShader: 1
   useDensityBiomeShader: 1
   blockBiomeAtlasShaderName: Cubus/BiomeAtlasURP
@@ -664,11 +667,10 @@ MonoBehaviour:
     MeshAppliesPerFrame: 24
     MeshApplyTimeBudgetMs: 8
     MaxAsyncChunkTasks: 16
-  desiredInitialSpawnLocation: {x: 0, y: 0, z: 0}
-  initialSpawnClearance: 2
   evictCachedChunkDataOutsideKeepSet: 1
   generateWorldDatabaseBeforeStreaming: 0
   persistStreamedChunks: 1
+  initialStreamingRadiusInChunks: 1
   useInitialStreamingStage: 1
   initialKeepPaddingInChunks: 1
 --- !u!114 &1298388483
@@ -712,11 +714,14 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5d3bd0cbc250298469e40fffbac56fc1, type: 3}
   m_Name: 
   m_EditorClassIdentifier: CubusCore.Runtime::CubusCore.Editing.SmoothDensityEditTool
+  brush: 0
   traceDistance: 128
   radiusVoxels: 4
-  densityStrength: 2.5
   addMaterialId: 1
   editInterval: 0.08
+  densityStrength: 2.5
+  smoothStrength: 0.5
+  flattenStrength: 0.5
 --- !u!114 &1298388486
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -798,6 +803,23 @@ MonoBehaviour:
   windSpeed: 1.5
   windFrequency: 0.15
   windDirection: {x: 1, y: 0.35}
+--- !u!114 &1298388490
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1298388476}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6f2a6998df9e7294abbf135b16f242fc, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: CubusCore.Runtime::CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain.Materials.CubusTerrainMaterialLibraryBinder
+  MaterialLibrary: {fileID: 11400000, guid: 14dc2a1f5bc3cf8469ae23ae29c3db97, type: 2}
+  TargetMaterial: {fileID: 2100000, guid: 31783bb5d288e484394d7bd775e74406, type: 2}
+  albedoArray: {fileID: 0}
+  normalArray: {fileID: 0}
+  maskArray: {fileID: 0}
 --- !u!1 &1453617040
 GameObject:
   m_ObjectHideFlags: 0
@@ -1066,10 +1088,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4d156f7359c8b09459577edc7b1f778a, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Assets.Demo.Scripts.Multiplayer.NetworkedBlockEditInput
-  editTool: {fileID: 1517188433}
+  controller: {fileID: 0}
   bridge: {fileID: 1517188432}
+  densityBridge: {fileID: 0}
   editCamera: {fileID: 1453617044}
-  traceDistance: 100
+  tools: []
+  showToolbar: 1
 --- !u!114 &1517188432
 MonoBehaviour:
   m_ObjectHideFlags: 0

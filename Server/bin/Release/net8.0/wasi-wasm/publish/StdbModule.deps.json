@@ -10,7 +10,7 @@
       "StdbModule/1.0.0": {
         "dependencies": {
           "Microsoft.NET.ILLink.Tasks": "8.0.28",
-          "SpacetimeDB.Runtime": "2.6.0",
+          "SpacetimeDB.Runtime": "2.6.1",
           "runtimepack.Microsoft.NETCore.App.Runtime.Mono.wasi-wasm": "8.0.28"
         },
         "runtime": {
@@ -153,22 +153,22 @@
         }
       },
       "Microsoft.NET.ILLink.Tasks/8.0.28": {},
-      "SpacetimeDB.BSATN.Runtime/2.6.0": {
+      "SpacetimeDB.BSATN.Runtime/2.6.1": {
         "runtime": {
           "lib/net8.0/SpacetimeDB.BSATN.Runtime.dll": {
-            "assemblyVersion": "2.6.0.0",
-            "fileVersion": "2.6.0.0"
+            "assemblyVersion": "2.6.1.0",
+            "fileVersion": "2.6.1.0"
           }
         }
       },
-      "SpacetimeDB.Runtime/2.6.0": {
+      "SpacetimeDB.Runtime/2.6.1": {
         "dependencies": {
-          "SpacetimeDB.BSATN.Runtime": "2.6.0"
+          "SpacetimeDB.BSATN.Runtime": "2.6.1"
         },
         "runtime": {
           "lib/net8.0/SpacetimeDB.Runtime.dll": {
-            "assemblyVersion": "2.6.0.0",
-            "fileVersion": "2.6.0.0"
+            "assemblyVersion": "2.6.1.0",
+            "fileVersion": "2.6.1.0"
           }
         }
       }
@@ -192,19 +192,19 @@
       "path": "microsoft.net.illink.tasks/8.0.28",
       "hashPath": "microsoft.net.illink.tasks.8.0.28.nupkg.sha512"
     },
-    "SpacetimeDB.BSATN.Runtime/2.6.0": {
+    "SpacetimeDB.BSATN.Runtime/2.6.1": {
       "type": "package",
       "serviceable": true,
-      "sha512": "sha512-lYHsHH9VGP96AwQFcu1D5XETYpk0RAE6JP42UYC2ngBSzcAKZRbvdL4mt60u1x7qrxfuqduAfRsQxaLCWGYVIw==",
-      "path": "spacetimedb.bsatn.runtime/2.6.0",
-      "hashPath": "spacetimedb.bsatn.runtime.2.6.0.nupkg.sha512"
+      "sha512": "sha512-uC+vPbZI4e1TTmw2uaMgNwWdziUjBWelPJHtBJlviIUobQkb4ASfVrxVAwSXZEQbcEulrQWnYtQLMSI4BUQbmQ==",
+      "path": "spacetimedb.bsatn.runtime/2.6.1",
+      "hashPath": "spacetimedb.bsatn.runtime.2.6.1.nupkg.sha512"
     },
-    "SpacetimeDB.Runtime/2.6.0": {
+    "SpacetimeDB.Runtime/2.6.1": {
       "type": "package",
       "serviceable": true,
-      "sha512": "sha512-264HClC4SVP6g/jGf434QvQbm92aibZAUXYF0vGhQrtyPnvg7hsStymCVzoSTPJVHtlllnZZT88COqMxgvK0vg==",
-      "path": "spacetimedb.runtime/2.6.0",
-      "hashPath": "spacetimedb.runtime.2.6.0.nupkg.sha512"
+      "sha512": "sha512-03WGLzTOH8Tz0CADNl6iCG4SnBRZ/Yf3H2Q77OmB6tGHcC5n4nYK0d9y3TiqdkSkkXw8fevMDxBz4CD2Ghj/dg==",
+      "path": "spacetimedb.runtime/2.6.1",
+      "hashPath": "spacetimedb.runtime.2.6.1.nupkg.sha512"
     }
   },
   "runtimes": {

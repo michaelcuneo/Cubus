@@ -398,15 +398,28 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World
       {
         chunkData = new BlockChunkData(chunkCoord);
 
-        WorldGenerator generator = new(settings);
+        worldData.BlockVoxelOverridesByChunk.TryGetValue(chunkCoord, out Dictionary<int, ushort> existingOverrides);
 
-        if (worldData.BlockVoxelOverridesByChunk.TryGetValue(chunkCoord, out var existingOverrides))
+        if (UsesSparseBlockLayer())
         {
-          generator.GenerateBlockChunkDataWithOverrides(chunkData, existingOverrides);
+          // Hybrid: the block layer is SPARSE (buildable blocks over the density terrain).
+          // Materialise an empty chunk carrying only existing edits - NOT full procedural block
+          // terrain - otherwise editing one block fills the whole chunk with block voxels over the
+          // density surface, which reads as the density material changing.
+          BlockChunkBuilder.ApplyOverrides(chunkData, existingOverrides);
         }
         else
         {
-          generator.GenerateBlockChunkData(chunkData);
+          WorldGenerator generator = new(settings);
+
+          if (existingOverrides != null)
+          {
+            generator.GenerateBlockChunkDataWithOverrides(chunkData, existingOverrides);
+          }
+          else
+          {
+            generator.GenerateBlockChunkData(chunkData);
+          }
         }
 
         if (chunkData.HasAnySolidVoxel())
@@ -451,6 +464,27 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World
       }
 
       return true;
+    }
+
+    /// <summary>
+    /// Whether the block layer should be materialised SPARSE (empty + edits) rather than as full
+    /// procedural terrain. True for Hybrid worlds whose block layer is SparseOnly (buildable blocks
+    /// over density). Matches the streaming path (CreateSparseBlockChunk); the streaming generation
+    /// context is authoritative when set, otherwise falls back to the terrain system.
+    /// </summary>
+    private bool UsesSparseBlockLayer()
+    {
+      if (StreamingGenerationContext.TryGet(
+              out TerrainSystem contextMode,
+              out _,
+              out HybridTerrainLayerGenerationMode blockLayerMode,
+              out _))
+      {
+        return contextMode == TerrainSystem.Hybrid
+            && blockLayerMode == HybridTerrainLayerGenerationMode.SparseOnly;
+      }
+
+      return settings.TerrainSystem == TerrainSystem.Hybrid;
     }
 
     private void ApplyBlockOverridesToGeneratedChunks()
@@ -627,14 +661,16 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World
     float radiusVoxels,
     float densityDelta,
     ushort materialId,
-    HashSet<Vector3Int> dirtyChunks)
+    HashSet<Vector3Int> dirtyChunks,
+    List<DensityVoxelEdit> collectedEdits = null)
     {
       return ModifyDensityInSphere(
           worldVoxelCenter,
           radiusVoxels,
           Mathf.Abs(densityDelta),
           materialId,
-          dirtyChunks
+          dirtyChunks,
+          collectedEdits
       );
     }
 
@@ -642,14 +678,65 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World
         Vector3 worldVoxelCenter,
         float radiusVoxels,
         float densityDelta,
-        HashSet<Vector3Int> dirtyChunks)
+        HashSet<Vector3Int> dirtyChunks,
+        List<DensityVoxelEdit> collectedEdits = null)
     {
       return ModifyDensityInSphere(
           worldVoxelCenter,
           radiusVoxels,
           -Mathf.Abs(densityDelta),
           0,
-          dirtyChunks
+          dirtyChunks,
+          collectedEdits
+      );
+    }
+
+    /// <summary>
+    /// Smooth (average) the density field inside the sphere, softening bumps and
+    /// noise. <paramref name="strength"/> 0..1 controls how far each voxel moves
+    /// toward its neighbour average per application.
+    /// </summary>
+    public int SmoothDensityInSphere(
+        Vector3 worldVoxelCenter,
+        float radiusVoxels,
+        float strength,
+        HashSet<Vector3Int> dirtyChunks,
+        List<DensityVoxelEdit> collectedEdits = null)
+    {
+      return SculptDensityInSphere(
+          worldVoxelCenter,
+          radiusVoxels,
+          DensitySculptOp.Smooth,
+          Mathf.Clamp01(strength),
+          0.0f,
+          0,
+          dirtyChunks,
+          collectedEdits
+      );
+    }
+
+    /// <summary>
+    /// Flatten the surface inside the sphere toward the horizontal plane at
+    /// <paramref name="targetHeightVoxels"/> (voxel-space Y), levelling terrain.
+    /// <paramref name="strength"/> 0..1 controls the pull per application.
+    /// </summary>
+    public int FlattenDensityInSphere(
+        Vector3 worldVoxelCenter,
+        float radiusVoxels,
+        float targetHeightVoxels,
+        float strength,
+        HashSet<Vector3Int> dirtyChunks,
+        List<DensityVoxelEdit> collectedEdits = null)
+    {
+      return SculptDensityInSphere(
+          worldVoxelCenter,
+          radiusVoxels,
+          DensitySculptOp.Flatten,
+          Mathf.Clamp01(strength),
+          targetHeightVoxels,
+          0,
+          dirtyChunks,
+          collectedEdits
       );
     }
 
@@ -658,7 +745,37 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World
         float radiusVoxels,
         float densityDelta,
         ushort materialId,
-        HashSet<Vector3Int> dirtyChunks)
+        HashSet<Vector3Int> dirtyChunks,
+        List<DensityVoxelEdit> collectedEdits = null)
+    {
+      return SculptDensityInSphere(
+          worldVoxelCenter,
+          radiusVoxels,
+          DensitySculptOp.Add,
+          densityDelta,
+          0.0f,
+          materialId,
+          dirtyChunks,
+          collectedEdits
+      );
+    }
+
+    private enum DensitySculptOp
+    {
+      Add,
+      Smooth,
+      Flatten,
+    }
+
+    private int SculptDensityInSphere(
+        Vector3 worldVoxelCenter,
+        float radiusVoxels,
+        DensitySculptOp op,
+        float amount,
+        float targetHeightVoxels,
+        ushort materialId,
+        HashSet<Vector3Int> dirtyChunks,
+        List<DensityVoxelEdit> collectedEdits = null)
     {
       float safeRadius = Mathf.Max(0.01f, radiusVoxels);
       float radiusSquared = safeRadius * safeRadius;
@@ -683,8 +800,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World
         {
           for (int x = min.x; x <= max.x; x++)
           {
-            Vector3 voxel = new(x + 0.5f, y + 0.5f, z + 0.5f);
-            float distanceSquared = (voxel - worldVoxelCenter).sqrMagnitude;
+            Vector3 voxelCenter = new(x + 0.5f, y + 0.5f, z + 0.5f);
+            float distanceSquared = (voxelCenter - worldVoxelCenter).sqrMagnitude;
 
             if (distanceSquared > radiusSquared)
             {
@@ -700,27 +817,38 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World
             float t = 1.0f - normalizedDistance;
             float smoothFalloff = t * t * (3.0f - 2.0f * t);
 
-            float nextDensity = currentVoxel.Density + densityDelta * smoothFalloff;
+            float nextDensity;
+            switch (op)
+            {
+              case DensitySculptOp.Smooth:
+                {
+                  float average = AverageNeighbourDensity(worldVoxel);
+                  nextDensity = Mathf.Lerp(
+                      currentVoxel.Density,
+                      average,
+                      Mathf.Clamp01(amount * smoothFalloff));
+                  break;
+                }
 
-            ushort nextMaterial;
-            if (nextDensity > 0.0f)
-            {
-              if (densityDelta >= 0.0f)
-              {
-                ushort safeAddMaterial = materialId != 0
-                    ? (ushort)Mathf.Clamp(materialId, 1, 65535)
-                    : currentVoxel.MaterialId != 0 ? currentVoxel.MaterialId : (ushort)1;
-                nextMaterial = safeAddMaterial;
-              }
-              else
-              {
-                nextMaterial = currentVoxel.MaterialId != 0 ? currentVoxel.MaterialId : (ushort)1;
-              }
+              case DensitySculptOp.Flatten:
+                {
+                  // Density convention: >0 solid, surface at 0, roughly (surface - y).
+                  // A plane at height H is density = H - y (zero-crossing at y = H),
+                  // so pulling toward that levels the surface to targetHeightVoxels.
+                  float targetDensity = targetHeightVoxels - voxelCenter.y;
+                  nextDensity = Mathf.Lerp(
+                      currentVoxel.Density,
+                      targetDensity,
+                      Mathf.Clamp01(amount * smoothFalloff));
+                  break;
+                }
+
+              default: // Add (raise when amount >= 0, lower when < 0)
+                nextDensity = currentVoxel.Density + amount * smoothFalloff;
+                break;
             }
-            else
-            {
-              nextMaterial = 0;
-            }
+
+            ushort nextMaterial = ResolveSculptMaterial(op, currentVoxel, nextDensity, amount, materialId);
 
             if (SetDensityVoxelAtWorldVoxel(
                 worldVoxel,
@@ -728,6 +856,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World
                 nextMaterial))
             {
               changedCount++;
+              collectedEdits?.Add(new DensityVoxelEdit(worldVoxel, nextDensity, nextMaterial));
 
               Vector3Int chunkCoord = VoxelMath.WorldVoxelToChunkCoord(worldVoxel);
               dirtyChunks?.Add(chunkCoord);
@@ -738,6 +867,40 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World
       }
 
       return changedCount;
+    }
+
+    private static ushort ResolveSculptMaterial(
+        DensitySculptOp op,
+        DensityVoxel currentVoxel,
+        float nextDensity,
+        float amount,
+        ushort materialId)
+    {
+      if (nextDensity <= 0.0f)
+      {
+        return 0;
+      }
+
+      if (op == DensitySculptOp.Add && amount >= 0.0f)
+      {
+        return materialId != 0
+            ? (ushort)Mathf.Clamp(materialId, 1, 65535)
+            : currentVoxel.MaterialId != 0 ? currentVoxel.MaterialId : (ushort)1;
+      }
+
+      return currentVoxel.MaterialId != 0 ? currentVoxel.MaterialId : (ushort)1;
+    }
+
+    private float AverageNeighbourDensity(Vector3Int worldVoxel)
+    {
+      float sum = 0.0f;
+      sum += GetDensityVoxelAtWorldVoxel(worldVoxel + Vector3Int.left).Density;
+      sum += GetDensityVoxelAtWorldVoxel(worldVoxel + Vector3Int.right).Density;
+      sum += GetDensityVoxelAtWorldVoxel(worldVoxel + Vector3Int.down).Density;
+      sum += GetDensityVoxelAtWorldVoxel(worldVoxel + Vector3Int.up).Density;
+      sum += GetDensityVoxelAtWorldVoxel(worldVoxel + new Vector3Int(0, 0, -1)).Density;
+      sum += GetDensityVoxelAtWorldVoxel(worldVoxel + new Vector3Int(0, 0, 1)).Density;
+      return sum / 6.0f;
     }
 
     private int EditBlocksInSphere(
@@ -874,7 +1037,18 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World
       }
 
       BlockChunkData chunkData = new(chunkCoord);
-      new WorldGenerator(settings).GenerateBlockChunkDataWithOverrides(chunkData, overrides);
+
+      if (UsesSparseBlockLayer())
+      {
+        // Hybrid sparse block layer: rebuild from edits only, not procedural terrain, so a
+        // non-resident edited neighbour isn't persisted as a full block-terrain chunk.
+        BlockChunkBuilder.ApplyOverrides(chunkData, overrides);
+      }
+      else
+      {
+        new WorldGenerator(settings).GenerateBlockChunkDataWithOverrides(chunkData, overrides);
+      }
+
       return chunkData;
     }
 

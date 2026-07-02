@@ -1,0 +1,40 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 11af8cf274a91be4ab38f1cb2c9dd53f, type: 3}
+  m_Name: Cubus Terrain Material Library
+  m_EditorClassIdentifier: CubusCore.Runtime::CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain.Materials.CubusTerrainMaterialLibrary
+  TextureSize: 1024
+  AlbedoFormat: 4
+  NormalFormat: 4
+  MaskFormat: 4
+  GenerateMipMaps: 1
+  Materials:
+  - MaterialId: 0
+    DisplayName: Ground
+    Albedo: {fileID: 2800000, guid: 04ff5a6d4ab5a454e85b542302f61c68, type: 3}
+    Normal: {fileID: 2800000, guid: a327df10cb85f7943b834504095fe085, type: 3}
+    Mask: {fileID: 2800000, guid: ecf58b58ebe347b4fb545d4f6c868e8a, type: 3}
+    Tiling: 0
+    NormalStrength: 0
+    RoughnessFallback: 0
+    MetallicFallback: 0
+    HeightStrength: 0
+  - MaterialId: 0
+    DisplayName: Grass
+    Albedo: {fileID: 2800000, guid: c455f4853af941f4ab1663f7f42a2187, type: 3}
+    Normal: {fileID: 2800000, guid: f79bbd2b5c72c3a40a5b9ff4b101af25, type: 3}
+    Mask: {fileID: 2800000, guid: 86c00680a28ac304c8f41a83c69a8e02, type: 3}
+    Tiling: 0
+    NormalStrength: 0
+    RoughnessFallback: 0
+    MetallicFallback: 0
+    HeightStrength: 0

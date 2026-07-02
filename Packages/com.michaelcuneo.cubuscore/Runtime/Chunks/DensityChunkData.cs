@@ -42,6 +42,15 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Chunks
       voxels = voxelData ?? new DensityVoxel[VoxelConstants.ChunkVolume];
     }
 
+    // Wraps a caller-owned (typically pooled) voxel array without copying. Used
+    // for the throwaway neighbour boundary snapshots meshed off the main thread;
+    // only the sampled boundary slab is populated by the caller, so the wrapper
+    // must never be treated as a fully-initialized chunk.
+    internal static DensityChunkData WrapRawArray(Vector3Int chunkCoord, DensityVoxel[] voxelData)
+    {
+      return new DensityChunkData(chunkCoord, voxelData);
+    }
+
     public DensityVoxel GetVoxel(int x, int y, int z)
     {
       return voxels[GetIndex(x, y, z)];

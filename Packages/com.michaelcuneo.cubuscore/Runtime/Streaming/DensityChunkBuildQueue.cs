@@ -111,6 +111,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
           Debug.LogException(task.Exception);
         }
 
+        ReturnNeighborSnapshotsToPool(request);
+
         lock (completedResults)
         {
           completedResults.Enqueue(result ?? new DensityChunkBuildResult
@@ -148,6 +150,27 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
       result = null;
       return false;
+    }
+
+    // Neighbour boundary snapshots wrap arrays rented from DensityVoxelArrayPool.
+    // The root snapshot (request.ChunkCoord) is a normal clone that becomes live
+    // chunk data, so it must never be returned to the pool.
+    private static void ReturnNeighborSnapshotsToPool(DensityChunkBuildRequest request)
+    {
+      if (request?.ChunkDataSnapshots == null)
+      {
+        return;
+      }
+
+      foreach (KeyValuePair<Vector3Int, DensityChunkData> snapshot in request.ChunkDataSnapshots)
+      {
+        if (snapshot.Key == request.ChunkCoord)
+        {
+          continue;
+        }
+
+        DensityVoxelArrayPool.Return(snapshot.Value?.GetRawVoxelArray());
+      }
     }
 
     private static DensityChunkBuildResult Build(DensityChunkBuildRequest request)
@@ -241,11 +264,17 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
           out _
       );
 
+      // TerrainSamplerBurst expects (wx = X, wy = Z, wz = Y[vertical]) - the same
+      // axis order the interior generation (BlockChunkGenerationJob /
+      // DensityChunkGenerationJob) uses. Passing the vertical voxel Y into the Z
+      // slot swapped the depth/vertical axes, so world-edge boundary samples
+      // (which ALWAYS use this fallback and never heal once a neighbour never
+      // loads) baked a permanent wrong-density vertical wall at the perimeter.
       TerrainSamplerBurst.Sample(
           profile,
           worldVoxelCoord.x * scale,
-          worldVoxelCoord.y * scale,
           worldVoxelCoord.z * scale,
+          worldVoxelCoord.y * scale,
           out float density,
           out int solidMaterialId
       );

@@ -159,6 +159,14 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Validation
 
         if (!meshRenderer.enabled)
         {
+          if (chunkView.RenderCulled)
+          {
+            // Intentionally hidden by view-frustum culling (out of camera view). The
+            // mesh and material are still valid and it re-enables when back in view,
+            // so this is not a defect - skip the draw-dependent checks below.
+            continue;
+          }
+
           return Fail($"Render spatial validation failed: chunk {chunkCoord} MeshRenderer is disabled despite having mesh data.", out message);
         }
 

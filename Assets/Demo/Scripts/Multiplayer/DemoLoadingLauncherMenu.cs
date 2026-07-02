@@ -1,6 +1,8 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using System.IO;
+using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Storage;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -236,7 +238,8 @@ namespace Assets.Demo.Scripts.Multiplayer
       }
       else
       {
-        AddText(contentRoot, "Local cache for this World ID is regenerated on launch.", 13, FontStyle.Bold, TextAnchor.MiddleLeft, new Color(0.62f, 0.74f, 0.84f, 1.0f), 24.0f);
+        AddText(contentRoot, "Start Local Game creates the World ID above if new, or resumes it from cache.", 13, FontStyle.Bold, TextAnchor.MiddleLeft, new Color(0.62f, 0.74f, 0.84f, 1.0f), 24.0f);
+        AddSavedWorldsSection();
       }
 
       AddSpacer(contentRoot, 4.0f);
@@ -503,11 +506,6 @@ namespace Assets.Demo.Scripts.Multiplayer
         return;
       }
 
-      if (mode == SetupMode.Local)
-      {
-        DeleteLocalWorldById(worldId);
-      }
-
       if (!TryFindSceneInBuildSettings(loadingSceneName, out string scenePath))
       {
         status = $"Scene '{loadingSceneName}' is not in Build Settings.";
@@ -624,6 +622,111 @@ namespace Assets.Demo.Scripts.Multiplayer
         Directory.Delete(path, true);
         Debug.Log($"[CubusLauncher] Deleted local world '{id}' at '{path}'.");
       }
+    }
+
+    private void AddSavedWorldsSection()
+    {
+      AddSection("Saved Worlds");
+
+      List<SavedWorldInfo> worlds = EnumerateSavedWorlds();
+      if (worlds.Count == 0)
+      {
+        AddText(contentRoot, "None yet. Enter a World ID above and Start Local Game to create one.", 13, FontStyle.Normal, TextAnchor.MiddleLeft, new Color(0.62f, 0.74f, 0.84f, 1.0f), 24.0f);
+        return;
+      }
+
+      AddText(contentRoot, "Join resumes from cache. Delete clears it so the next launch regenerates.", 12, FontStyle.Normal, TextAnchor.MiddleLeft, new Color(0.55f, 0.66f, 0.75f, 1.0f), 22.0f);
+
+      foreach (SavedWorldInfo info in worlds)
+      {
+        RectTransform row = AddRow(contentRoot, 34.0f, 8.0f);
+        string label = info.Seed != 0 ? $"{info.Id}  (seed {info.Seed})" : info.Id;
+        AddText(row, label, 14, FontStyle.Bold, TextAnchor.MiddleLeft, new Color(0.82f, 0.90f, 0.97f, 1.0f), 34.0f);
+
+        string capturedId = info.Id;
+        int capturedSeed = info.Seed;
+        AddButton(row, "Join", () => JoinSavedWorld(capturedId, capturedSeed), 90.0f, 30.0f, true);
+        AddButton(row, "Delete", () => DeleteSavedWorldAndRefresh(capturedId), 90.0f, 30.0f);
+      }
+    }
+
+    private void JoinSavedWorld(string id, int savedSeed)
+    {
+      if (isLoading)
+      {
+        return;
+      }
+
+      mode = SetupMode.Local;
+      worldId = id;
+      if (savedSeed != 0)
+      {
+        seed = savedSeed.ToString();
+      }
+
+      UpdateUiState(true);
+      StartSelectedGame();
+    }
+
+    private void DeleteSavedWorldAndRefresh(string id)
+    {
+      if (isLoading)
+      {
+        return;
+      }
+
+      DeleteLocalWorldById(id);
+      RebuildControls();
+      UpdateUiState(true);
+    }
+
+    private static List<SavedWorldInfo> EnumerateSavedWorlds()
+    {
+      List<SavedWorldInfo> results = new();
+      string root = Path.Combine(Application.persistentDataPath, "CubusCore", "Worlds");
+      if (!Directory.Exists(root))
+      {
+        return results;
+      }
+
+      foreach (string dir in Directory.GetDirectories(root))
+      {
+        string id = Path.GetFileName(dir);
+        int savedSeed = 0;
+
+        string manifestPath = Path.Combine(dir, "manifest.json");
+        if (File.Exists(manifestPath))
+        {
+          try
+          {
+            WorldManifest manifest = JsonUtility.FromJson<WorldManifest>(File.ReadAllText(manifestPath));
+            if (manifest != null)
+            {
+              if (!string.IsNullOrWhiteSpace(manifest.WorldId))
+              {
+                id = manifest.WorldId;
+              }
+
+              savedSeed = manifest.WorldSeed;
+            }
+          }
+          catch (Exception ex)
+          {
+            Debug.LogWarning($"[CubusLauncher] Failed to read manifest for '{id}': {ex.Message}");
+          }
+        }
+
+        results.Add(new SavedWorldInfo { Id = id, Seed = savedSeed });
+      }
+
+      results.Sort((a, b) => string.CompareOrdinal(a.Id, b.Id));
+      return results;
+    }
+
+    private struct SavedWorldInfo
+    {
+      public string Id;
+      public int Seed;
     }
 
     private static string SanitizeWorldId(string value)

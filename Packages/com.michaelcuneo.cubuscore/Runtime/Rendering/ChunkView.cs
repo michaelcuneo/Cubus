@@ -28,6 +28,37 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
     public bool IsActive { get; private set; }
     public MeshRenderer MeshRenderer => meshRenderer;
 
+    /// <summary>
+    /// True when the streamer has deliberately hidden this chunk because it is
+    /// outside the camera view. The mesh stays resident so it can be shown again
+    /// instantly; only the renderer is disabled. Distinct from a cleared/empty view.
+    /// </summary>
+    public bool RenderCulled { get; private set; }
+
+    /// <summary>True when this view currently holds a renderable mesh.</summary>
+    public bool HasRenderableMesh => currentMesh != null;
+
+    /// <summary>
+    /// Shows or hides only the renderer for view-frustum culling, without touching the
+    /// mesh, collider, or active/pooling state. A hidden chunk keeps its mesh so
+    /// re-showing is free. Never force-enables a renderer that has no mesh.
+    /// </summary>
+    public void SetRenderVisible(bool visible)
+    {
+      RenderCulled = !visible;
+
+      if (meshRenderer == null)
+      {
+        return;
+      }
+
+      bool shouldEnable = visible && currentMesh != null;
+      if (meshRenderer.enabled != shouldEnable)
+      {
+        meshRenderer.enabled = shouldEnable;
+      }
+    }
+
     private void Awake()
     {
       EnsureComponents();
@@ -77,6 +108,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
 
       ChunkCoord = chunkCoord;
       IsActive = true;
+      RenderCulled = false;
 
       transform.SetParent(parent, false);
       transform.localPosition = VoxelMath.ChunkCoordToWorldPosition(chunkCoord, voxelSize);

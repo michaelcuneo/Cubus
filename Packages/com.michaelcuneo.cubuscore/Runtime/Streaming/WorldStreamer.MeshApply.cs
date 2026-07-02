@@ -98,9 +98,19 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         if (r == null) { count++; continue; }
         if (r.GenerationId != densityBuildQueue.GenerationId || (!desiredChunkCoords.Contains(r.ChunkCoord) && !keepChunkCoords.Contains(r.ChunkCoord)))
         {
+          densityEditRenderSet.Remove(r.ChunkCoord);
           ReturnMeshData(r);
           count++;
           continue;
+        }
+
+        if (densityRebuildAfterInFlight.Remove(r.ChunkCoord))
+        {
+          // This build was in flight when the chunk was re-queued (e.g. an edit changed the
+          // data after it started), so its result may be stale. Re-mesh with the current data;
+          // the result below still applies for a frame, then the fresh build supersedes it.
+          knownEmptyDensityChunks.Remove(r.ChunkCoord);
+          QueueDensityRender(r.ChunkCoord, false);
         }
 
         if (r.ChunkData != null) world.Data.DensityChunks[r.ChunkCoord] = r.ChunkData;
@@ -119,6 +129,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         if (r.MeshData == null || r.MeshData.IsEmpty)
         {
           knownEmptyDensityChunks.Add(r.ChunkCoord);
+          densityEditRenderSet.Remove(r.ChunkCoord);
           worldRenderer.RemoveDensityChunkMesh(r.ChunkCoord);
           ReturnMeshData(r);
           count++;
@@ -126,6 +137,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         }
 
         knownEmptyDensityChunks.Remove(r.ChunkCoord);
+        densityEditRenderSet.Remove(r.ChunkCoord);
         Mesh mesh = r.MeshData.ToUnityMeshFast();
         MeshDataPool.Return(r.MeshData); r.MeshData = null;
         worldRenderer.RenderDensityChunkMesh(

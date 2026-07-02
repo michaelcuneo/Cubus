@@ -82,7 +82,10 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         activeTaskCount++;
       }
 
-      _ = Task.Run(() => Load(store, worldId, chunkCoord, requestGeneration, blockOverrides, densityOverrides)).ContinueWith(task =>
+      _ = Task.Run(() =>
+      {
+        return Load(store, worldId, chunkCoord, requestGeneration, blockOverrides, densityOverrides);
+      }).ContinueWith(task =>
       {
         ChunkLoadResult result;
 
@@ -217,12 +220,12 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
         if (mode == TerrainSystem.SmoothDensity)
         {
-          result.DensityChunkData = DensityChunkBuilder.GenerateChunkData(chunkCoord, snapshot, densityOverrides);
+          result.DensityChunkData = DensityChunkBuilder.GenerateChunkDataJob(chunkCoord, snapshot, densityOverrides);
         }
         else if (mode == TerrainSystem.Hybrid)
         {
           result.DensityChunkData = densityLayerMode == HybridTerrainLayerGenerationMode.ProceduralTerrain
-            ? DensityChunkBuilder.GenerateChunkData(chunkCoord, snapshot, densityOverrides)
+            ? DensityChunkBuilder.GenerateChunkDataJob(chunkCoord, snapshot, densityOverrides)
             : CreateSparseDensityChunk(chunkCoord, densityOverrides);
         }
 

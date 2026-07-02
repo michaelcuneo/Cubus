@@ -13,6 +13,14 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
       foreach (Vector3Int dirtyChunk in dirtyChunks)
       {
+        // Persist the sculpted density chunk so the edit survives streaming
+        // eviction, re-entry and restarts (mirrors the block edit path in
+        // HandleBlockChunksEdited).
+        if (persistStreamedChunks && storage != null && storage.ActiveStore != null)
+        {
+          storage.SaveEditedChunk(dirtyChunk);
+        }
+
         for (int i = 0; i < DensityEditAffectedChunkOffsets.Length; i++)
         {
           Vector3Int c = dirtyChunk + DensityEditAffectedChunkOffsets[i];
@@ -23,6 +31,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
           }
 
           knownEmptyDensityChunks.Remove(c);
+          densityEditRenderSet.Add(c);
           QueueDensityRender(c);
         }
       }

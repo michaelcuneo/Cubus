@@ -110,14 +110,20 @@ namespace Assets.Demo.Scripts.Multiplayer
     }
 
     /// <summary>
-    /// Forwards a local edit intent to the server. The change becomes visible once the
-    /// authoritative <c>voxel_edit</c> row is replicated back. Material 0 removes the voxel.
+    /// Applies a local edit intent. In a connected world it is forwarded to the server and becomes
+    /// visible once the authoritative <c>voxel_edit</c> row is replicated back. In a local/offline
+    /// world (no server) it is applied directly so single-player editing works. Material 0 removes
+    /// the voxel.
     /// </summary>
     public bool SendEdit(Vector3Int worldVoxel, ushort material)
     {
       if (!IsReady)
       {
-        return false;
+        // Local / offline world: apply directly through the same remesh +
+        // persistence path the networked echo uses. Connected play instead
+        // routes through the voxel_edit table so all clients converge.
+        editTool.ApplyNetworkVoxelEdit(worldVoxel, material);
+        return true;
       }
 
       net.Conn.Reducers.EditBlock(net.WorldId, worldVoxel.x, worldVoxel.y, worldVoxel.z, material);

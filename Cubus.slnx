@@ -5,5 +5,6 @@
   <Project Path="Assembly-CSharp.csproj" />
   <Project Path="Assembly-CSharp-Editor-firstpass.csproj" />
   <Project Path="CubusCore.Editor.csproj" />
+  <Project Path="Assembly-CSharp-Editor.csproj" />
   <Project Path="CubusCore.Runtime.PlayModeTests.csproj" />
 </Solution>
