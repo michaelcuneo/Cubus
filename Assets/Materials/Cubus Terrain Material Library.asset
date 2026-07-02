@@ -18,7 +18,7 @@ MonoBehaviour:
   MaskFormat: 4
   GenerateMipMaps: 1
   Materials:
-  - MaterialId: 0
+  - MaterialId: 1
     DisplayName: Ground
     Albedo: {fileID: 2800000, guid: 04ff5a6d4ab5a454e85b542302f61c68, type: 3}
     Normal: {fileID: 2800000, guid: a327df10cb85f7943b834504095fe085, type: 3}
