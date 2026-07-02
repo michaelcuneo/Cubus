@@ -6,6 +6,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
   [Serializable]
   public sealed class StreamingSettings : ISerializationCallbackReceiver
   {
+    private const int MaxRuntimeRadiusInChunks = 256;
     private const int MaxRuntimeUnloadPaddingInChunks = 4;
     private const int MaxRuntimeChunksGeneratedPerFrame = 32;
     private const int MaxRuntimeInitialChunksGeneratedPerFrame = 64;
@@ -26,6 +27,19 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     // effective total becomes the full hardware concurrency; this only ever
     // raises a conservatively-serialized component, never exceeds the cores.
     private const int MinRuntimeAsyncChunkTasks = 12;
+
+    [Header("Radii")]
+    [Tooltip("Chunks kept in memory around the viewer. 0 = ViewDistanceInChunks + UnloadPaddingInChunks.")]
+    [Min(0)]
+    public int LoadRadiusInChunks = 0;
+
+    [Tooltip("Chunks eligible for mesh generation around the viewer. 0 = ViewDistanceInChunks.")]
+    [Min(0)]
+    public int BuildRadiusInChunks = 0;
+
+    [Tooltip("Maximum horizontal radius that can be drawn. 0 = BuildRadiusInChunks/ViewDistanceInChunks. Frustum culling still applies inside this radius.")]
+    [Min(0)]
+    public int RenderRadiusInChunks = 0;
 
     [Header("Horizontal")]
     [Min(1)]
@@ -65,6 +79,9 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
     public void NormalizeRuntimeBudgets()
     {
+      LoadRadiusInChunks = Mathf.Clamp(LoadRadiusInChunks, 0, MaxRuntimeRadiusInChunks);
+      BuildRadiusInChunks = Mathf.Clamp(BuildRadiusInChunks, 0, MaxRuntimeRadiusInChunks);
+      RenderRadiusInChunks = Mathf.Clamp(RenderRadiusInChunks, 0, MaxRuntimeRadiusInChunks);
       UnloadPaddingInChunks = Mathf.Clamp(UnloadPaddingInChunks, 1, MaxRuntimeUnloadPaddingInChunks);
       ChunksGeneratedPerFrame = Mathf.Clamp(ChunksGeneratedPerFrame, MinRuntimeChunksGeneratedPerFrame, MaxRuntimeChunksGeneratedPerFrame);
       InitialChunksGeneratedPerFrame = Mathf.Clamp(InitialChunksGeneratedPerFrame, 1, MaxRuntimeInitialChunksGeneratedPerFrame);
