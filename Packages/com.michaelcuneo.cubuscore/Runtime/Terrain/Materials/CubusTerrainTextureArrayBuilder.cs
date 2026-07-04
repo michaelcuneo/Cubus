@@ -14,9 +14,12 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain.Material
       int count = Mathf.Max(1, library.MaterialCount);
       bool mipMaps = library.GenerateMipMaps;
 
-      albedoArray = CreateArray(size, count, library.AlbedoFormat, mipMaps);
-      normalArray = CreateArray(size, count, library.NormalFormat, mipMaps);
-      maskArray = CreateArray(size, count, library.MaskFormat, mipMaps);
+      // Albedo is colour data and must stay sRGB. Normal and mask maps are data and
+      // must stay linear. Treating every source as Linear crushes imported Quixel
+      // base colour and makes the terrain look muddy/dark.
+      albedoArray = CreateArray(size, count, library.AlbedoFormat, mipMaps, false);
+      normalArray = CreateArray(size, count, library.NormalFormat, mipMaps, true);
+      maskArray = CreateArray(size, count, library.MaskFormat, mipMaps, true);
 
       for (int i = 0; i < count; i++)
       {
@@ -34,21 +37,27 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain.Material
           albedoArray,
           i,
           size,
-          new Color(1.0f, 1.0f, 1.0f, 1.0f));
+          new Color(1.0f, 1.0f, 1.0f, 1.0f),
+          RenderTextureReadWrite.sRGB,
+          false);
 
         CopyTextureOrFallback(
           normal,
           normalArray,
           i,
           size,
-          new Color(0.5f, 0.5f, 1.0f, 1.0f));
+          new Color(0.5f, 0.5f, 1.0f, 1.0f),
+          RenderTextureReadWrite.Linear,
+          true);
 
         CopyTextureOrFallback(
           mask,
           maskArray,
           i,
           size,
-          new Color(1.0f, 0.8f, 0.0f, 0.0f));
+          new Color(1.0f, 0.8f, 0.0f, 0.0f),
+          RenderTextureReadWrite.Linear,
+          true);
       }
 
       albedoArray.Apply(mipMaps, false);
@@ -60,7 +69,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain.Material
       int size,
       int count,
       TextureFormat format,
-      bool mipMaps)
+      bool mipMaps,
+      bool linear)
     {
       Texture2DArray array = new(
         size,
@@ -68,7 +78,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain.Material
         count,
         format,
         mipMaps,
-        false);
+        linear);
 
       array.wrapMode = TextureWrapMode.Repeat;
       array.filterMode = FilterMode.Trilinear;
@@ -82,9 +92,11 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain.Material
       Texture2DArray destination,
       int slice,
       int size,
-      Color fallback)
+      Color fallback,
+      RenderTextureReadWrite readWrite,
+      bool linearReadable)
     {
-      Texture2D readable = MakeReadableResized(source, size, fallback);
+      Texture2D readable = MakeReadableResized(source, size, fallback, readWrite, linearReadable);
       Color[] pixels = readable.GetPixels();
 
       destination.SetPixels(
@@ -98,14 +110,16 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain.Material
     private static Texture2D MakeReadableResized(
       Texture2D source,
       int size,
-      Color fallback)
+      Color fallback,
+      RenderTextureReadWrite readWrite,
+      bool linearReadable)
     {
       RenderTexture temporary = RenderTexture.GetTemporary(
         size,
         size,
         0,
         RenderTextureFormat.ARGB32,
-        RenderTextureReadWrite.Linear);
+        readWrite);
 
       RenderTexture previous = RenderTexture.active;
 
@@ -115,7 +129,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain.Material
       }
       else
       {
-        Texture2D fallbackTexture = new(size, size, TextureFormat.RGBA32, false);
+        Texture2D fallbackTexture = new(size, size, TextureFormat.RGBA32, false, linearReadable);
         Color[] fill = new Color[size * size];
 
         for (int i = 0; i < fill.Length; i++)
@@ -131,7 +145,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain.Material
 
       RenderTexture.active = temporary;
 
-      Texture2D readable = new(size, size, TextureFormat.RGBA32, false);
+      Texture2D readable = new(size, size, TextureFormat.RGBA32, false, linearReadable);
       readable.ReadPixels(new Rect(0, 0, size, size), 0, 0);
       readable.Apply(false, false);
 

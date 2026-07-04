@@ -238,6 +238,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       cachedMaxHardwareConcurrency = Mathf.Max(1, SystemInfo.processorCount - 1);
       cachedChunkPriorityComparison = CompareChunkPriorityCached;
       EnsureRuntimeReferences();
+      world?.Settings?.EnsureRuntimeStreamingBounds();
       EnsureLodStreamer();
     }
 
@@ -277,6 +278,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     private void Start()
     {
       if (!EnsureRuntimeReferences()) return;
+      world.Settings.EnsureRuntimeStreamingBounds();
       if (viewer == null && Camera.main != null) viewer = Camera.main.transform;
       if (!world.Settings.TryValidateConfiguration(out string configError))
       {
@@ -294,6 +296,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     public void RegenerateStreamedWorld()
     {
       if (!EnsureRuntimeReferences()) return;
+      world.Settings.EnsureRuntimeStreamingBounds();
       world.SyncBiomeMaterialLayersFromRules();
       StartBootstrap(true);
     }
@@ -308,6 +311,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     {
       if (!EnsureRuntimeReferences()) yield break;
 
+      world.Settings.EnsureRuntimeStreamingBounds();
+
       if (!world.IsWorldReady)
       {
         if (generateWorldDatabaseBeforeStreaming)
@@ -321,10 +326,12 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         else
         {
           storage?.LoadWorldManifestOnly();
+          world.Settings.EnsureRuntimeStreamingBounds();
           if (!world.IsWorldReady) world.MarkDatabaseLoaded();
         }
       }
 
+      world.Settings.EnsureRuntimeStreamingBounds();
       generator = new WorldGenerator(world.Settings);
       StreamingGenerationContext.Set(world.Settings);
       worldSnapshot = WorldGenerationSnapshot.FromSettings(world.Settings);
@@ -414,6 +421,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     public void ForceRefreshStreamingSet()
     {
       if (!EnsureRuntimeReferences()) return;
+      world.Settings.EnsureRuntimeStreamingBounds();
       StreamingGenerationContext.Set(world.Settings);
       worldSnapshot = WorldGenerationSnapshot.FromSettings(world.Settings);
       generator ??= new WorldGenerator(world.Settings);
