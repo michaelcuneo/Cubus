@@ -117,6 +117,34 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       }
     }
 
+    private void QueueKeepOnlyDensityLoads()
+    {
+      if (!IsDensityTerrainEnabled)
+      {
+        return;
+      }
+
+      foreach (Vector3Int chunkCoord in keepChunkCoords)
+      {
+        if (desiredChunkCoords.Contains(chunkCoord) ||
+            world.Data.DensityChunks.ContainsKey(chunkCoord) ||
+            pendingLoadSet.Contains(chunkCoord) ||
+            chunkLoadQueue.IsInFlight(chunkCoord) ||
+            knownEmptyDensityChunks.Contains(chunkCoord))
+        {
+          continue;
+        }
+
+        if (!world.Settings.IsInsideEffectiveWorldBounds3D(chunkCoord))
+        {
+          knownEmptyDensityChunks.Add(chunkCoord);
+          continue;
+        }
+
+        QueueLoad(chunkCoord);
+      }
+    }
+
     private bool NeedsBlockRenderOrLoad(Vector3Int chunkCoord)
     {
       return IsBlockTerrainEnabled &&
@@ -283,6 +311,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       BuildChunkSet(viewerChunkCoord, GetActiveLoadRadiusInChunks(), keepChunkCoords);
       PruneKnownEmptyChunksOutsideCurrentInterest();
       QueueGeneratedChunksForRender(viewerChunkCoord);
+      QueueKeepOnlyDensityLoads();
       UnloadOutsideKeepSet();
       pendingLoadQueueNeedsPrioritization = true;
       pendingRenderQueueNeedsPrioritization = true;
