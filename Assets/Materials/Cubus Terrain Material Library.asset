@@ -22,7 +22,7 @@ MonoBehaviour:
     DisplayName: Green Surface
     Albedo: {fileID: 2800000, guid: 04ff5a6d4ab5a454e85b542302f61c68, type: 3}
     Normal: {fileID: 2800000, guid: a327df10cb85f7943b834504095fe085, type: 3}
-    Mask: {fileID: 2800000, guid: ecf58b58ebe347b4fb545d4f6c868e8a, type: 3}
+    Mask: {fileID: 2800000, guid: 1c78b8b78c0bf964d897ffe20147dac7, type: 2}
     Tiling: 1
     NormalStrength: 1
     RoughnessFallback: 0.66
@@ -32,7 +32,7 @@ MonoBehaviour:
     DisplayName: Green Shallow Soil
     Albedo: {fileID: 2800000, guid: c455f4853af941f4ab1663f7f42a2187, type: 3}
     Normal: {fileID: 2800000, guid: f79bbd2b5c72c3a40a5b9ff4b101af25, type: 3}
-    Mask: {fileID: 2800000, guid: 86c00680a28ac304c8f41a83c69a8e02, type: 3}
+    Mask: {fileID: 2800000, guid: 4b5ca4e7396006c4291a03fb9f76c018, type: 2}
     Tiling: 1
     NormalStrength: 1
     RoughnessFallback: 0.8
@@ -42,7 +42,7 @@ MonoBehaviour:
     DisplayName: Green Subsoil
     Albedo: {fileID: 2800000, guid: 887e49c4b96d26944a0d5da1c0812eb1, type: 3}
     Normal: {fileID: 2800000, guid: 806b023c60a22b24783cd3d6c29bcc68, type: 3}
-    Mask: {fileID: 2800000, guid: 55ac18675b360c741981417187a4b4f6, type: 3}
+    Mask: {fileID: 2800000, guid: 5d4cbccf98aa31e439f98513ffa652ea, type: 2}
     Tiling: 1
     NormalStrength: 1
     RoughnessFallback: 0.75
@@ -52,7 +52,7 @@ MonoBehaviour:
     DisplayName: Green Deep Earth
     Albedo: {fileID: 2800000, guid: f6a5f64a83c26b94e8cf840744dd5531, type: 3}
     Normal: {fileID: 2800000, guid: 020c218bda7d8ab4d919a710fe987d1b, type: 3}
-    Mask: {fileID: 2800000, guid: 51a16a6436f3cd146b987f08af4b3c7e, type: 3}
+    Mask: {fileID: 2800000, guid: 78476364fae22cd4485f6eb4ac37a17f, type: 2}
     Tiling: 1
     NormalStrength: 1
     RoughnessFallback: 0.8
@@ -62,7 +62,7 @@ MonoBehaviour:
     DisplayName: Green Base Rock
     Albedo: {fileID: 2800000, guid: 04ff5a6d4ab5a454e85b542302f61c68, type: 3}
     Normal: {fileID: 2800000, guid: a327df10cb85f7943b834504095fe085, type: 3}
-    Mask: {fileID: 2800000, guid: ecf58b58ebe347b4fb545d4f6c868e8a, type: 3}
+    Mask: {fileID: 2800000, guid: 1c78b8b78c0bf964d897ffe20147dac7, type: 2}
     Tiling: 1
     NormalStrength: 1
     RoughnessFallback: 0.72
@@ -72,7 +72,7 @@ MonoBehaviour:
     DisplayName: Alpine Surface
     Albedo: {fileID: 2800000, guid: 04ff5a6d4ab5a454e85b542302f61c68, type: 3}
     Normal: {fileID: 2800000, guid: a327df10cb85f7943b834504095fe085, type: 3}
-    Mask: {fileID: 2800000, guid: ecf58b58ebe347b4fb545d4f6c868e8a, type: 3}
+    Mask: {fileID: 2800000, guid: 1c78b8b78c0bf964d897ffe20147dac7, type: 2}
     Tiling: 1
     NormalStrength: 1
     RoughnessFallback: 0.72
@@ -82,7 +82,7 @@ MonoBehaviour:
     DisplayName: Alpine Shallow Layer
     Albedo: {fileID: 2800000, guid: a9306ae5ae5a4064da7da98486eab7f6, type: 3}
     Normal: {fileID: 2800000, guid: 90051f1c7967acd48bca00011146a085, type: 3}
-    Mask: {fileID: 2800000, guid: 6b8de04a835b30a41a24162ee1c2f3fe, type: 3}
+    Mask: {fileID: 2800000, guid: b220f9730f63a3244be1f18783a2e413, type: 2}
     Tiling: 1
     NormalStrength: 1
     RoughnessFallback: 0.82
@@ -92,7 +92,7 @@ MonoBehaviour:
     DisplayName: Alpine Mid Layer
     Albedo: {fileID: 2800000, guid: 04ff5a6d4ab5a454e85b542302f61c68, type: 3}
     Normal: {fileID: 2800000, guid: a327df10cb85f7943b834504095fe085, type: 3}
-    Mask: {fileID: 2800000, guid: ecf58b58ebe347b4fb545d4f6c868e8a, type: 3}
+    Mask: {fileID: 2800000, guid: 1c78b8b78c0bf964d897ffe20147dac7, type: 2}
     Tiling: 1
     NormalStrength: 1
     RoughnessFallback: 0.72
@@ -102,7 +102,7 @@ MonoBehaviour:
     DisplayName: Alpine Deep Layer
     Albedo: {fileID: 2800000, guid: 04ff5a6d4ab5a454e85b542302f61c68, type: 3}
     Normal: {fileID: 2800000, guid: a327df10cb85f7943b834504095fe085, type: 3}
-    Mask: {fileID: 2800000, guid: ecf58b58ebe347b4fb545d4f6c868e8a, type: 3}
+    Mask: {fileID: 2800000, guid: 1c78b8b78c0bf964d897ffe20147dac7, type: 2}
     Tiling: 1
     NormalStrength: 1
     RoughnessFallback: 0.75
@@ -112,7 +112,7 @@ MonoBehaviour:
     DisplayName: Alpine Base Rock
     Albedo: {fileID: 2800000, guid: 04ff5a6d4ab5a454e85b542302f61c68, type: 3}
     Normal: {fileID: 2800000, guid: a327df10cb85f7943b834504095fe085, type: 3}
-    Mask: {fileID: 2800000, guid: ecf58b58ebe347b4fb545d4f6c868e8a, type: 3}
+    Mask: {fileID: 2800000, guid: 1c78b8b78c0bf964d897ffe20147dac7, type: 2}
     Tiling: 1
     NormalStrength: 1
     RoughnessFallback: 0.7
@@ -122,7 +122,7 @@ MonoBehaviour:
     DisplayName: Desert Surface
     Albedo: {fileID: 2800000, guid: a9306ae5ae5a4064da7da98486eab7f6, type: 3}
     Normal: {fileID: 2800000, guid: 90051f1c7967acd48bca00011146a085, type: 3}
-    Mask: {fileID: 2800000, guid: 6b8de04a835b30a41a24162ee1c2f3fe, type: 3}
+    Mask: {fileID: 2800000, guid: b220f9730f63a3244be1f18783a2e413, type: 2}
     Tiling: 1
     NormalStrength: 0.9
     RoughnessFallback: 0.86
@@ -132,7 +132,7 @@ MonoBehaviour:
     DisplayName: Desert Shallow Layer
     Albedo: {fileID: 2800000, guid: f6a5f64a83c26b94e8cf840744dd5531, type: 3}
     Normal: {fileID: 2800000, guid: 020c218bda7d8ab4d919a710fe987d1b, type: 3}
-    Mask: {fileID: 2800000, guid: 51a16a6436f3cd146b987f08af4b3c7e, type: 3}
+    Mask: {fileID: 2800000, guid: 78476364fae22cd4485f6eb4ac37a17f, type: 2}
     Tiling: 1
     NormalStrength: 0.9
     RoughnessFallback: 0.82
@@ -142,7 +142,7 @@ MonoBehaviour:
     DisplayName: Desert Mid Layer
     Albedo: {fileID: 2800000, guid: a9306ae5ae5a4064da7da98486eab7f6, type: 3}
     Normal: {fileID: 2800000, guid: 90051f1c7967acd48bca00011146a085, type: 3}
-    Mask: {fileID: 2800000, guid: 6b8de04a835b30a41a24162ee1c2f3fe, type: 3}
+    Mask: {fileID: 2800000, guid: b220f9730f63a3244be1f18783a2e413, type: 2}
     Tiling: 1
     NormalStrength: 0.9
     RoughnessFallback: 0.86
@@ -152,7 +152,7 @@ MonoBehaviour:
     DisplayName: Desert Deep Layer
     Albedo: {fileID: 2800000, guid: f6a5f64a83c26b94e8cf840744dd5531, type: 3}
     Normal: {fileID: 2800000, guid: 020c218bda7d8ab4d919a710fe987d1b, type: 3}
-    Mask: {fileID: 2800000, guid: 51a16a6436f3cd146b987f08af4b3c7e, type: 3}
+    Mask: {fileID: 2800000, guid: 78476364fae22cd4485f6eb4ac37a17f, type: 2}
     Tiling: 1
     NormalStrength: 0.9
     RoughnessFallback: 0.82
@@ -162,7 +162,7 @@ MonoBehaviour:
     DisplayName: Desert Base Rock
     Albedo: {fileID: 2800000, guid: 04ff5a6d4ab5a454e85b542302f61c68, type: 3}
     Normal: {fileID: 2800000, guid: a327df10cb85f7943b834504095fe085, type: 3}
-    Mask: {fileID: 2800000, guid: ecf58b58ebe347b4fb545d4f6c868e8a, type: 3}
+    Mask: {fileID: 2800000, guid: 1c78b8b78c0bf964d897ffe20147dac7, type: 2}
     Tiling: 1
     NormalStrength: 1
     RoughnessFallback: 0.72
@@ -172,7 +172,7 @@ MonoBehaviour:
     DisplayName: Swamp Surface
     Albedo: {fileID: 2800000, guid: c455f4853af941f4ab1663f7f42a2187, type: 3}
     Normal: {fileID: 2800000, guid: f79bbd2b5c72c3a40a5b9ff4b101af25, type: 3}
-    Mask: {fileID: 2800000, guid: 86c00680a28ac304c8f41a83c69a8e02, type: 3}
+    Mask: {fileID: 2800000, guid: 4b5ca4e7396006c4291a03fb9f76c018, type: 2}
     Tiling: 1
     NormalStrength: 1
     RoughnessFallback: 0.9
@@ -182,7 +182,7 @@ MonoBehaviour:
     DisplayName: Swamp Shallow Layer
     Albedo: {fileID: 2800000, guid: f6a5f64a83c26b94e8cf840744dd5531, type: 3}
     Normal: {fileID: 2800000, guid: 020c218bda7d8ab4d919a710fe987d1b, type: 3}
-    Mask: {fileID: 2800000, guid: 51a16a6436f3cd146b987f08af4b3c7e, type: 3}
+    Mask: {fileID: 2800000, guid: 78476364fae22cd4485f6eb4ac37a17f, type: 2}
     Tiling: 1
     NormalStrength: 0.9
     RoughnessFallback: 0.92
@@ -192,7 +192,7 @@ MonoBehaviour:
     DisplayName: Swamp Mid Layer
     Albedo: {fileID: 2800000, guid: a9306ae5ae5a4064da7da98486eab7f6, type: 3}
     Normal: {fileID: 2800000, guid: 90051f1c7967acd48bca00011146a085, type: 3}
-    Mask: {fileID: 2800000, guid: 6b8de04a835b30a41a24162ee1c2f3fe, type: 3}
+    Mask: {fileID: 2800000, guid: b220f9730f63a3244be1f18783a2e413, type: 2}
     Tiling: 1
     NormalStrength: 0.9
     RoughnessFallback: 0.88
@@ -202,7 +202,7 @@ MonoBehaviour:
     DisplayName: Swamp Deep Layer
     Albedo: {fileID: 2800000, guid: f6a5f64a83c26b94e8cf840744dd5531, type: 3}
     Normal: {fileID: 2800000, guid: 020c218bda7d8ab4d919a710fe987d1b, type: 3}
-    Mask: {fileID: 2800000, guid: 51a16a6436f3cd146b987f08af4b3c7e, type: 3}
+    Mask: {fileID: 2800000, guid: 78476364fae22cd4485f6eb4ac37a17f, type: 2}
     Tiling: 1
     NormalStrength: 0.9
     RoughnessFallback: 0.92
@@ -212,7 +212,7 @@ MonoBehaviour:
     DisplayName: Swamp Base Rock
     Albedo: {fileID: 2800000, guid: 04ff5a6d4ab5a454e85b542302f61c68, type: 3}
     Normal: {fileID: 2800000, guid: a327df10cb85f7943b834504095fe085, type: 3}
-    Mask: {fileID: 2800000, guid: ecf58b58ebe347b4fb545d4f6c868e8a, type: 3}
+    Mask: {fileID: 2800000, guid: 1c78b8b78c0bf964d897ffe20147dac7, type: 2}
     Tiling: 1
     NormalStrength: 1
     RoughnessFallback: 0.75
@@ -222,7 +222,7 @@ MonoBehaviour:
     DisplayName: Volcanic Surface
     Albedo: {fileID: 2800000, guid: 04ff5a6d4ab5a454e85b542302f61c68, type: 3}
     Normal: {fileID: 2800000, guid: a327df10cb85f7943b834504095fe085, type: 3}
-    Mask: {fileID: 2800000, guid: ecf58b58ebe347b4fb545d4f6c868e8a, type: 3}
+    Mask: {fileID: 2800000, guid: 1c78b8b78c0bf964d897ffe20147dac7, type: 2}
     Tiling: 1
     NormalStrength: 1.1
     RoughnessFallback: 0.7
@@ -232,7 +232,7 @@ MonoBehaviour:
     DisplayName: Volcanic Shallow Layer
     Albedo: {fileID: 2800000, guid: a9306ae5ae5a4064da7da98486eab7f6, type: 3}
     Normal: {fileID: 2800000, guid: 90051f1c7967acd48bca00011146a085, type: 3}
-    Mask: {fileID: 2800000, guid: 6b8de04a835b30a41a24162ee1c2f3fe, type: 3}
+    Mask: {fileID: 2800000, guid: b220f9730f63a3244be1f18783a2e413, type: 2}
     Tiling: 1
     NormalStrength: 1
     RoughnessFallback: 0.78
@@ -242,7 +242,7 @@ MonoBehaviour:
     DisplayName: Volcanic Mid Layer
     Albedo: {fileID: 2800000, guid: 04ff5a6d4ab5a454e85b542302f61c68, type: 3}
     Normal: {fileID: 2800000, guid: a327df10cb85f7943b834504095fe085, type: 3}
-    Mask: {fileID: 2800000, guid: ecf58b58ebe347b4fb545d4f6c868e8a, type: 3}
+    Mask: {fileID: 2800000, guid: 1c78b8b78c0bf964d897ffe20147dac7, type: 2}
     Tiling: 1
     NormalStrength: 1.1
     RoughnessFallback: 0.72
@@ -252,7 +252,7 @@ MonoBehaviour:
     DisplayName: Volcanic Deep Layer
     Albedo: {fileID: 2800000, guid: 04ff5a6d4ab5a454e85b542302f61c68, type: 3}
     Normal: {fileID: 2800000, guid: a327df10cb85f7943b834504095fe085, type: 3}
-    Mask: {fileID: 2800000, guid: ecf58b58ebe347b4fb545d4f6c868e8a, type: 3}
+    Mask: {fileID: 2800000, guid: 1c78b8b78c0bf964d897ffe20147dac7, type: 2}
     Tiling: 1
     NormalStrength: 1.1
     RoughnessFallback: 0.72
@@ -262,7 +262,7 @@ MonoBehaviour:
     DisplayName: Volcanic Base Rock
     Albedo: {fileID: 2800000, guid: 04ff5a6d4ab5a454e85b542302f61c68, type: 3}
     Normal: {fileID: 2800000, guid: a327df10cb85f7943b834504095fe085, type: 3}
-    Mask: {fileID: 2800000, guid: ecf58b58ebe347b4fb545d4f6c868e8a, type: 3}
+    Mask: {fileID: 2800000, guid: 1c78b8b78c0bf964d897ffe20147dac7, type: 2}
     Tiling: 1
     NormalStrength: 1.1
     RoughnessFallback: 0.7
