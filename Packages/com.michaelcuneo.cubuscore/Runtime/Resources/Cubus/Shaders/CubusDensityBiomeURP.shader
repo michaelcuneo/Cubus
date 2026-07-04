@@ -177,9 +177,14 @@ Shader "Cubus/DensityBiomeURP"
 
       float3 UnpackTerrainNormal(half4 sampleValue)
       {
-        float3 n = sampleValue.xyz * 2.0 - 1.0;
-        n.z = max(n.z, 0.0001);
-        return normalize(n);
+        // Handle both common RGB normal maps and Unity/DXT-style maps that carry X
+        // in alpha. The copied texture array can preserve either layout depending on
+        // importer/compression, so choose alpha when it appears authored, otherwise red.
+        float encodedX = abs(sampleValue.a - 1.0) > 0.001 ? sampleValue.a : sampleValue.r;
+        float2 xy = float2(encodedX, sampleValue.g) * 2.0 - 1.0;
+        xy = clamp(xy, -0.999, 0.999);
+        float z = sqrt(saturate(1.0 - dot(xy, xy)));
+        return normalize(float3(xy, z));
       }
 
       float3 AxisNormalX(float3 tangentNormal, float3 normalWS)
@@ -470,11 +475,15 @@ Shader "Cubus/DensityBiomeURP"
           GetMaterialRoughnessFallback(material2) * weights.z +
           GetMaterialRoughnessFallback(material3) * weights.w;
 
-        // If a real ORMH/packed mask is present, use G as roughness. If the mask is a
-        // height/parallax texture or effectively blank, fall back to authored material roughness.
-        float maskRoughness = saturate(mask.g);
-        float maskSignal = max(max(mask.r, mask.g), max(mask.b, mask.a));
-        float roughness = lerp(roughnessFallback, maskRoughness, saturate((maskSignal - 0.05) * 4.0));
+        // Fab's packed texture is metallic/AO/unused/smoothness:
+        // R = metallic, G = AO, B = unused, A = smoothness/gloss. It is not ORMH.
+        // Therefore roughness is 1 - alpha, not green. Green should only darken
+        // ambient slightly, otherwise AO-as-roughness makes the terrain look wrong.
+        float packedSmoothness = saturate(mask.a);
+        float packedRoughness = 1.0 - packedSmoothness;
+        float maskSignal = max(max(mask.r, mask.g), mask.a);
+        float roughness = lerp(roughnessFallback, packedRoughness, saturate((maskSignal - 0.05) * 4.0));
+        float ambientOcclusion = lerp(1.0, saturate(mask.g), saturate((mask.g - 0.05) * 4.0));
 
         float3 baseColor = saturate(albedo.rgb * _Tint.rgb * _AlbedoBrightness);
 
@@ -483,6 +492,8 @@ Shader "Cubus/DensityBiomeURP"
           IN.positionWS,
           materialNormalWS,
           roughness);
+
+        lit *= lerp(1.0, ambientOcclusion, 0.35);
 
         if (_UseSceneFog > 0.5)
         {
