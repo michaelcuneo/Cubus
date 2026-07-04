@@ -38,12 +38,18 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     /// <summary>
     /// Minecraft-style rule: do not use the camera frustum as a hard mesh/load gate.
     /// Keep the world around the player generated/renderable, then use the camera only
-    /// for priority and renderer visibility. Otherwise a fast camera turn exposes empty
-    /// chunks that were never built because they were behind the player.
+    /// for priority and renderer visibility. The build radius is the hard mesh gate;
+    /// edit-dirtied density chunks can still rebuild outside it so border edits repair.
     /// </summary>
     private bool ShouldQueueMeshWorkForChunk(Vector3Int chunkCoord)
     {
-      return world == null || world.Settings == null || world.Settings.IsInsideEffectiveWorldBounds3D(chunkCoord);
+      bool insideWorld = world == null || world.Settings == null || world.Settings.IsInsideEffectiveWorldBounds3D(chunkCoord);
+      if (!insideWorld)
+      {
+        return false;
+      }
+
+      return densityEditRenderSet.Contains(chunkCoord) || IsChunkInsideActiveBuildRadius(chunkCoord);
     }
 
     private bool ShouldStartChunkLoadForCurrentVisibility(Vector3Int chunkCoord)
@@ -109,6 +115,18 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       return new Bounds(worldCenter, worldSize);
     }
 
+    private Bounds GetChunkWorldBounds(ChunkView chunkView)
+    {
+      if (chunkView == null)
+      {
+        return GetChunkWorldBounds(Vector3Int.zero);
+      }
+
+      float voxelSize = world != null && world.Settings != null ? world.Settings.VoxelSize : 1.0f;
+      float padding = VoxelConstants.ChunkSize * voxelSize * VisibilityBoundsPaddingChunks;
+      return chunkView.GetWorldBounds(padding);
+    }
+
     private Vector3 GetChunkWorldCenter(Vector3Int chunkCoord)
     {
       return GetChunkWorldBounds(chunkCoord).center;
@@ -118,6 +136,12 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     {
       Camera camera = ResolveVisibilityCamera();
       return camera == null || GeometryUtility.TestPlanesAABB(visibilityFrustumPlanes, GetChunkWorldBounds(chunkCoord));
+    }
+
+    private bool IsChunkInCameraFrustum(ChunkView chunkView)
+    {
+      Camera camera = ResolveVisibilityCamera();
+      return camera == null || GeometryUtility.TestPlanesAABB(visibilityFrustumPlanes, GetChunkWorldBounds(chunkView));
     }
 
     private Camera ResolveVisibilityCamera()
@@ -224,6 +248,11 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       score += distanceFromPivot * 35;
       score += verticalDistance * 200;
 
+      if (!IsChunkInsideActiveRenderRadius(chunkCoord))
+      {
+        score += 200000;
+      }
+
       if (IsChunkNearViewerForImmediateMesh(chunkCoord))
       {
         score -= 250000;
@@ -304,8 +333,11 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       foreach (KeyValuePair<Vector3Int, ChunkView> pair in activeViews)
       {
         Vector3Int chunkCoord = pair.Key;
+        ChunkView chunkView = pair.Value;
 
-        bool inView = IsChunkNearViewerForAlwaysDraw(chunkCoord) || IsChunkInCameraFrustum(chunkCoord);
+        bool nearViewer = IsChunkNearViewerForAlwaysDraw(chunkCoord);
+        bool inRenderRadius = nearViewer || IsChunkInsideActiveRenderRadius(chunkCoord);
+        bool inView = nearViewer || (inRenderRadius && IsChunkInCameraFrustum(chunkView));
 
         if (inView)
         {
