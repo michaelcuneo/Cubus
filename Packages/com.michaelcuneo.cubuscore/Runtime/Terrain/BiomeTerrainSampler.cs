@@ -354,6 +354,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain
       count++;
     }
 
+
+
     private static DensityMaterialSet PackTopFourLayerWeights(
       Span<ushort> ids,
       Span<float> weights,
@@ -361,9 +363,25 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain
     {
       int safeCount = Mathf.Min(count, ids.Length);
 
-      // Preserve terrain layer/vein discovery order. Do not sort by weight here:
-      // sorting makes channel meaning change per voxel, which becomes visible as
-      // rectangular/triangular material panels once the shader interpolates UV ids.
+      for (int i = 0; i < safeCount - 1; i++)
+      {
+        int best = i;
+
+        for (int j = i + 1; j < safeCount; j++)
+        {
+          if (weights[j] > weights[best])
+          {
+            best = j;
+          }
+        }
+
+        if (best != i)
+        {
+          (ids[i], ids[best]) = (ids[best], ids[i]);
+          (weights[i], weights[best]) = (weights[best], weights[i]);
+        }
+      }
+
       ushort material0 = safeCount > 0 ? ids[0] : (ushort)1;
       ushort material1 = safeCount > 1 ? ids[1] : (ushort)0;
       ushort material2 = safeCount > 2 ? ids[2] : (ushort)0;
@@ -386,12 +404,12 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain
     }
 
     private static void ApplyMaterialVeins(
-      TerrainGenerationProfileSnapshot profile,
-      Vector3Int worldVoxel,
-      float depth,
-      ref int count,
-      Span<ushort> ids,
-      Span<float> weights)
+  TerrainGenerationProfileSnapshot profile,
+  Vector3Int worldVoxel,
+  float depth,
+  ref int count,
+  Span<ushort> ids,
+  Span<float> weights)
     {
       int veinCount = Mathf.Min(profile.VeinCount, 8);
 
@@ -507,6 +525,12 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain
     }
   }
 
+  // Reusable per-column terrain sampler. Resolves the biome blend and each
+  // contributing biome's (X/Z-only) surface height a single time per column,
+  // then reuses them for every voxel in that column. This avoids recomputing
+  // the expensive surface noise and re-allocating the biome blend for all 32
+  // voxels of a column, while producing output identical to
+  // BiomeTerrainSampler.Sample.
   public sealed class TerrainColumnSampler
   {
     private BiomeBlendSample blend;
@@ -518,6 +542,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain
     private byte fallbackBiomeId;
     private double fallbackSurfaceHeight;
 
+    // Blended surface height for the column (matches TerrainSample.SurfaceHeight).
     public float SurfaceHeight { get; private set; }
 
     public void Prepare(
