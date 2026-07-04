@@ -16,8 +16,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
       WorldGenerationSnapshot snapshot,
       int cellStep,
       bool flipWinding,
-      Func<Vector3Int, DensityVoxel> sampleVoxelAtWorld
-    )
+      Func<Vector3Int, DensityVoxel> sampleVoxelAtWorld)
     {
       if (sampleVoxelAtWorld == null) return null;
 
@@ -67,8 +66,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
       bool flipWinding,
       DensityChunkData rootChunkData,
       IReadOnlyDictionary<Vector3Int, DensityChunkData> chunkDataSnapshots,
-      Func<Vector3Int, DensityVoxel> fallbackSampleVoxelAtWorld
-    )
+      Func<Vector3Int, DensityVoxel> fallbackSampleVoxelAtWorld)
     {
       if (rootChunkData == null) return Generate(chunkCoord, snapshot, cellStep, flipWinding, fallbackSampleVoxelAtWorld);
 
@@ -129,8 +127,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
     private static DensityVoxel SampleSnapshotOrFallback(
       IReadOnlyDictionary<Vector3Int, DensityChunkData> chunkDataSnapshots,
       Func<Vector3Int, DensityVoxel> fallbackSampleVoxelAtWorld,
-      Vector3Int worldVoxel
-    )
+      Vector3Int worldVoxel)
     {
       Vector3Int sampleChunkCoord = VoxelMath.WorldVoxelToChunkCoord(worldVoxel);
       Vector3Int localCoord = VoxelMath.WorldVoxelToLocalCoord(worldVoxel);
@@ -147,8 +144,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
       DensityMaterialSet[] materialGrid,
       int numCellsAxis,
       float cellWorldSize,
-      bool flipWinding
-    )
+      bool flipWinding)
     {
       if (densityGrid == null || materialGrid == null || numCellsAxis <= 0) return null;
 
@@ -248,6 +244,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
               normals[6] = SampleNormalCached(densityGrid, normalCache, normalComputed, numSamplesAxis, 1, 1, i111);
               normals[7] = SampleNormalCached(densityGrid, normalCache, normalComputed, numSamplesAxis, 0, 1, i011);
 
+              DensityMaterialSet cellSlots = BuildCellMaterialSlots(materials, densities);
+
               for (int i = 0; i < 12; i++) edgeIndices[i] = -1;
 
               for (int t = 0; t < 16; t += 3)
@@ -258,9 +256,9 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
                 int e2 = MarchingCubesTables.TriangleTable[cubeIndex, t + 2];
                 if (e1 < 0 || e2 < 0 || e0 >= 12 || e1 >= 12 || e2 >= 12) break;
 
-                int v0 = AddOrGetEdgeVertex(mesh, e0, positions, densities, materials, normals, edgeVertices, edgeNormals, edgeIndices);
-                int v1 = AddOrGetEdgeVertex(mesh, e1, positions, densities, materials, normals, edgeVertices, edgeNormals, edgeIndices);
-                int v2 = AddOrGetEdgeVertex(mesh, e2, positions, densities, materials, normals, edgeVertices, edgeNormals, edgeIndices);
+                int v0 = AddOrGetEdgeVertex(mesh, e0, positions, densities, materials, cellSlots, normals, edgeVertices, edgeNormals, edgeIndices);
+                int v1 = AddOrGetEdgeVertex(mesh, e1, positions, densities, materials, cellSlots, normals, edgeVertices, edgeNormals, edgeIndices);
+                int v2 = AddOrGetEdgeVertex(mesh, e2, positions, densities, materials, cellSlots, normals, edgeVertices, edgeNormals, edgeIndices);
 
                 if (v0 < 0 || v1 < 0 || v2 < 0 || v0 == v1 || v1 == v2 || v0 == v2) continue;
 
@@ -329,6 +327,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
       Span<Vector3> positions,
       Span<float> densities,
       Span<DensityMaterialSet> materials,
+      DensityMaterialSet cellSlots,
       Span<Vector3> normals,
       Span<Vector3> edgeVertices,
       Span<Vector3> edgeNormals,
@@ -360,6 +359,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
         positions,
         densities,
         materials,
+        cellSlots,
         position,
         out Color32 splatWeights,
         out Vector2 materialIds01,
@@ -395,14 +395,52 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
       return Vector3.Lerp(a, b, t);
     }
 
+    private static DensityMaterialSet BuildCellMaterialSlots(Span<DensityMaterialSet> materials, Span<float> densities)
+    {
+      Span<ushort> ids = stackalloc ushort[16];
+      Span<float> weights = stackalloc float[16];
+      int uniqueCount = 0;
+
+      for (int corner = 0; corner < 8; corner++)
+      {
+        float densityWeight = Mathf.Clamp01(densities[corner] + 0.75f);
+        if (densityWeight <= 0.000001f) continue;
+        DensityMaterialSet set = materials[corner];
+        AccumulateMaterial(ref uniqueCount, ids, weights, set.Material0, set.Weight0 * densityWeight);
+        AccumulateMaterial(ref uniqueCount, ids, weights, set.Material1, set.Weight1 * densityWeight);
+        AccumulateMaterial(ref uniqueCount, ids, weights, set.Material2, set.Weight2 * densityWeight);
+        AccumulateMaterial(ref uniqueCount, ids, weights, set.Material3, set.Weight3 * densityWeight);
+      }
+
+      if (uniqueCount == 0)
+      {
+        return DensityMaterialSet.Single(1);
+      }
+
+      SortMaterialsByWeight(ids, weights, uniqueCount);
+
+      return new DensityMaterialSet
+      {
+        Material0 = uniqueCount > 0 ? ids[0] : (ushort)1,
+        Material1 = uniqueCount > 1 ? ids[1] : (ushort)0,
+        Material2 = uniqueCount > 2 ? ids[2] : (ushort)0,
+        Material3 = uniqueCount > 3 ? ids[3] : (ushort)0,
+        Weight0 = 255,
+        Weight1 = 0,
+        Weight2 = 0,
+        Weight3 = 0
+      };
+    }
+
     private static void BuildSplatPayload(
-  Span<Vector3> positions,
-  Span<float> densities,
-  Span<DensityMaterialSet> materials,
-  Vector3 surfacePosition,
-  out Color32 splatWeights,
-  out Vector2 materialIds01,
-  out Vector2 materialIds23)
+      Span<Vector3> positions,
+      Span<float> densities,
+      Span<DensityMaterialSet> materials,
+      DensityMaterialSet cellSlots,
+      Vector3 surfacePosition,
+      out Color32 splatWeights,
+      out Vector2 materialIds01,
+      out Vector2 materialIds23)
     {
       Span<ushort> ids = stackalloc ushort[16];
       Span<float> weights = stackalloc float[16];
@@ -428,25 +466,20 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
         AccumulateMaterial(ref uniqueCount, ids, weights, set.Material3, set.Weight3 * cornerWeight);
       }
 
-      if (uniqueCount == 0)
+      ushort material0 = cellSlots.Material0 != 0 ? cellSlots.Material0 : (ushort)1;
+      ushort material1 = cellSlots.Material1;
+      ushort material2 = cellSlots.Material2;
+      ushort material3 = cellSlots.Material3;
+
+      float weight0 = GetAccumulatedWeight(ids, weights, uniqueCount, material0);
+      float weight1 = GetAccumulatedWeight(ids, weights, uniqueCount, material1);
+      float weight2 = GetAccumulatedWeight(ids, weights, uniqueCount, material2);
+      float weight3 = GetAccumulatedWeight(ids, weights, uniqueCount, material3);
+
+      if (weight0 + weight1 + weight2 + weight3 <= 0.000001f)
       {
-        splatWeights = new Color32(255, 0, 0, 0);
-        materialIds01 = new Vector2(1, 0);
-        materialIds23 = Vector2.zero;
-        return;
+        weight0 = 1.0f;
       }
-
-      SortMaterialsByWeight(ids, weights, uniqueCount);
-
-      ushort material0 = uniqueCount > 0 ? ids[0] : (ushort)1;
-      ushort material1 = uniqueCount > 1 ? ids[1] : (ushort)0;
-      ushort material2 = uniqueCount > 2 ? ids[2] : (ushort)0;
-      ushort material3 = uniqueCount > 3 ? ids[3] : (ushort)0;
-
-      float weight0 = uniqueCount > 0 ? weights[0] : 0.0f;
-      float weight1 = uniqueCount > 1 ? weights[1] : 0.0f;
-      float weight2 = uniqueCount > 2 ? weights[2] : 0.0f;
-      float weight3 = uniqueCount > 3 ? weights[3] : 0.0f;
 
       NormalizeTopFourWeights(
         weight0,
@@ -468,8 +501,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
       float density,
       Vector3 surfacePosition)
     {
-      // Let near-surface empty samples still contribute slightly so exposed material
-      // transitions do not collapse into hard positive-density-only islands.
       if (density <= -0.75f)
       {
         return 0.0f;
@@ -511,6 +542,26 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
       ids[uniqueCount] = materialId;
       weights[uniqueCount] = weight;
       uniqueCount++;
+    }
+
+    private static float GetAccumulatedWeight(
+      Span<ushort> ids,
+      Span<float> weights,
+      int count,
+      ushort materialId)
+    {
+      if (materialId == 0) return 0.0f;
+      float result = 0.0f;
+      int safeCount = Mathf.Min(count, ids.Length);
+      for (int i = 0; i < safeCount; i++)
+      {
+        if (ids[i] == materialId)
+        {
+          result += weights[i];
+        }
+      }
+
+      return result;
     }
 
     private static void SortMaterialsByWeight(
