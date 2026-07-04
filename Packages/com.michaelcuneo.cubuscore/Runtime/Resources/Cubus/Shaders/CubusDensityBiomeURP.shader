@@ -11,11 +11,13 @@ Shader "Cubus/DensityBiomeURP"
     _MaterialBlendNoiseScale("Material Blend Noise Scale", Float) = 0.14
     _MaterialBlendNoiseStrength("Material Blend Noise Strength", Range(0, 1)) = 0.45
 
+    _AlbedoBrightness("Albedo Brightness", Range(0.25, 3)) = 1.35
     _Smoothness("Smoothness", Range(0, 1)) = 0.12
-    _SpecularStrength("Specular Strength", Range(0, 2)) = 0.25
-    _FresnelStrength("Fresnel Rim", Range(0, 2)) = 0.15
-    _AmbientStrength("Ambient Strength", Range(0, 1)) = 0.28
-    _DirectLightStrength("Direct Sun Strength", Range(0, 2)) = 1.15
+    _SpecularStrength("Specular Strength", Range(0, 2)) = 0.18
+    _FresnelStrength("Fresnel Rim", Range(0, 2)) = 0.08
+    _AmbientStrength("Ambient Strength", Range(0, 2)) = 0.85
+    _DirectLightStrength("Direct Sun Strength", Range(0, 3)) = 1.35
+    _ShadowStrength("Shadow Strength", Range(0, 1)) = 0.45
     _UseSceneFog("Use Scene Fog", Range(0, 1)) = 0
   }
 
@@ -89,11 +91,13 @@ Shader "Cubus/DensityBiomeURP"
       float _MaterialBlendWidth;
       float _MaterialBlendNoiseScale;
       float _MaterialBlendNoiseStrength;
+      float _AlbedoBrightness;
       float _Smoothness;
       float _SpecularStrength;
       float _FresnelStrength;
       float _AmbientStrength;
       float _DirectLightStrength;
+      float _ShadowStrength;
       float _UseSceneFog;
       int _TerrainMaterialCount;
       float4 _TerrainMaterialParams[128];
@@ -301,20 +305,18 @@ Shader "Cubus/DensityBiomeURP"
         float4 shadowCoord = TransformWorldToShadowCoord(positionWS);
         Light mainLight = GetMainLight(shadowCoord);
 
-        float atten = mainLight.shadowAttenuation * mainLight.distanceAttenuation;
+        float rawAtten = mainLight.shadowAttenuation * mainLight.distanceAttenuation;
+        float atten = lerp(1.0, rawAtten, saturate(_ShadowStrength));
         float ndl = saturate(dot(n, mainLight.direction));
-        float3 direct = mainLight.color * ndl * atten * _DirectLightStrength;
+        float wrappedNdl = saturate(ndl * 0.85 + 0.15);
+        float3 direct = mainLight.color * wrappedNdl * atten * _DirectLightStrength;
 
-        // Real sky ambient (spherical harmonics) so the terrain reacts to the scene
-        // and sky lighting instead of a flat constant. A small floor keeps shaded
-        // faces readable.
-        float3 skyAmbient = SampleSH(n) * _AmbientStrength;
-        float3 floorAmbient = 0.06.xxx;
+        // Keep terrain readable. SampleSH can be extremely dark depending on scene
+        // volume/ambient setup, so use it as colour but not as a hard black floor.
+        float3 skyAmbient = max(SampleSH(n), 0.20.xxx) * _AmbientStrength;
+        float3 floorAmbient = 0.18.xxx;
         float3 ambient = max(skyAmbient, floorAmbient);
 
-        // Terrain is matte: drive the highlight from the low uniform smoothness (the
-        // material mask roughness is often unauthored/zero, which would otherwise make
-        // everything look like wet plastic). Mask roughness can only make it more matte.
         float smoothness = saturate(_Smoothness) * saturate(1.0 - roughness);
         float3 halfVec = SafeNormalize(mainLight.direction + viewDir);
         float ndh = saturate(dot(n, halfVec));
@@ -394,20 +396,11 @@ Shader "Cubus/DensityBiomeURP"
           mask2 * weights.z +
           mask3 * weights.w;
 
-        // Mask convention:
-        // R = AO
-        // G = Roughness
-        // B = Metallic
-        // A = Height
-        //
-        // AO (mask.r) is intentionally NOT multiplied into the diffuse albedo: the
-        // terrain mask array is frequently unauthored (all zero), which would multiply
-        // the whole surface to black regardless of lighting. The block shader ignores
-        // AO for the same reason; when authored it belongs on the ambient term only.
         float roughness = saturate(mask.g);
+        float3 baseColor = saturate(albedo.rgb * _Tint.rgb * _AlbedoBrightness);
 
         float3 lit = ApplyLighting(
-          albedo.rgb * _Tint.rgb,
+          baseColor,
           IN.positionWS,
           normalWS,
           roughness);
