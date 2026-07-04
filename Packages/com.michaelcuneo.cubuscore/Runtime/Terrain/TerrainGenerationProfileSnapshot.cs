@@ -272,24 +272,92 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain
     }
 
     // Returns the material ID for a given depth below the terrain surface.
-    // Iterates layers in order; the last layer catches all remaining depth.
+    // The depth-only overload remains deterministic for callers that do not have
+    // world coordinates, but it still uses the same transition code path.
     public int GetMaterialId(float depthBelowSurface)
+    {
+      return GetMaterialId(depthBelowSurface, 0.0, 0.0, depthBelowSurface);
+    }
+
+    // Returns a spatially varied material ID near layer boundaries. This makes the
+    // marching-cubes corner sampler feed different neighbouring material IDs inside
+    // each layer's BlendWidth, so the mesh/shader blend path has real data to blend.
+    public int GetMaterialId(float depthBelowSurface, double wx, double wy, double wz)
     {
       if (MaterialLayers.Length == 0)
       {
         return 1;
       }
 
+      int selectedIndex = MaterialLayers.Length - 1;
       for (int i = 0; i < MaterialLayers.Length; i++)
       {
-        MaterialLayerSnapshotEntry layer = MaterialLayers[i];
-        if (depthBelowSurface <= layer.MaxDepthBelowSurface)
+        if (depthBelowSurface <= MaterialLayers[i].MaxDepthBelowSurface)
         {
-          return layer.MaterialId;
+          selectedIndex = i;
+          break;
         }
       }
 
-      return MaterialLayers[MaterialLayers.Length - 1].MaterialId;
+      MaterialLayerSnapshotEntry selected = MaterialLayers[selectedIndex];
+
+      if (selectedIndex > 0)
+      {
+        MaterialLayerSnapshotEntry previous = MaterialLayers[selectedIndex - 1];
+        float boundary = previous.MaxDepthBelowSurface;
+        float blendWidth = Mathf.Max(0.001f, selected.BlendWidth);
+        float t = Mathf.Clamp01((depthBelowSurface - boundary) / blendWidth);
+
+        if (t > 0.0f && t < 1.0f)
+        {
+          return ChooseTransitionMaterial(previous, selected, t, wx, wy, wz);
+        }
+      }
+
+      if (selectedIndex + 1 < MaterialLayers.Length)
+      {
+        MaterialLayerSnapshotEntry next = MaterialLayers[selectedIndex + 1];
+        float boundary = selected.MaxDepthBelowSurface;
+        float blendWidth = Mathf.Max(0.001f, next.BlendWidth);
+        float t = Mathf.Clamp01((depthBelowSurface - (boundary - blendWidth)) / blendWidth);
+
+        if (t > 0.0f && t < 1.0f)
+        {
+          return ChooseTransitionMaterial(selected, next, t, wx, wy, wz);
+        }
+      }
+
+      return selected.MaterialId;
+    }
+
+    private int ChooseTransitionMaterial(
+      MaterialLayerSnapshotEntry lower,
+      MaterialLayerSnapshotEntry upper,
+      float t,
+      double wx,
+      double wy,
+      double wz)
+    {
+      float eased = t * t * (3.0f - 2.0f * t);
+      float lowerWeight = Mathf.Max(0.0001f, lower.Weight);
+      float upperWeight = Mathf.Max(0.0001f, upper.Weight);
+      float weightBias = upperWeight / (lowerWeight + upperWeight);
+      float scale = Mathf.Max(0.0001f, upper.NoiseScale);
+      float noise = HashNoise01(
+        (float)(wx * scale),
+        (float)(wy * scale),
+        (float)(wz * scale),
+        WorldSeed + upper.MaterialId * 131 + lower.MaterialId * 17);
+
+      float jitter = (noise - 0.5f) * Mathf.Clamp01(upper.NoiseStrength) * 0.75f;
+      float threshold = Mathf.Clamp01(weightBias + jitter);
+      return eased >= threshold ? upper.MaterialId : lower.MaterialId;
+    }
+
+    private static float HashNoise01(float x, float y, float z, int seed)
+    {
+      float n = x * 12.9898f + y * 78.233f + z * 37.719f + seed * 0.12345f;
+      return Mathf.Repeat(Mathf.Sin(n) * 43758.5453f, 1.0f);
     }
 
     public static TerrainGenerationProfileSnapshot Blend(
