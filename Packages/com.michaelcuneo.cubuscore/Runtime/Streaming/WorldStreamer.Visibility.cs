@@ -8,11 +8,11 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 {
   public sealed partial class WorldStreamer
   {
-    private const int AlwaysDrawNearViewerHorizontalChunks = 2;
-    private const int AlwaysDrawNearViewerVerticalChunks = 1;
+    private const int AlwaysDrawNearViewerHorizontalChunks = 0;
+    private const int AlwaysDrawNearViewerVerticalChunks = 0;
     private const int HighPriorityNearViewerHorizontalChunks = 3;
     private const int HighPriorityNearViewerVerticalChunks = 2;
-    private const float VisibilityBoundsPaddingChunks = 0.75f;
+    private const float VisibilityBoundsPaddingChunks = 0.15f;
     private const float VisibilityRefreshPositionEpsilon = 0.25f;
     private const float VisibilityRefreshDotThreshold = 0.9975f;
     private const int VisibilityRefreshMaxFrameInterval = 6;
@@ -185,7 +185,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
     private void RefreshVisibilitySchedulingIfNeeded()
     {
-      if (UseInitialStreamingStageNow || !hasLastViewerChunkCoord || desiredChunkCoords.Count == 0)
+      if (!hasLastViewerChunkCoord || desiredChunkCoords.Count == 0)
       {
         return;
       }
@@ -320,9 +320,10 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
       Camera camera = ResolveVisibilityCamera();
 
-      // During the initial fill (or with no camera to test against) keep everything
-      // drawn - hiding here would make the world momentarily vanish.
-      if (UseInitialStreamingStageNow || camera == null)
+      // With no camera, keep chunks drawn. Otherwise apply visibility immediately,
+      // including during initial streaming, so the cull behaviour is observable and
+      // the renderer does not draw the full loaded shell while the initial gate waits.
+      if (camera == null)
       {
         ShowAllRenderedChunks(activeViews);
         return;
