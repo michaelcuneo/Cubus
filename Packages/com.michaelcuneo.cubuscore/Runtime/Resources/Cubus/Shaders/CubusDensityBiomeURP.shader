@@ -13,9 +13,9 @@ Shader "Cubus/DensityBiomeURP"
 
     _AlbedoBrightness("Albedo Brightness", Range(0.25, 3)) = 1.35
     _NormalStrength("Normal Strength", Range(0, 3)) = 1.25
-    _Smoothness("Smoothness", Range(0, 1)) = 0.12
-    _SpecularStrength("Specular Strength", Range(0, 2)) = 0.18
-    _FresnelStrength("Fresnel Rim", Range(0, 2)) = 0.08
+    _Smoothness("Smoothness", Range(0, 1)) = 0.04
+    _SpecularStrength("Specular Strength", Range(0, 2)) = 0.06
+    _FresnelStrength("Fresnel Rim", Range(0, 2)) = 0.03
     _AmbientStrength("Ambient Strength", Range(0, 2)) = 0.85
     _DirectLightStrength("Direct Sun Strength", Range(0, 3)) = 1.35
     _ShadowStrength("Shadow Strength", Range(0, 1)) = 0.45
@@ -309,13 +309,14 @@ Shader "Cubus/DensityBiomeURP"
         float3 skyAmbient = max(SampleSH(n), 0.20.xxx) * _AmbientStrength;
         float3 floorAmbient = 0.18.xxx;
         float3 ambient = max(skyAmbient, floorAmbient);
-        float smoothness = saturate(_Smoothness) * saturate(1.0 - roughness);
+        float terrainRoughness = saturate(max(roughness, 0.55));
+        float smoothness = saturate(_Smoothness) * saturate(1.0 - terrainRoughness) * 0.35;
         float3 halfVec = SafeNormalize(mainLight.direction + viewDir);
         float ndh = saturate(dot(n, halfVec));
-        float shininess = exp2(lerp(3.0, 11.0, smoothness));
-        float specTerm = pow(ndh, shininess) * _SpecularStrength * ndl * atten;
+        float shininess = exp2(lerp(2.0, 8.0, smoothness));
+        float specTerm = pow(ndh, shininess) * _SpecularStrength * 0.35 * ndl * atten;
         float3 specular = mainLight.color * specTerm;
-        float fresnel = pow(1.0 - saturate(dot(n, viewDir)), 5.0) * _FresnelStrength;
+        float fresnel = pow(1.0 - saturate(dot(n, viewDir)), 5.0) * _FresnelStrength * 0.35;
         float3 rim = skyAmbient * fresnel;
         return albedoRgb * (ambient + direct) + specular + rim;
       }
@@ -380,6 +381,7 @@ Shader "Cubus/DensityBiomeURP"
         float packedRoughness = 1.0 - packedSmoothness;
         float maskSignal = max(max(mask.r, mask.g), mask.a);
         float roughness = lerp(roughnessFallback, packedRoughness, saturate((maskSignal - 0.05) * 4.0));
+        roughness = saturate(max(roughness, 0.55));
         float ambientOcclusion = lerp(1.0, saturate(mask.g), saturate((mask.g - 0.05) * 4.0));
         float3 baseColor = saturate(albedo.rgb * _Tint.rgb * _AlbedoBrightness);
         if (_DebugMode >= 0.5) return half4(DebugModeColor(_DebugMode, baseColor, meshNormalWS, materialNormalWS, mask, roughness, packedSmoothness, ambientOcclusion, weights), 1.0);
