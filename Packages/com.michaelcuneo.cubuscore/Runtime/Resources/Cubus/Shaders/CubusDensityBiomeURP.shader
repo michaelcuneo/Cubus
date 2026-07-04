@@ -290,18 +290,16 @@ Shader "Cubus/DensityBiomeURP"
 
       half4 frag(Varyings IN) : SV_Target
       {
-        float oldId = round(IN.splatWeights.r * 255.0) + round(IN.splatWeights.g * 255.0) * 256.0;
-        bool oldLayout = IN.splatWeights.a > 0.99 && oldId > 0.5;
-        float material0 = oldLayout ? oldId : round(IN.materialIds01.x);
-        float material1 = oldLayout ? 0.0 : round(IN.materialIds01.y);
-        float material2 = oldLayout ? 0.0 : round(IN.materialIds23.x);
-        float material3 = oldLayout ? 0.0 : round(IN.materialIds23.y);
+        float material0 = round(IN.materialIds01.x);
+        float material1 = round(IN.materialIds01.y);
+        float material2 = round(IN.materialIds23.x);
+        float material3 = round(IN.materialIds23.y);
         float4 activeMask = float4(material0 > 0.5 ? 1.0 : 0.0, material1 > 0.5 ? 1.0 : 0.0, material2 > 0.5 ? 1.0 : 0.0, material3 > 0.5 ? 1.0 : 0.0);
         material0 = max(1.0, material0);
         material1 = max(1.0, material1);
         material2 = max(1.0, material2);
         material3 = max(1.0, material3);
-        float4 weights = oldLayout ? float4(1.0, 0.0, 0.0, 0.0) : BreakupSplatWeights(IN.splatWeights, activeMask, IN.positionWS);
+        float4 weights = BreakupSplatWeights(IN.splatWeights, activeMask, IN.positionWS);
         float3 meshNormalWS = normalize(IN.normalWS);
         half4 albedo0 = SampleTriplanarAlbedo(material0, IN.positionWS, meshNormalWS);
         half4 albedo1 = SampleTriplanarAlbedo(material1, IN.positionWS, meshNormalWS);
