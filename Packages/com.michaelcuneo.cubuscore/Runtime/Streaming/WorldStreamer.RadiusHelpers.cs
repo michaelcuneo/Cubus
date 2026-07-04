@@ -18,7 +18,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
       int viewRadius = GetConfiguredViewRadiusInChunks();
       return settings != null && settings.BuildRadiusInChunks > 0
-        ? Mathf.Clamp(settings.BuildRadiusInChunks, 1, viewRadius)
+        ? Mathf.Max(1, settings.BuildRadiusInChunks)
         : viewRadius;
     }
 
@@ -45,7 +45,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       int buildRadius = GetActiveBuildRadiusInChunks();
       int defaultLoadRadius = buildRadius + UnloadPaddingInChunks;
       return settings != null && settings.LoadRadiusInChunks > 0
-        ? Mathf.Clamp(settings.LoadRadiusInChunks, buildRadius, GetConfiguredViewRadiusInChunks() + UnloadPaddingInChunks)
+        ? Mathf.Max(buildRadius, settings.LoadRadiusInChunks)
         : defaultLoadRadius;
     }
 
