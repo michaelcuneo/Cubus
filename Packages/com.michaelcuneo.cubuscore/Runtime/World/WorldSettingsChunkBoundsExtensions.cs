@@ -6,6 +6,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World
   {
     private const int CompatibilityWorldMinChunkY = int.MinValue / 4;
     private const int CompatibilityWorldMaxChunkY = int.MaxValue / 4;
+    private const int MinimumRuntimeWorldRadiusInChunks = 1024;
 
     public static ChunkBounds3D GetEffectiveGenerationChunkBounds3D(this WorldSettings settings)
     {
@@ -65,6 +66,36 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World
       }
 
       return !settings.UseFixedGenerationBounds || settings.GetEffectiveGenerationChunkBounds3D().Contains(chunkCoord);
+    }
+
+    public static void EnsureRuntimeStreamingBounds(this WorldSettings settings)
+    {
+      if (settings == null)
+      {
+        return;
+      }
+
+      // Runtime streaming must not inherit small pregeneration/test bounds such as
+      // -4..4 or -8..8. Those are only useful for tiny offline pregeneration passes;
+      // gameplay streaming expects a wide world and should generate missing chunks
+      // procedurally as the player moves.
+      settings.UseWorldBounds = true;
+
+      int minX = Mathf.Min(settings.WorldMinChunkXZ.x, settings.WorldMaxChunkXZ.x);
+      int maxX = Mathf.Max(settings.WorldMinChunkXZ.x, settings.WorldMaxChunkXZ.x);
+      int minZ = Mathf.Min(settings.WorldMinChunkXZ.y, settings.WorldMaxChunkXZ.y);
+      int maxZ = Mathf.Max(settings.WorldMinChunkXZ.y, settings.WorldMaxChunkXZ.y);
+
+      if (minX > -MinimumRuntimeWorldRadiusInChunks) minX = -MinimumRuntimeWorldRadiusInChunks;
+      if (maxX < MinimumRuntimeWorldRadiusInChunks) maxX = MinimumRuntimeWorldRadiusInChunks;
+      if (minZ > -MinimumRuntimeWorldRadiusInChunks) minZ = -MinimumRuntimeWorldRadiusInChunks;
+      if (maxZ < MinimumRuntimeWorldRadiusInChunks) maxZ = MinimumRuntimeWorldRadiusInChunks;
+
+      settings.WorldMinChunkXZ = new Vector2Int(minX, minZ);
+      settings.WorldMaxChunkXZ = new Vector2Int(maxX, maxZ);
+
+      settings.UseFixedGenerationBounds = false;
+      settings.MissingChunkPolicy = MissingChunkPolicy.GenerateLocally;
     }
 
     public static void GetEffectiveGenerationChunkBounds3D(
