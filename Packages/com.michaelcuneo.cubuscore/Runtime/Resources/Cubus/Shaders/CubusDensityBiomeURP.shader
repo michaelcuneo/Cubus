@@ -3,14 +3,11 @@ Shader "Cubus/DensityBiomeURP"
   Properties
   {
     _Tint("Tint", Color) = (1, 1, 1, 1)
-
     _TextureScale("Global Texture Scale", Float) = 0.25
     _TriplanarSharpness("Triplanar Sharpness", Float) = 4.0
-
     _MaterialBlendWidth("Material Blend Width", Range(0.01, 1)) = 0.35
     _MaterialBlendNoiseScale("Material Blend Noise Scale", Float) = 0.14
     _MaterialBlendNoiseStrength("Material Blend Noise Strength", Range(0, 1)) = 0.45
-
     _AlbedoBrightness("Albedo Brightness", Range(0.25, 3)) = 1.35
     _NormalStrength("Normal Strength", Range(0, 3)) = 1.25
     _Smoothness("Smoothness", Range(0, 1)) = 0.04
@@ -25,20 +22,12 @@ Shader "Cubus/DensityBiomeURP"
 
   SubShader
   {
-    Tags
-    {
-      "RenderType" = "Opaque"
-      "RenderPipeline" = "UniversalPipeline"
-      "Queue" = "Geometry"
-    }
-
+    Tags { "RenderType" = "Opaque" "RenderPipeline" = "UniversalPipeline" "Queue" = "Geometry" }
     LOD 100
-
     Pass
     {
       Name "ForwardLit"
       Tags { "LightMode" = "UniversalForward" }
-
       Cull Back
       ZWrite On
       ZTest LEqual
@@ -54,17 +43,10 @@ Shader "Cubus/DensityBiomeURP"
       #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
       #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
 
-      TEXTURE2D_ARRAY(_TerrainAlbedoArray);
-      SAMPLER(sampler_TerrainAlbedoArray);
-
-      TEXTURE2D_ARRAY(_TerrainNormalArray);
-      SAMPLER(sampler_TerrainNormalArray);
-
-      TEXTURE2D_ARRAY(_TerrainMaskArray);
-      SAMPLER(sampler_TerrainMaskArray);
-
-      TEXTURE2D(_TerrainMaterialSliceLookup);
-      SAMPLER(sampler_TerrainMaterialSliceLookup);
+      TEXTURE2D_ARRAY(_TerrainAlbedoArray); SAMPLER(sampler_TerrainAlbedoArray);
+      TEXTURE2D_ARRAY(_TerrainNormalArray); SAMPLER(sampler_TerrainNormalArray);
+      TEXTURE2D_ARRAY(_TerrainMaskArray); SAMPLER(sampler_TerrainMaskArray);
+      TEXTURE2D(_TerrainMaterialSliceLookup); SAMPLER(sampler_TerrainMaterialSliceLookup);
 
       struct Attributes
       {
@@ -126,26 +108,14 @@ Shader "Cubus/DensityBiomeURP"
         return _TerrainMaterialParams[index];
       }
 
-      half4 SampleTerrainAlbedoArray(float slice, float2 uv, float2 gradX, float2 gradY)
-      {
-        return SAMPLE_TEXTURE2D_ARRAY_GRAD(_TerrainAlbedoArray, sampler_TerrainAlbedoArray, uv, slice, gradX, gradY);
-      }
-
-      half4 SampleTerrainNormalArray(float slice, float2 uv, float2 gradX, float2 gradY)
-      {
-        return SAMPLE_TEXTURE2D_ARRAY_GRAD(_TerrainNormalArray, sampler_TerrainNormalArray, uv, slice, gradX, gradY);
-      }
-
-      half4 SampleTerrainMaskArray(float slice, float2 uv, float2 gradX, float2 gradY)
-      {
-        return SAMPLE_TEXTURE2D_ARRAY_GRAD(_TerrainMaskArray, sampler_TerrainMaskArray, uv, slice, gradX, gradY);
-      }
+      half4 SampleTerrainAlbedoArray(float slice, float2 uv, float2 gradX, float2 gradY) { return SAMPLE_TEXTURE2D_ARRAY_GRAD(_TerrainAlbedoArray, sampler_TerrainAlbedoArray, uv, slice, gradX, gradY); }
+      half4 SampleTerrainNormalArray(float slice, float2 uv, float2 gradX, float2 gradY) { return SAMPLE_TEXTURE2D_ARRAY_GRAD(_TerrainNormalArray, sampler_TerrainNormalArray, uv, slice, gradX, gradY); }
+      half4 SampleTerrainMaskArray(float slice, float2 uv, float2 gradX, float2 gradY) { return SAMPLE_TEXTURE2D_ARRAY_GRAD(_TerrainMaskArray, sampler_TerrainMaskArray, uv, slice, gradX, gradY); }
 
       float3 TriplanarWeights(float3 normalWS)
       {
         float3 n = abs(normalize(normalWS));
-        float sharpness = max(0.001, _TriplanarSharpness);
-        n = pow(n, sharpness);
+        n = pow(n, max(0.001, _TriplanarSharpness));
         return n / max(n.x + n.y + n.z, 0.0001);
       }
 
@@ -188,56 +158,36 @@ Shader "Cubus/DensityBiomeURP"
       {
         float slice = MaterialIdToSlice(materialId);
         float4 materialParams = GetTerrainMaterialParams(slice);
-        float3 weights;
-        float2 uvX;
-        float2 uvY;
-        float2 uvZ;
+        float3 weights; float2 uvX; float2 uvY; float2 uvZ;
         BuildTriplanarCoordinates(positionWS, normalWS, materialParams.x, weights, uvX, uvY, uvZ);
-        half4 sampleX = SampleTerrainAlbedoArray(slice, uvX, ddx(uvX), ddy(uvX));
-        half4 sampleY = SampleTerrainAlbedoArray(slice, uvY, ddx(uvY), ddy(uvY));
-        half4 sampleZ = SampleTerrainAlbedoArray(slice, uvZ, ddx(uvZ), ddy(uvZ));
-        return sampleX * weights.x + sampleY * weights.y + sampleZ * weights.z;
+        return SampleTerrainAlbedoArray(slice, uvX, ddx(uvX), ddy(uvX)) * weights.x + SampleTerrainAlbedoArray(slice, uvY, ddx(uvY), ddy(uvY)) * weights.y + SampleTerrainAlbedoArray(slice, uvZ, ddx(uvZ), ddy(uvZ)) * weights.z;
       }
 
       half4 SampleTriplanarMask(float materialId, float3 positionWS, float3 normalWS)
       {
         float slice = MaterialIdToSlice(materialId);
         float4 materialParams = GetTerrainMaterialParams(slice);
-        float3 weights;
-        float2 uvX;
-        float2 uvY;
-        float2 uvZ;
+        float3 weights; float2 uvX; float2 uvY; float2 uvZ;
         BuildTriplanarCoordinates(positionWS, normalWS, materialParams.x, weights, uvX, uvY, uvZ);
-        half4 sampleX = SampleTerrainMaskArray(slice, uvX, ddx(uvX), ddy(uvX));
-        half4 sampleY = SampleTerrainMaskArray(slice, uvY, ddx(uvY), ddy(uvY));
-        half4 sampleZ = SampleTerrainMaskArray(slice, uvZ, ddx(uvZ), ddy(uvZ));
-        return sampleX * weights.x + sampleY * weights.y + sampleZ * weights.z;
+        return SampleTerrainMaskArray(slice, uvX, ddx(uvX), ddy(uvX)) * weights.x + SampleTerrainMaskArray(slice, uvY, ddx(uvY), ddy(uvY)) * weights.y + SampleTerrainMaskArray(slice, uvZ, ddx(uvZ), ddy(uvZ)) * weights.z;
       }
 
       float3 SampleTriplanarNormal(float materialId, float3 positionWS, float3 normalWS)
       {
         float slice = MaterialIdToSlice(materialId);
         float4 materialParams = GetTerrainMaterialParams(slice);
-        float3 weights;
-        float2 uvX;
-        float2 uvY;
-        float2 uvZ;
+        float3 weights; float2 uvX; float2 uvY; float2 uvZ;
         BuildTriplanarCoordinates(positionWS, normalWS, materialParams.x, weights, uvX, uvY, uvZ);
         float3 tangentX = UnpackTerrainNormal(SampleTerrainNormalArray(slice, uvX, ddx(uvX), ddy(uvX)));
         float3 tangentY = UnpackTerrainNormal(SampleTerrainNormalArray(slice, uvY, ddx(uvY), ddy(uvY)));
         float3 tangentZ = UnpackTerrainNormal(SampleTerrainNormalArray(slice, uvZ, ddx(uvZ), ddy(uvZ)));
-        float3 worldX = AxisNormalX(tangentX, normalWS);
-        float3 worldY = AxisNormalY(tangentY, normalWS);
-        float3 worldZ = AxisNormalZ(tangentZ, normalWS);
-        float normalStrength = saturate(materialParams.y) * _NormalStrength;
-        float3 detailNormal = normalize(worldX * weights.x + worldY * weights.y + worldZ * weights.z);
-        return normalize(lerp(normalize(normalWS), detailNormal, saturate(normalStrength)));
+        float3 detailNormal = normalize(AxisNormalX(tangentX, normalWS) * weights.x + AxisNormalY(tangentY, normalWS) * weights.y + AxisNormalZ(tangentZ, normalWS) * weights.z);
+        return normalize(lerp(normalize(normalWS), detailNormal, saturate(saturate(materialParams.y) * _NormalStrength)));
       }
 
       float GetMaterialRoughnessFallback(float materialId)
       {
-        float slice = MaterialIdToSlice(materialId);
-        return saturate(GetTerrainMaterialParams(slice).z);
+        return saturate(GetTerrainMaterialParams(MaterialIdToSlice(materialId)).z);
       }
 
       float Hash31(float3 p)
@@ -264,9 +214,7 @@ Shader "Cubus/DensityBiomeURP"
         float nx10 = lerp(n010, n110, f.x);
         float nx01 = lerp(n001, n101, f.x);
         float nx11 = lerp(n011, n111, f.x);
-        float nxy0 = lerp(nx00, nx10, f.y);
-        float nxy1 = lerp(nx01, nx11, f.y);
-        return lerp(nxy0, nxy1, f.z);
+        return lerp(lerp(nx00, nx10, f.y), lerp(nx01, nx11, f.y), f.z);
       }
 
       float4 NormalizeSplatWeights(float4 weights)
@@ -291,8 +239,7 @@ Shader "Cubus/DensityBiomeURP"
         weights.y += noise.y * strength;
         weights.z += noise.z * strength;
         weights.w -= (noise.x + noise.y + noise.z) * 0.3333333 * strength;
-        weights = max(weights * activeMask, 0.0);
-        return NormalizeSplatWeights(weights);
+        return NormalizeSplatWeights(max(weights * activeMask, 0.0));
       }
 
       float3 ApplyLighting(float3 albedoRgb, float3 positionWS, float3 normalWS, float roughness)
@@ -301,24 +248,17 @@ Shader "Cubus/DensityBiomeURP"
         float3 viewDir = SafeNormalize(_WorldSpaceCameraPos - positionWS);
         float4 shadowCoord = TransformWorldToShadowCoord(positionWS);
         Light mainLight = GetMainLight(shadowCoord);
-        float rawAtten = mainLight.shadowAttenuation * mainLight.distanceAttenuation;
-        float atten = lerp(1.0, rawAtten, saturate(_ShadowStrength));
+        float atten = lerp(1.0, mainLight.shadowAttenuation * mainLight.distanceAttenuation, saturate(_ShadowStrength));
         float ndl = saturate(dot(n, mainLight.direction));
-        float wrappedNdl = saturate(ndl * 0.85 + 0.15);
-        float3 direct = mainLight.color * wrappedNdl * atten * _DirectLightStrength;
+        float3 direct = mainLight.color * saturate(ndl * 0.85 + 0.15) * atten * _DirectLightStrength;
         float3 skyAmbient = max(SampleSH(n), 0.20.xxx) * _AmbientStrength;
-        float3 floorAmbient = 0.18.xxx;
-        float3 ambient = max(skyAmbient, floorAmbient);
         float terrainRoughness = saturate(max(roughness, 0.55));
         float smoothness = saturate(_Smoothness) * saturate(1.0 - terrainRoughness) * 0.35;
         float3 halfVec = SafeNormalize(mainLight.direction + viewDir);
-        float ndh = saturate(dot(n, halfVec));
-        float shininess = exp2(lerp(2.0, 8.0, smoothness));
-        float specTerm = pow(ndh, shininess) * _SpecularStrength * 0.35 * ndl * atten;
+        float specTerm = pow(saturate(dot(n, halfVec)), exp2(lerp(2.0, 8.0, smoothness))) * _SpecularStrength * 0.35 * ndl * atten;
         float3 specular = mainLight.color * specTerm;
-        float fresnel = pow(1.0 - saturate(dot(n, viewDir)), 5.0) * _FresnelStrength * 0.35;
-        float3 rim = skyAmbient * fresnel;
-        return albedoRgb * (ambient + direct) + specular + rim;
+        float3 rim = skyAmbient * pow(1.0 - saturate(dot(n, viewDir)), 5.0) * _FresnelStrength * 0.35;
+        return albedoRgb * (max(skyAmbient, 0.18.xxx) + direct) + specular + rim;
       }
 
       float3 DebugModeColor(float debugMode, float3 baseColor, float3 meshNormalWS, float3 materialNormalWS, half4 packedMask, float roughness, float smoothness, float ambientOcclusion, float4 weights)
@@ -350,16 +290,18 @@ Shader "Cubus/DensityBiomeURP"
 
       half4 frag(Varyings IN) : SV_Target
       {
-        float material0 = round(IN.materialIds01.x);
-        float material1 = round(IN.materialIds01.y);
-        float material2 = round(IN.materialIds23.x);
-        float material3 = round(IN.materialIds23.y);
+        float oldId = round(IN.splatWeights.r * 255.0) + round(IN.splatWeights.g * 255.0) * 256.0;
+        bool oldLayout = IN.splatWeights.a > 0.99 && oldId > 0.5;
+        float material0 = oldLayout ? oldId : round(IN.materialIds01.x);
+        float material1 = oldLayout ? 0.0 : round(IN.materialIds01.y);
+        float material2 = oldLayout ? 0.0 : round(IN.materialIds23.x);
+        float material3 = oldLayout ? 0.0 : round(IN.materialIds23.y);
         float4 activeMask = float4(material0 > 0.5 ? 1.0 : 0.0, material1 > 0.5 ? 1.0 : 0.0, material2 > 0.5 ? 1.0 : 0.0, material3 > 0.5 ? 1.0 : 0.0);
         material0 = max(1.0, material0);
         material1 = max(1.0, material1);
         material2 = max(1.0, material2);
         material3 = max(1.0, material3);
-        float4 weights = BreakupSplatWeights(IN.splatWeights, activeMask, IN.positionWS);
+        float4 weights = oldLayout ? float4(1.0, 0.0, 0.0, 0.0) : BreakupSplatWeights(IN.splatWeights, activeMask, IN.positionWS);
         float3 meshNormalWS = normalize(IN.normalWS);
         half4 albedo0 = SampleTriplanarAlbedo(material0, IN.positionWS, meshNormalWS);
         half4 albedo1 = SampleTriplanarAlbedo(material1, IN.positionWS, meshNormalWS);
@@ -380,8 +322,7 @@ Shader "Cubus/DensityBiomeURP"
         float packedSmoothness = saturate(mask.a);
         float packedRoughness = 1.0 - packedSmoothness;
         float maskSignal = max(max(mask.r, mask.g), mask.a);
-        float roughness = lerp(roughnessFallback, packedRoughness, saturate((maskSignal - 0.05) * 4.0));
-        roughness = saturate(max(roughness, 0.55));
+        float roughness = saturate(max(lerp(roughnessFallback, packedRoughness, saturate((maskSignal - 0.05) * 4.0)), 0.55));
         float ambientOcclusion = lerp(1.0, saturate(mask.g), saturate((mask.g - 0.05) * 4.0));
         float3 baseColor = saturate(albedo.rgb * _Tint.rgb * _AlbedoBrightness);
         if (_DebugMode >= 0.5) return half4(DebugModeColor(_DebugMode, baseColor, meshNormalWS, materialNormalWS, mask, roughness, packedSmoothness, ambientOcclusion, weights), 1.0);
@@ -390,10 +331,8 @@ Shader "Cubus/DensityBiomeURP"
         if (_UseSceneFog > 0.5) lit = MixFog(lit, IN.fogCoord);
         return half4(lit, 1.0);
       }
-
       ENDHLSL
     }
   }
-
   FallBack "Universal Render Pipeline/Lit"
 }
