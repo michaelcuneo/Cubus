@@ -159,6 +159,11 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
 
             MaterialBlend slotBlend = BuildCellSlotBlend(densities, sampleBlends);
 
+            if (sampleVoxelAtWorld == null)
+            {
+              AddSurfaceEdgeSlotsToCellBlend(ref slotBlend, snapshot, chunkCoord, cubeIndex, positions, densities);
+            }
+
             for (int t = 0; t < 16; t += 3)
             {
               int e0 = MarchingCubesTables.TriangleTable[cubeIndex, t + 0];
@@ -175,9 +180,9 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
                 break;
               }
 
-              int v0 = AddOrGetEdgeVertex(mesh, e0, positions, densities, normals, sampleBlends, slotBlend, edgeVertices, edgeIndices);
-              int v1 = AddOrGetEdgeVertex(mesh, e1, positions, densities, normals, sampleBlends, slotBlend, edgeVertices, edgeIndices);
-              int v2 = AddOrGetEdgeVertex(mesh, e2, positions, densities, normals, sampleBlends, slotBlend, edgeVertices, edgeIndices);
+              int v0 = AddOrGetEdgeVertex(mesh, e0, positions, densities, normals, sampleBlends, slotBlend, snapshot, chunkCoord, sampleVoxelAtWorld == null, edgeVertices, edgeIndices);
+              int v1 = AddOrGetEdgeVertex(mesh, e1, positions, densities, normals, sampleBlends, slotBlend, snapshot, chunkCoord, sampleVoxelAtWorld == null, edgeVertices, edgeIndices);
+              int v2 = AddOrGetEdgeVertex(mesh, e2, positions, densities, normals, sampleBlends, slotBlend, snapshot, chunkCoord, sampleVoxelAtWorld == null, edgeVertices, edgeIndices);
 
               if (v0 < 0 || v1 < 0 || v2 < 0 || v0 == v1 || v1 == v2 || v0 == v2)
               {
@@ -255,6 +260,26 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
 
       float depthBelowSurface = (float)(surfaceHeight - sampleZ);
       materialBlend = BuildProfileMaterialBlend(snapshot.TerrainProfile, depthBelowSurface, sampleX, sampleY, sampleZ);
+    }
+
+    private static MaterialBlend BuildSurfacePositionMaterialBlend(
+      WorldGenerationSnapshot snapshot,
+      Vector3Int chunkCoord,
+      Vector3 localPosition)
+    {
+      float voxelSize = Mathf.Max(0.0001f, snapshot.VoxelSize);
+      double wx = chunkCoord.x * VoxelConstants.ChunkSize + localPosition.x / voxelSize;
+      double wy = chunkCoord.y * VoxelConstants.ChunkSize + localPosition.y / voxelSize;
+      double wz = chunkCoord.z * VoxelConstants.ChunkSize + localPosition.z / voxelSize;
+
+      double sampleScale = snapshot.DensitySampleScale <= 0.0f ? 1.0 : snapshot.DensitySampleScale;
+      double sampleX = wx * sampleScale;
+      double sampleY = wz * sampleScale;
+      double sampleZ = wy * sampleScale;
+      double surfaceHeight = TerrainHeight.ComputeSurfaceHeight(snapshot.TerrainProfile, sampleX, sampleY);
+      float depthBelowSurface = (float)(surfaceHeight - sampleZ);
+
+      return BuildProfileMaterialBlend(snapshot.TerrainProfile, depthBelowSurface, sampleX, sampleY, sampleZ);
     }
 
     private static MaterialBlend BuildProfileMaterialBlend(
@@ -362,6 +387,56 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
       return normal.sqrMagnitude > 0.000001f ? normal.normalized : Vector3.up;
     }
 
+    private static void AddSurfaceEdgeSlotsToCellBlend(
+      ref MaterialBlend slotBlend,
+      WorldGenerationSnapshot snapshot,
+      Vector3Int chunkCoord,
+      int cubeIndex,
+      Vector3[] positions,
+      float[] densities)
+    {
+      bool[] usedEdges = new bool[12];
+
+      for (int t = 0; t < 16; t += 3)
+      {
+        int e0 = MarchingCubesTables.TriangleTable[cubeIndex, t + 0];
+        if (e0 < 0)
+        {
+          break;
+        }
+
+        int e1 = MarchingCubesTables.TriangleTable[cubeIndex, t + 1];
+        int e2 = MarchingCubesTables.TriangleTable[cubeIndex, t + 2];
+        AddSurfaceEdgeSlot(ref slotBlend, usedEdges, e0, snapshot, chunkCoord, positions, densities);
+        AddSurfaceEdgeSlot(ref slotBlend, usedEdges, e1, snapshot, chunkCoord, positions, densities);
+        AddSurfaceEdgeSlot(ref slotBlend, usedEdges, e2, snapshot, chunkCoord, positions, densities);
+      }
+
+      NormalizeMaterialBlend(ref slotBlend);
+    }
+
+    private static void AddSurfaceEdgeSlot(
+      ref MaterialBlend slotBlend,
+      bool[] usedEdges,
+      int edgeIndex,
+      WorldGenerationSnapshot snapshot,
+      Vector3Int chunkCoord,
+      Vector3[] positions,
+      float[] densities)
+    {
+      if (edgeIndex < 0 || edgeIndex >= 12 || usedEdges[edgeIndex])
+      {
+        return;
+      }
+
+      usedEdges[edgeIndex] = true;
+      int cornerA = MarchingCubesTables.EdgeConnection[edgeIndex, 0];
+      int cornerB = MarchingCubesTables.EdgeConnection[edgeIndex, 1];
+      Vector3 position = InterpolateVertex(positions[cornerA], positions[cornerB], densities[cornerA], densities[cornerB]);
+      MaterialBlend surfaceBlend = BuildSurfacePositionMaterialBlend(snapshot, chunkCoord, position);
+      AddBlendWeighted(ref slotBlend, surfaceBlend, 1.0f);
+    }
+
     private static int AddOrGetEdgeVertex(
       MeshData mesh,
       int edgeIndex,
@@ -370,6 +445,9 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
       Vector3[] normals,
       MaterialBlend[] sampleBlends,
       MaterialBlend slotBlend,
+      WorldGenerationSnapshot snapshot,
+      Vector3Int chunkCoord,
+      bool useExactSurfaceMaterial,
       Vector3[] edgeVertices,
       int[] edgeIndices)
     {
@@ -393,12 +471,11 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
         densities[cornerA],
         densities[cornerB]);
 
-      MaterialBlend edgeBlend = BuildEdgeMaterialBlend(
-        slotBlend,
-        sampleBlends[cornerA],
-        sampleBlends[cornerB],
-        densities[cornerA],
-        densities[cornerB]);
+      MaterialBlend rawBlend = useExactSurfaceMaterial
+        ? BuildSurfacePositionMaterialBlend(snapshot, chunkCoord, position)
+        : BuildInterpolatedEdgeMaterialBlend(sampleBlends[cornerA], sampleBlends[cornerB], densities[cornerA], densities[cornerB]);
+
+      MaterialBlend edgeBlend = ProjectBlendToFixedSlots(slotBlend, rawBlend);
 
       int index = mesh.Vertices.Count;
       mesh.Vertices.Add(position);
@@ -430,26 +507,36 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
       return blend;
     }
 
-    private static MaterialBlend BuildEdgeMaterialBlend(
-      MaterialBlend slotBlend,
+    private static MaterialBlend BuildInterpolatedEdgeMaterialBlend(
       MaterialBlend sampleA,
       MaterialBlend sampleB,
       float densityA,
       float densityB)
     {
-      MaterialBlend blend = new()
-      {
-        Id0 = slotBlend.Id0,
-        Id1 = slotBlend.Id1,
-        Id2 = slotBlend.Id2,
-        Id3 = slotBlend.Id3
-      };
-
+      MaterialBlend blend = default;
       float t = EdgeInterpolationT(densityA, densityB);
-      AddBlendToFixedSlots(ref blend, slotBlend, sampleA, 1.0f - t);
-      AddBlendToFixedSlots(ref blend, slotBlend, sampleB, t);
+      AddBlendWeighted(ref blend, sampleA, 1.0f - t);
+      AddBlendWeighted(ref blend, sampleB, t);
       NormalizeMaterialBlend(ref blend);
       return blend;
+    }
+
+    private static MaterialBlend ProjectBlendToFixedSlots(MaterialBlend slots, MaterialBlend source)
+    {
+      MaterialBlend result = new()
+      {
+        Id0 = slots.Id0,
+        Id1 = slots.Id1,
+        Id2 = slots.Id2,
+        Id3 = slots.Id3,
+        W0 = GetBlendWeight(source, slots.Id0),
+        W1 = GetBlendWeight(source, slots.Id1),
+        W2 = GetBlendWeight(source, slots.Id2),
+        W3 = GetBlendWeight(source, slots.Id3)
+      };
+
+      NormalizeMaterialBlend(ref result);
+      return result;
     }
 
     private static MaterialBlend SingleMaterialBlend(ushort materialId)
@@ -467,14 +554,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
       AddMaterialWeight(ref target, source.Id1, source.W1 * weight);
       AddMaterialWeight(ref target, source.Id2, source.W2 * weight);
       AddMaterialWeight(ref target, source.Id3, source.W3 * weight);
-    }
-
-    private static void AddBlendToFixedSlots(ref MaterialBlend target, MaterialBlend slots, MaterialBlend source, float weight)
-    {
-      target.W0 += GetBlendWeight(source, slots.Id0) * weight;
-      target.W1 += GetBlendWeight(source, slots.Id1) * weight;
-      target.W2 += GetBlendWeight(source, slots.Id2) * weight;
-      target.W3 += GetBlendWeight(source, slots.Id3) * weight;
     }
 
     private static float GetBlendWeight(MaterialBlend blend, ushort materialId)
