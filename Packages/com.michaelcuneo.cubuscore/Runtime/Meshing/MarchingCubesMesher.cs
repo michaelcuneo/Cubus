@@ -87,9 +87,12 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
 
               DensityVoxel voxel = sampleVoxelAtWorld(worldVoxel);
               densityGrid[index] = voxel.Density;
-              materialBlendGrid[index] = voxel.Density > 0.0f
-                ? SingleMaterialBlend((ushort)Mathf.Clamp(voxel.MaterialId, 1, 65535))
-                : default;
+
+              // Use the voxel sampler only for shape/density. Material blends still
+              // come from the terrain profile so smooth generated terrain is not
+              // collapsed back to hard DensityVoxel.MaterialId bands.
+              SampleTerrain(snapshot, chunkCoord, lx, ly, lz, out _, out MaterialBlend materialBlend);
+              materialBlendGrid[index] = voxel.Density > 0.0f ? materialBlend : default;
             }
             else
             {
@@ -158,11 +161,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
             }
 
             MaterialBlend slotBlend = BuildCellSlotBlend(densities, sampleBlends);
-
-            if (sampleVoxelAtWorld == null)
-            {
-              AddSurfaceEdgeSlotsToCellBlend(ref slotBlend, snapshot, chunkCoord, cubeIndex, positions, densities);
-            }
+            AddSurfaceEdgeSlotsToCellBlend(ref slotBlend, snapshot, chunkCoord, cubeIndex, positions, densities);
 
             for (int t = 0; t < 16; t += 3)
             {
@@ -180,9 +179,9 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
                 break;
               }
 
-              int v0 = AddOrGetEdgeVertex(mesh, e0, positions, densities, normals, sampleBlends, slotBlend, snapshot, chunkCoord, sampleVoxelAtWorld == null, edgeVertices, edgeIndices);
-              int v1 = AddOrGetEdgeVertex(mesh, e1, positions, densities, normals, sampleBlends, slotBlend, snapshot, chunkCoord, sampleVoxelAtWorld == null, edgeVertices, edgeIndices);
-              int v2 = AddOrGetEdgeVertex(mesh, e2, positions, densities, normals, sampleBlends, slotBlend, snapshot, chunkCoord, sampleVoxelAtWorld == null, edgeVertices, edgeIndices);
+              int v0 = AddOrGetEdgeVertex(mesh, e0, positions, densities, normals, sampleBlends, slotBlend, snapshot, chunkCoord, true, edgeVertices, edgeIndices);
+              int v1 = AddOrGetEdgeVertex(mesh, e1, positions, densities, normals, sampleBlends, slotBlend, snapshot, chunkCoord, true, edgeVertices, edgeIndices);
+              int v2 = AddOrGetEdgeVertex(mesh, e2, positions, densities, normals, sampleBlends, slotBlend, snapshot, chunkCoord, true, edgeVertices, edgeIndices);
 
               if (v0 < 0 || v1 < 0 || v2 < 0 || v0 == v1 || v1 == v2 || v0 == v2)
               {
