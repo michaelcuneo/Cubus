@@ -660,6 +660,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: CubusCore.Runtime::CubusCore.Streaming.WorldStreamer
   viewer: {fileID: 1517188426}
   settings:
+    LoadRadiusInChunks: 0
+    BuildRadiusInChunks: 0
+    RenderRadiusInChunks: 0
     UnloadPaddingInChunks: 2
     ChunksGeneratedPerFrame: 24
     InitialChunksGeneratedPerFrame: 64
@@ -836,7 +839,7 @@ GameObject:
   - component: {fileID: 1453617042}
   m_Layer: 0
   m_Name: Camera
-  m_TagString: Untagged
+  m_TagString: MainCamera
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
