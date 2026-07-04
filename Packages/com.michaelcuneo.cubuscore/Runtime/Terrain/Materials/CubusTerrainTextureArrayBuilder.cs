@@ -18,7 +18,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain.Material
       // must stay linear. Treating every source as Linear crushes imported Quixel
       // base colour and makes the terrain look muddy/dark.
       albedoArray = CreateArray(size, count, library.AlbedoFormat, mipMaps, false);
-      normalArray = CreateArray(size, count, library.NormalFormat, mipMaps, true);
+      normalArray = CreateArray(size, count, TextureFormat.RGBA32, mipMaps, true);
       maskArray = CreateArray(size, count, library.MaskFormat, mipMaps, true);
 
       for (int i = 0; i < count; i++)
