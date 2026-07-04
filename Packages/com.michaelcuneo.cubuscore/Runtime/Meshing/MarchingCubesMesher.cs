@@ -65,7 +65,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
       int totalSamples = numSamplesAxis * numSamplesAxis * numSamplesAxis;
 
       float[] densityGrid = new float[totalSamples];
-      ushort[] materialGrid = new ushort[totalSamples];
+      MaterialBlend[] materialBlendGrid = new MaterialBlend[totalSamples];
 
       for (int sz = 0; sz < numSamplesAxis; sz++)
       {
@@ -87,15 +87,15 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
 
               DensityVoxel voxel = sampleVoxelAtWorld(worldVoxel);
               densityGrid[index] = voxel.Density;
-              materialGrid[index] = voxel.Density > 0.0f
-                ? (ushort)Mathf.Clamp(voxel.MaterialId, 1, 65535)
-                : (ushort)0;
+              materialBlendGrid[index] = voxel.Density > 0.0f
+                ? SingleMaterialBlend((ushort)Mathf.Clamp(voxel.MaterialId, 1, 65535))
+                : default;
             }
             else
             {
-              SampleTerrain(snapshot, chunkCoord, lx, ly, lz, out float density, out ushort materialId);
+              SampleTerrain(snapshot, chunkCoord, lx, ly, lz, out float density, out MaterialBlend materialBlend);
               densityGrid[index] = density;
-              materialGrid[index] = density > 0.0f ? materialId : (ushort)0;
+              materialBlendGrid[index] = density > 0.0f ? materialBlend : default;
             }
           }
         }
@@ -106,7 +106,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
       MeshData mesh = MeshDataPool.Rent(estimatedVerts, estimatedIndices);
 
       float[] densities = new float[8];
-      ushort[] materials = new ushort[8];
+      MaterialBlend[] sampleBlends = new MaterialBlend[8];
       Vector3[] positions = new Vector3[8];
       Vector3[] normals = new Vector3[8];
       Vector3[] edgeVertices = new Vector3[12];
@@ -129,7 +129,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
 
               float density = densityGrid[sampleIndex];
               densities[corner] = density;
-              materials[corner] = materialGrid[sampleIndex];
+              sampleBlends[corner] = materialBlendGrid[sampleIndex];
               normals[corner] = ComputeNormal(densityGrid, sx, sy, sz, numSamplesAxis);
               positions[corner] = new Vector3(
                 sx * safeCellStep * snapshot.VoxelSize,
@@ -157,7 +157,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
               edgeIndices[i] = -1;
             }
 
-            MaterialBlend slotBlend = BuildMaterialBlend(densities, materials);
+            MaterialBlend slotBlend = BuildCellSlotBlend(densities, sampleBlends);
 
             for (int t = 0; t < 16; t += 3)
             {
@@ -175,9 +175,9 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
                 break;
               }
 
-              int v0 = AddOrGetEdgeVertex(mesh, e0, positions, densities, normals, materials, slotBlend, edgeVertices, edgeIndices);
-              int v1 = AddOrGetEdgeVertex(mesh, e1, positions, densities, normals, materials, slotBlend, edgeVertices, edgeIndices);
-              int v2 = AddOrGetEdgeVertex(mesh, e2, positions, densities, normals, materials, slotBlend, edgeVertices, edgeIndices);
+              int v0 = AddOrGetEdgeVertex(mesh, e0, positions, densities, normals, sampleBlends, slotBlend, edgeVertices, edgeIndices);
+              int v1 = AddOrGetEdgeVertex(mesh, e1, positions, densities, normals, sampleBlends, slotBlend, edgeVertices, edgeIndices);
+              int v2 = AddOrGetEdgeVertex(mesh, e2, positions, densities, normals, sampleBlends, slotBlend, edgeVertices, edgeIndices);
 
               if (v0 < 0 || v1 < 0 || v2 < 0 || v0 == v1 || v1 == v2 || v0 == v2)
               {
@@ -222,7 +222,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
       int ly,
       int lz,
       out float density,
-      out ushort materialId)
+      out MaterialBlend materialBlend)
     {
       int wx = chunkCoord.x * VoxelConstants.ChunkSize + lx;
       int wy = chunkCoord.y * VoxelConstants.ChunkSize + ly;
@@ -249,13 +249,97 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
 
       if (density <= 0.0f)
       {
-        materialId = 0;
+        materialBlend = default;
         return;
       }
 
       float depthBelowSurface = (float)(surfaceHeight - sampleZ);
-      int selected = snapshot.TerrainProfile.GetMaterialId(depthBelowSurface, sampleX, sampleY, sampleZ);
-      materialId = (ushort)Mathf.Clamp(selected, 1, 65535);
+      materialBlend = BuildProfileMaterialBlend(snapshot.TerrainProfile, depthBelowSurface, sampleX, sampleY, sampleZ);
+    }
+
+    private static MaterialBlend BuildProfileMaterialBlend(
+      TerrainGenerationProfileSnapshot profile,
+      float depthBelowSurface,
+      double wx,
+      double wy,
+      double wz)
+    {
+      if (profile.MaterialLayers.Length == 0)
+      {
+        return SingleMaterialBlend(1);
+      }
+
+      int selectedIndex = profile.MaterialLayers.Length - 1;
+      for (int i = 0; i < profile.MaterialLayers.Length; i++)
+      {
+        if (depthBelowSurface <= profile.MaterialLayers[i].MaxDepthBelowSurface)
+        {
+          selectedIndex = i;
+          break;
+        }
+      }
+
+      MaterialLayerSnapshotEntry selected = profile.MaterialLayers[selectedIndex];
+
+      if (selectedIndex > 0)
+      {
+        MaterialLayerSnapshotEntry previous = profile.MaterialLayers[selectedIndex - 1];
+        float boundary = previous.MaxDepthBelowSurface;
+        float blendWidth = Mathf.Max(0.001f, selected.BlendWidth);
+        float t = Mathf.Clamp01((depthBelowSurface - boundary) / blendWidth);
+
+        if (t > 0.0f && t < 1.0f)
+        {
+          return BuildLayerTransitionBlend(previous, selected, t, wx, wy, wz, profile.WorldSeed);
+        }
+      }
+
+      if (selectedIndex + 1 < profile.MaterialLayers.Length)
+      {
+        MaterialLayerSnapshotEntry next = profile.MaterialLayers[selectedIndex + 1];
+        float boundary = selected.MaxDepthBelowSurface;
+        float blendWidth = Mathf.Max(0.001f, next.BlendWidth);
+        float t = Mathf.Clamp01((depthBelowSurface - (boundary - blendWidth)) / blendWidth);
+
+        if (t > 0.0f && t < 1.0f)
+        {
+          return BuildLayerTransitionBlend(selected, next, t, wx, wy, wz, profile.WorldSeed);
+        }
+      }
+
+      return SingleMaterialBlend((ushort)Mathf.Clamp(selected.MaterialId, 1, 65535));
+    }
+
+    private static MaterialBlend BuildLayerTransitionBlend(
+      MaterialLayerSnapshotEntry lower,
+      MaterialLayerSnapshotEntry upper,
+      float t,
+      double wx,
+      double wy,
+      double wz,
+      int seed)
+    {
+      float scale = Mathf.Max(0.0001f, upper.NoiseScale);
+      float noise = HashNoise01(
+        (float)(wx * scale),
+        (float)(wy * scale),
+        (float)(wz * scale),
+        seed + upper.MaterialId * 131 + lower.MaterialId * 17);
+
+      float jitter = (noise - 0.5f) * Mathf.Clamp01(upper.NoiseStrength) * 0.5f;
+      float eased = Mathf.Clamp01(t + jitter);
+      eased = eased * eased * (3.0f - 2.0f * eased);
+
+      float lowerWeightBias = Mathf.Max(0.0001f, lower.Weight);
+      float upperWeightBias = Mathf.Max(0.0001f, upper.Weight);
+      float lowerWeight = (1.0f - eased) * lowerWeightBias;
+      float upperWeight = eased * upperWeightBias;
+
+      MaterialBlend blend = default;
+      AddMaterialWeight(ref blend, (ushort)Mathf.Clamp(lower.MaterialId, 1, 65535), lowerWeight);
+      AddMaterialWeight(ref blend, (ushort)Mathf.Clamp(upper.MaterialId, 1, 65535), upperWeight);
+      NormalizeMaterialBlend(ref blend);
+      return blend;
     }
 
     private static Vector3 ComputeNormal(float[] densityGrid, int sx, int sy, int sz, int numSamplesAxis)
@@ -284,7 +368,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
       Vector3[] positions,
       float[] densities,
       Vector3[] normals,
-      ushort[] materials,
+      MaterialBlend[] sampleBlends,
       MaterialBlend slotBlend,
       Vector3[] edgeVertices,
       int[] edgeIndices)
@@ -311,8 +395,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
 
       MaterialBlend edgeBlend = BuildEdgeMaterialBlend(
         slotBlend,
-        materials[cornerA],
-        materials[cornerB],
+        sampleBlends[cornerA],
+        sampleBlends[cornerB],
         densities[cornerA],
         densities[cornerB]);
 
@@ -328,20 +412,18 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
       return index;
     }
 
-    private static MaterialBlend BuildMaterialBlend(float[] densities, ushort[] materials)
+    private static MaterialBlend BuildCellSlotBlend(float[] densities, MaterialBlend[] sampleBlends)
     {
       MaterialBlend blend = default;
 
       for (int i = 0; i < 8; i++)
       {
-        ushort materialId = materials[i];
-
-        if (materialId == 0 || densities[i] <= 0.0f)
+        if (densities[i] <= 0.0f)
         {
           continue;
         }
 
-        AddMaterialWeight(ref blend, materialId, Mathf.Max(0.001f, densities[i]));
+        AddBlendWeighted(ref blend, sampleBlends[i], Mathf.Max(0.001f, densities[i]));
       }
 
       NormalizeMaterialBlend(ref blend);
@@ -350,8 +432,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
 
     private static MaterialBlend BuildEdgeMaterialBlend(
       MaterialBlend slotBlend,
-      ushort materialA,
-      ushort materialB,
+      MaterialBlend sampleA,
+      MaterialBlend sampleB,
       float densityA,
       float densityB)
     {
@@ -364,19 +446,50 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
       };
 
       float t = EdgeInterpolationT(densityA, densityB);
-
-      if (materialA != 0)
-      {
-        AddMaterialWeight(ref blend, materialA, 1.0f - t);
-      }
-
-      if (materialB != 0)
-      {
-        AddMaterialWeight(ref blend, materialB, t);
-      }
-
+      AddBlendToFixedSlots(ref blend, slotBlend, sampleA, 1.0f - t);
+      AddBlendToFixedSlots(ref blend, slotBlend, sampleB, t);
       NormalizeMaterialBlend(ref blend);
       return blend;
+    }
+
+    private static MaterialBlend SingleMaterialBlend(ushort materialId)
+    {
+      return new MaterialBlend
+      {
+        Id0 = materialId == 0 ? (ushort)1 : materialId,
+        W0 = 1.0f
+      };
+    }
+
+    private static void AddBlendWeighted(ref MaterialBlend target, MaterialBlend source, float weight)
+    {
+      AddMaterialWeight(ref target, source.Id0, source.W0 * weight);
+      AddMaterialWeight(ref target, source.Id1, source.W1 * weight);
+      AddMaterialWeight(ref target, source.Id2, source.W2 * weight);
+      AddMaterialWeight(ref target, source.Id3, source.W3 * weight);
+    }
+
+    private static void AddBlendToFixedSlots(ref MaterialBlend target, MaterialBlend slots, MaterialBlend source, float weight)
+    {
+      target.W0 += GetBlendWeight(source, slots.Id0) * weight;
+      target.W1 += GetBlendWeight(source, slots.Id1) * weight;
+      target.W2 += GetBlendWeight(source, slots.Id2) * weight;
+      target.W3 += GetBlendWeight(source, slots.Id3) * weight;
+    }
+
+    private static float GetBlendWeight(MaterialBlend blend, ushort materialId)
+    {
+      if (materialId == 0)
+      {
+        return 0.0f;
+      }
+
+      float weight = 0.0f;
+      if (blend.Id0 == materialId) weight += blend.W0;
+      if (blend.Id1 == materialId) weight += blend.W1;
+      if (blend.Id2 == materialId) weight += blend.W2;
+      if (blend.Id3 == materialId) weight += blend.W3;
+      return weight;
     }
 
     private static void AddMaterialWeight(ref MaterialBlend blend, ushort materialId, float weight)
@@ -531,6 +644,12 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
     {
       Vector3 normal = n0 + (n1 - n0) * EdgeInterpolationT(d0, d1);
       return normal.sqrMagnitude > 0.000001f ? normal.normalized : Vector3.up;
+    }
+
+    private static float HashNoise01(float x, float y, float z, int seed)
+    {
+      float n = x * 12.9898f + y * 78.233f + z * 37.719f + seed * 0.12345f;
+      return Mathf.Repeat(Mathf.Sin(n) * 43758.5453f, 1.0f);
     }
   }
 }
