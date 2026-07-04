@@ -152,9 +152,16 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         return cachedVisibilityCamera;
       }
 
+      cachedVisibilityCamera = null;
+
       if (viewer != null)
       {
         cachedVisibilityCamera = viewer.GetComponent<Camera>();
+
+        if (cachedVisibilityCamera == null || !cachedVisibilityCamera.isActiveAndEnabled)
+        {
+          cachedVisibilityCamera = viewer.GetComponentInChildren<Camera>(true);
+        }
       }
 
       if (cachedVisibilityCamera == null || !cachedVisibilityCamera.isActiveAndEnabled)
