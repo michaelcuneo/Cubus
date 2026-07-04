@@ -113,19 +113,9 @@ Shader "Cubus/DensityBiomeURP"
         float x = fmod(id, 256.0);
         float y = floor(id / 256.0);
         float2 uv = (float2(x, y) + 0.5) / 256.0;
-        half4 encoded = SAMPLE_TEXTURE2D_LOD(
-          _TerrainMaterialSliceLookup,
-          sampler_TerrainMaterialSliceLookup,
-          uv,
-          0.0);
-
+        half4 encoded = SAMPLE_TEXTURE2D_LOD(_TerrainMaterialSliceLookup, sampler_TerrainMaterialSliceLookup, uv, 0.0);
         float encodedSlice = round(encoded.r * 255.0) + round(encoded.g * 255.0) * 256.0;
-
-        if (encodedSlice <= 0.5)
-        {
-          return 0.0;
-        }
-
+        if (encodedSlice <= 0.5) return 0.0;
         float count = max(1.0, (float)_TerrainMaterialCount);
         return clamp(encodedSlice - 1.0, 0.0, count - 1.0);
       }
@@ -161,8 +151,7 @@ Shader "Cubus/DensityBiomeURP"
 
       float3 UnpackTerrainNormal(half4 sampleValue)
       {
-        float encodedX = abs(sampleValue.a - 1.0) > 0.001 ? sampleValue.a : sampleValue.r;
-        float2 xy = float2(encodedX, sampleValue.g) * 2.0 - 1.0;
+        float2 xy = sampleValue.rg * 2.0 - 1.0;
         xy = clamp(xy, -0.999, 0.999);
         float z = sqrt(saturate(1.0 - dot(xy, xy)));
         return normalize(float3(xy, z));
@@ -284,10 +273,7 @@ Shader "Cubus/DensityBiomeURP"
       {
         weights = max(weights, 0.0);
         float total = weights.x + weights.y + weights.z + weights.w;
-        if (total <= 0.0001)
-        {
-          return float4(1.0, 0.0, 0.0, 0.0);
-        }
+        if (total <= 0.0001) return float4(1.0, 0.0, 0.0, 0.0);
         return weights / total;
       }
 
@@ -396,18 +382,10 @@ Shader "Cubus/DensityBiomeURP"
         float roughness = lerp(roughnessFallback, packedRoughness, saturate((maskSignal - 0.05) * 4.0));
         float ambientOcclusion = lerp(1.0, saturate(mask.g), saturate((mask.g - 0.05) * 4.0));
         float3 baseColor = saturate(albedo.rgb * _Tint.rgb * _AlbedoBrightness);
-
-        if (_DebugMode >= 0.5)
-        {
-          return half4(DebugModeColor(_DebugMode, baseColor, meshNormalWS, materialNormalWS, mask, roughness, packedSmoothness, ambientOcclusion, weights), 1.0);
-        }
-
+        if (_DebugMode >= 0.5) return half4(DebugModeColor(_DebugMode, baseColor, meshNormalWS, materialNormalWS, mask, roughness, packedSmoothness, ambientOcclusion, weights), 1.0);
         float3 lit = ApplyLighting(baseColor, IN.positionWS, materialNormalWS, roughness);
         lit *= lerp(1.0, ambientOcclusion, 0.35);
-        if (_UseSceneFog > 0.5)
-        {
-          lit = MixFog(lit, IN.fogCoord);
-        }
+        if (_UseSceneFog > 0.5) lit = MixFog(lit, IN.fogCoord);
         return half4(lit, 1.0);
       }
 
