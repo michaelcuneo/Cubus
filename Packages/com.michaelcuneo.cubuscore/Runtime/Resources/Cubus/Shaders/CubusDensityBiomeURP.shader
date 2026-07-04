@@ -20,6 +20,7 @@ Shader "Cubus/DensityBiomeURP"
     _DirectLightStrength("Direct Sun Strength", Range(0, 3)) = 1.35
     _ShadowStrength("Shadow Strength", Range(0, 1)) = 0.45
     _UseSceneFog("Use Scene Fog", Range(0, 1)) = 0
+    _DebugMode("Debug Mode: 0 Final, 1 Albedo, 2 Mesh Normal, 3 Material Normal, 4 Packed Mask, 5 Rough/Smooth/AO, 6 Weights", Range(0, 6)) = 0
   }
 
   SubShader
@@ -101,6 +102,7 @@ Shader "Cubus/DensityBiomeURP"
       float _DirectLightStrength;
       float _ShadowStrength;
       float _UseSceneFog;
+      float _DebugMode;
       int _TerrainMaterialCount;
       float4 _TerrainMaterialParams[128];
       CBUFFER_END
@@ -396,6 +398,54 @@ Shader "Cubus/DensityBiomeURP"
         return albedoRgb * (ambient + direct) + specular + rim;
       }
 
+      float3 DebugModeColor(
+        float debugMode,
+        float3 baseColor,
+        float3 meshNormalWS,
+        float3 materialNormalWS,
+        half4 packedMask,
+        float roughness,
+        float smoothness,
+        float ambientOcclusion,
+        float4 weights)
+      {
+        int mode = (int)round(debugMode);
+
+        if (mode == 1)
+        {
+          return baseColor;
+        }
+
+        if (mode == 2)
+        {
+          return normalize(meshNormalWS) * 0.5 + 0.5;
+        }
+
+        if (mode == 3)
+        {
+          return normalize(materialNormalWS) * 0.5 + 0.5;
+        }
+
+        if (mode == 4)
+        {
+          // Fab packed mask visualisation: R=metallic, G=AO, B=smoothness/gloss.
+          return float3(saturate(packedMask.r), saturate(packedMask.g), saturate(packedMask.a));
+        }
+
+        if (mode == 5)
+        {
+          // R=roughness, G=smoothness/gloss, B=AO.
+          return float3(saturate(roughness), saturate(smoothness), saturate(ambientOcclusion));
+        }
+
+        if (mode == 6)
+        {
+          return saturate(weights.rgb + weights.www * 0.3333333);
+        }
+
+        return baseColor;
+      }
+
       Varyings vert(Attributes IN)
       {
         Varyings OUT;
@@ -486,6 +536,11 @@ Shader "Cubus/DensityBiomeURP"
         float ambientOcclusion = lerp(1.0, saturate(mask.g), saturate((mask.g - 0.05) * 4.0));
 
         float3 baseColor = saturate(albedo.rgb * _Tint.rgb * _AlbedoBrightness);
+
+        if (_DebugMode >= 0.5)
+        {
+          return half4(DebugModeColor(_DebugMode, baseColor, meshNormalWS, materialNormalWS, mask, roughness, packedSmoothness, ambientOcclusion, weights), 1.0);
+        }
 
         float3 lit = ApplyLighting(
           baseColor,
