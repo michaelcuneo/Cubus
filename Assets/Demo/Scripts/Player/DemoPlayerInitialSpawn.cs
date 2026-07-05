@@ -1,3 +1,4 @@
+using System.Collections;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Editing;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming;
@@ -12,9 +13,15 @@ namespace Assets.Demo.Scripts.Player
     [SerializeField] private CubusWorld world;
     [SerializeField] private bool assignAsStreamingViewer = true;
 
+    [Header("Spawn Grounding")]
+    [SerializeField] private float terrainColliderWaitTimeoutSeconds = 15.0f;
+    [SerializeField] private float terrainColliderRetrySeconds = 0.05f;
+
     [Header("Components To Disable Until Spawn")]
     [SerializeField] private CharacterController characterController;
     [SerializeField] private MonoBehaviour firstPersonController;
+
+    private Coroutine spawnRoutine;
 
     private void Awake()
     {
@@ -64,6 +71,12 @@ namespace Assets.Demo.Scripts.Player
       {
         world.OnInitialTerrainReady -= HandleInitialTerrainReady;
       }
+
+      if (spawnRoutine != null)
+      {
+        StopCoroutine(spawnRoutine);
+        spawnRoutine = null;
+      }
     }
 
     private void SetPlayerEnabled(bool enabled)
@@ -83,8 +96,49 @@ namespace Assets.Demo.Scripts.Player
     {
       SetPlayerEnabled(false);
 
-      Vector3 spawnPosition = ResolveTerrainSpawnPosition(suggestedSpawnLocation);
+      if (spawnRoutine != null)
+      {
+        StopCoroutine(spawnRoutine);
+      }
 
+      spawnRoutine = StartCoroutine(SpawnWhenTerrainColliderReady(suggestedSpawnLocation));
+    }
+
+    private IEnumerator SpawnWhenTerrainColliderReady(Vector3 suggestedSpawnLocation)
+    {
+      float startTime = Time.realtimeSinceStartup;
+      float retryDelay = Mathf.Max(0.01f, terrainColliderRetrySeconds);
+      float timeout = Mathf.Max(0.0f, terrainColliderWaitTimeoutSeconds);
+
+      while (true)
+      {
+        Physics.SyncTransforms();
+
+        if (TryResolveTerrainSpawnPosition(suggestedSpawnLocation, out Vector3 spawnPosition))
+        {
+          ApplySpawnPosition(spawnPosition);
+          spawnRoutine = null;
+          yield break;
+        }
+
+        bool timedOut = timeout > 0.0f && Time.realtimeSinceStartup - startTime >= timeout;
+
+        if (timedOut)
+        {
+          Debug.LogWarning(
+            $"DemoPlayerInitialSpawn timed out waiting for a terrain collider below {suggestedSpawnLocation}. " +
+            "Keeping the player controller disabled to avoid falling through the world.");
+
+          spawnRoutine = null;
+          yield break;
+        }
+
+        yield return new WaitForSeconds(retryDelay);
+      }
+    }
+
+    private void ApplySpawnPosition(Vector3 spawnPosition)
+    {
       transform.SetPositionAndRotation(
         spawnPosition,
           Quaternion.Euler(0.0f, transform.rotation.eulerAngles.y, 0.0f)
@@ -115,11 +169,13 @@ namespace Assets.Demo.Scripts.Player
       Debug.Log($"Demo player spawned at {transform.position}");
     }
 
-    private Vector3 ResolveTerrainSpawnPosition(Vector3 suggestedSpawnLocation)
+    private bool TryResolveTerrainSpawnPosition(Vector3 suggestedSpawnLocation, out Vector3 spawnPosition)
     {
+      spawnPosition = suggestedSpawnLocation;
+
       if (characterController == null)
       {
-        return suggestedSpawnLocation;
+        return true;
       }
 
       const float rayUp = 128.0f;
@@ -159,12 +215,13 @@ namespace Assets.Demo.Scripts.Player
 
       if (float.IsInfinity(bestDistance))
       {
-        return suggestedSpawnLocation;
+        return false;
       }
 
       float halfHeight = characterController.height * 0.5f;
       float y = bestPoint.y + halfHeight + characterController.skinWidth + 0.05f;
-      return new Vector3(suggestedSpawnLocation.x, y, suggestedSpawnLocation.z);
+      spawnPosition = new Vector3(suggestedSpawnLocation.x, y, suggestedSpawnLocation.z);
+      return true;
     }
   }
 }
