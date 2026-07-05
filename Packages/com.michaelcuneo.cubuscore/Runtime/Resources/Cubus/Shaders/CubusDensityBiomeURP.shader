@@ -15,9 +15,9 @@ Shader "Cubus/DensityBiomeURP"
     _FresnelStrength("Fresnel Rim", Range(0, 2)) = 0.03
     _AmbientStrength("Ambient Strength", Range(0, 2)) = 0.85
     _DirectLightStrength("Direct Sun Strength", Range(0, 3)) = 1.35
-    _ShadowStrength("Shadow Strength", Range(0, 1)) = 0.45
+    _ShadowStrength("Shadow Strength", Range(0, 1)) = 0.7
     _UseSceneFog("Use Scene Fog", Range(0, 1)) = 0
-    _DebugMode("Debug Mode: 0 Final, 1 Albedo, 2 Mesh Normal, 3 Material Normal, 4 Packed Mask, 5 Rough/Smooth/AO, 6 Weights", Range(0, 6)) = 0
+    _DebugMode("Debug Mode: 0 Final, 1 Albedo, 2 Mesh Normal, 3 Material Normal, 4 Packed Mask, 5 Rough/Smooth/AO, 6 Weights, 7 ShadowAtten, 8 Sun NdotL", Range(0, 8)) = 0
   }
 
   SubShader
@@ -248,17 +248,24 @@ Shader "Cubus/DensityBiomeURP"
         float3 viewDir = SafeNormalize(_WorldSpaceCameraPos - positionWS);
         float4 shadowCoord = TransformWorldToShadowCoord(positionWS);
         Light mainLight = GetMainLight(shadowCoord);
-        float atten = lerp(1.0, mainLight.shadowAttenuation * mainLight.distanceAttenuation, saturate(_ShadowStrength));
+        // Use shadowAttenuation EXACTLY as debug mode 7 does (which is proven correct).
+        // Do NOT multiply by distanceAttenuation here: for runtime-streamed chunks that
+        // term can read 0, which would zero the sun everywhere and erase the shadow edge.
+        float shadow = saturate(mainLight.shadowAttenuation);
         float ndl = saturate(dot(n, mainLight.direction));
-        float3 direct = mainLight.color * saturate(ndl * 0.85 + 0.15) * atten * _DirectLightStrength;
+        float3 direct = mainLight.color * saturate(ndl * 0.85 + 0.15) * shadow * _DirectLightStrength;
         float3 skyAmbient = max(SampleSH(n), 0.20.xxx) * _AmbientStrength;
         float terrainRoughness = saturate(max(roughness, 0.55));
         float smoothness = saturate(_Smoothness) * saturate(1.0 - terrainRoughness) * 0.35;
         float3 halfVec = SafeNormalize(mainLight.direction + viewDir);
-        float specTerm = pow(saturate(dot(n, halfVec)), exp2(lerp(2.0, 8.0, smoothness))) * _SpecularStrength * 0.35 * ndl * atten;
+        float specTerm = pow(saturate(dot(n, halfVec)), exp2(lerp(2.0, 8.0, smoothness))) * _SpecularStrength * 0.35 * ndl * shadow;
         float3 specular = mainLight.color * specTerm;
         float3 rim = skyAmbient * pow(1.0 - saturate(dot(n, viewDir)), 5.0) * _FresnelStrength * 0.35;
-        return albedoRgb * (max(skyAmbient, 0.18.xxx) + direct) + specular + rim;
+        float3 lit = albedoRgb * (max(skyAmbient, 0.18.xxx) + direct) + specular + rim;
+        // Darken the whole surface where the sun is occluded so cast shadows read even when
+        // ambient dominates. Floored at 0.6 so a zeroed _ShadowStrength can't hide shadows.
+        lit *= lerp(1.0, shadow, saturate(max(_ShadowStrength, 0.6)));
+        return lit;
       }
 
       float3 DebugModeColor(float debugMode, float3 baseColor, float3 meshNormalWS, float3 materialNormalWS, half4 packedMask, float roughness, float smoothness, float ambientOcclusion, float4 weights)
@@ -323,11 +330,128 @@ Shader "Cubus/DensityBiomeURP"
         float roughness = saturate(max(lerp(roughnessFallback, packedRoughness, saturate((maskSignal - 0.05) * 4.0)), 0.55));
         float ambientOcclusion = lerp(1.0, saturate(mask.g), saturate((mask.g - 0.05) * 4.0));
         float3 baseColor = saturate(albedo.rgb * _Tint.rgb * _AlbedoBrightness);
+        if (_DebugMode >= 6.5)
+        {
+          // Diagnostic: sample the main light exactly as ApplyLighting does.
+          // Mode 7 shows raw shadow attenuation (BLACK = fully shadowed, WHITE = lit).
+          //   If casters work, dark blobs appear on the ground under/behind objects.
+          //   If it is pure white everywhere, the ground is not receiving the shadow map.
+          // Mode 8 shows sun N.L (confirms the main light direction is valid at all).
+          float4 dbgShadowCoord = TransformWorldToShadowCoord(IN.positionWS);
+          Light dbgLight = GetMainLight(dbgShadowCoord);
+          if (_DebugMode >= 7.5) return half4(saturate(dot(meshNormalWS, dbgLight.direction)).xxx, 1.0);
+          return half4(saturate(dbgLight.shadowAttenuation).xxx, 1.0);
+        }
         if (_DebugMode >= 0.5) return half4(DebugModeColor(_DebugMode, baseColor, meshNormalWS, materialNormalWS, mask, roughness, packedSmoothness, ambientOcclusion, weights), 1.0);
         float3 lit = ApplyLighting(baseColor, IN.positionWS, materialNormalWS, roughness);
         lit *= lerp(1.0, ambientOcclusion, 0.35);
         if (_UseSceneFog > 0.5) lit = MixFog(lit, IN.fogCoord);
         return half4(lit, 1.0);
+      }
+      ENDHLSL
+    }
+
+    Pass
+    {
+      Name "ShadowCaster"
+      Tags { "LightMode" = "ShadowCaster" }
+      ZWrite On
+      ZTest LEqual
+      ColorMask 0
+      Cull Back
+
+      HLSLPROGRAM
+      #pragma vertex ShadowPassVertex
+      #pragma fragment ShadowPassFragment
+      #pragma multi_compile_vertex _ _CASTING_PUNCTUAL_LIGHT_SHADOW
+
+      #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+      #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Shadows.hlsl"
+
+      float3 _LightDirection;
+      float3 _LightPosition;
+
+      struct ShadowAttributes
+      {
+        float4 positionOS : POSITION;
+        float3 normalOS : NORMAL;
+      };
+
+      struct ShadowVaryings
+      {
+        float4 positionCS : SV_POSITION;
+      };
+
+      float4 GetShadowPositionHClip(ShadowAttributes IN)
+      {
+        float3 positionWS = TransformObjectToWorld(IN.positionOS.xyz);
+        float3 normalWS = TransformObjectToWorldNormal(IN.normalOS);
+
+      #if _CASTING_PUNCTUAL_LIGHT_SHADOW
+        float3 lightDirectionWS = normalize(_LightPosition - positionWS);
+      #else
+        float3 lightDirectionWS = _LightDirection;
+      #endif
+
+        float4 positionCS = TransformWorldToHClip(ApplyShadowBias(positionWS, normalWS, lightDirectionWS));
+
+      #if UNITY_REVERSED_Z
+        positionCS.z = min(positionCS.z, UNITY_NEAR_CLIP_VALUE);
+      #else
+        positionCS.z = max(positionCS.z, UNITY_NEAR_CLIP_VALUE);
+      #endif
+
+        return positionCS;
+      }
+
+      ShadowVaryings ShadowPassVertex(ShadowAttributes IN)
+      {
+        ShadowVaryings OUT;
+        OUT.positionCS = GetShadowPositionHClip(IN);
+        return OUT;
+      }
+
+      half4 ShadowPassFragment(ShadowVaryings IN) : SV_Target
+      {
+        return 0;
+      }
+      ENDHLSL
+    }
+
+    Pass
+    {
+      Name "DepthOnly"
+      Tags { "LightMode" = "DepthOnly" }
+      ZWrite On
+      ColorMask R
+      Cull Back
+
+      HLSLPROGRAM
+      #pragma vertex DepthOnlyVertex
+      #pragma fragment DepthOnlyFragment
+
+      #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+
+      struct DepthAttributes
+      {
+        float4 positionOS : POSITION;
+      };
+
+      struct DepthVaryings
+      {
+        float4 positionCS : SV_POSITION;
+      };
+
+      DepthVaryings DepthOnlyVertex(DepthAttributes IN)
+      {
+        DepthVaryings OUT;
+        OUT.positionCS = TransformObjectToHClip(IN.positionOS.xyz);
+        return OUT;
+      }
+
+      half4 DepthOnlyFragment(DepthVaryings IN) : SV_Target
+      {
+        return 0;
       }
       ENDHLSL
     }

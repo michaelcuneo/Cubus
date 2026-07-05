@@ -214,7 +214,9 @@ Shader "Cubus/BiomeAtlasURP"
         float4 shadowCoord = TransformWorldToShadowCoord(positionWS);
         Light mainLight = GetMainLight(shadowCoord);
 
-        float atten = mainLight.shadowAttenuation * mainLight.distanceAttenuation;
+        // Use shadowAttenuation only. distanceAttenuation can read 0 on runtime-streamed
+        // chunks, which would zero the sun everywhere and erase cast shadows entirely.
+        float atten = mainLight.shadowAttenuation;
         float ndl = saturate(dot(n, mainLight.direction));
         float3 direct = mainLight.color * ndl * atten * _DirectLightStrength;
 

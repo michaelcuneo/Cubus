@@ -33,6 +33,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
     [SerializeField][Range(0f, 1f)] private float surfaceSmoothness = 0.12f;
     [SerializeField][Range(0f, 2f)] private float specularStrength = 0.25f;
     [SerializeField][Range(0f, 2f)] private float fresnelStrength = 0.15f;
+    [SerializeField][Range(0f, 1f)] private float shadowStrength = 0.7f;
 
     [SerializeField] private bool logRenderedChunkMeshes;
 
@@ -708,6 +709,9 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
       SetFloatIfPropertyExists(material, "_SurfaceSmoothness", surfaceSmoothness);
       SetFloatIfPropertyExists(material, "_SpecularStrength", specularStrength);
       SetFloatIfPropertyExists(material, "_FresnelStrength", fresnelStrength);
+      // Force a usable shadow strength so cast shadows read on the terrain regardless of
+      // whatever value the assigned base material was authored with (which may be 0).
+      SetFloatIfPropertyExists(material, "_ShadowStrength", shadowStrength);
     }
 
     private void ApplyBlockMaterialLookups(Material material)
