@@ -166,14 +166,13 @@ namespace Assets.Demo.Scripts.Player
 
       Physics.SyncTransforms();
 
+      // The spawn gate already prewarms streaming around this player and the
+      // scene normally assigns the same viewer. Calling SetViewer here forced
+      // another full streaming-set refresh at the exact moment gameplay began,
+      // which could cause a large native allocation spike and an immediate CTD.
       if (assignAsStreamingViewer)
       {
-        WorldStreamer streamer = FindAnyObjectByType<WorldStreamer>();
-
-        if (streamer != null)
-        {
-          streamer.SetViewer(transform);
-        }
+        Debug.Log("Demo player using the streaming viewer prepared by the spawn gate.");
       }
 
       BlockEditTool editTool = BlockEditTool.FindWorldEditTool()
