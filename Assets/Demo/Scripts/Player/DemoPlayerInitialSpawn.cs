@@ -24,6 +24,8 @@ namespace Assets.Demo.Scripts.Player
 
     private Coroutine spawnRoutine;
 
+    public bool IsSpawnComplete { get; private set; }
+
     private void Awake()
     {
       ResolveReferences();
@@ -96,14 +98,30 @@ namespace Assets.Demo.Scripts.Player
 
     private void HandleInitialTerrainReady(Vector3 suggestedSpawnLocation)
     {
+      IsSpawnComplete = false;
       SetPlayerEnabled(false);
 
       if (spawnRoutine != null)
       {
         StopCoroutine(spawnRoutine);
+        spawnRoutine = null;
       }
 
       Vector3 requestedSpawnLocation = ResolveRequestedSpawnLocation(suggestedSpawnLocation);
+
+      // The normal spawn gate only broadcasts readiness after it has already
+      // verified a ChunkView collider beneath the requested spawn column. Finish
+      // that spawn synchronously so the loading screen cannot advance one frame
+      // ahead of the actual player placement.
+      Physics.SyncTransforms();
+      if (TryResolveTerrainSpawnPosition(requestedSpawnLocation, out Vector3 spawnPosition))
+      {
+        ApplySpawnPosition(spawnPosition);
+        return;
+      }
+
+      // Manual/debug release paths can still arrive before collision is ready.
+      // Keep the loading screen and player gated while we retry safely.
       spawnRoutine = StartCoroutine(SpawnWhenTerrainColliderReady(requestedSpawnLocation));
     }
 
@@ -184,6 +202,7 @@ namespace Assets.Demo.Scripts.Player
       }
 
       SetPlayerEnabled(true);
+      IsSpawnComplete = true;
       Debug.Log($"Demo player spawned at {transform.position}");
     }
 
