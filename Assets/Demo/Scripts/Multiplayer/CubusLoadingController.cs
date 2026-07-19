@@ -10,6 +10,7 @@ using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 using Assets.Demo.Scripts.Core;
 using Assets.Demo.Scripts.UI;
+using Assets.Demo.Scripts.Player;
 
 namespace Assets.Demo.Scripts.Multiplayer
 {
@@ -34,10 +35,12 @@ namespace Assets.Demo.Scripts.Multiplayer
 
     private string status = "Starting Cubus loading scene.";
     private string detail = string.Empty;
-    private string loadedGameplayScenePath = string.Empty;
     private float startedAt;
+    private string loadedGameplayScenePath;
     private float sceneLoadProgress;
     private float terrainProgress;
+    private float peakTerrainWork;
+    private float displayedProgress;
     private float settledTerrainFallbackStartedAt = -1.0f;
     private float lastConsoleDiagnosticsAt = -999.0f;
     private bool sceneLoadDone;
@@ -50,6 +53,7 @@ namespace Assets.Demo.Scripts.Multiplayer
     private CubusWorld world;
     private WorldStreamer streamer;
     private DemoNetworkManager network;
+    private DemoPlayerInitialSpawn playerSpawn;
 
     private CanvasGroup canvasGroup;
     private Text statusText;
@@ -145,6 +149,7 @@ namespace Assets.Demo.Scripts.Multiplayer
 
       yield return WaitForGameplayReferences();
       yield return WaitForInitialTerrainReady();
+      yield return WaitForPlayerSpawnComplete();
 
       if (failed)
       {
@@ -153,7 +158,7 @@ namespace Assets.Demo.Scripts.Multiplayer
 
       preparationDone = true;
       status = "Ready";
-      detail = "Initial terrain is ready. Entering CubusGame.";
+      detail = "Terrain and Player Spawn are ready. Entering CubusGame.";
       terrainProgress = 1.0f;
       UpdateLoadingUi();
       LogDiagnosticsSnapshot("Ready to enter game", true);
@@ -252,6 +257,50 @@ namespace Assets.Demo.Scripts.Multiplayer
       LogDiagnosticsSnapshot("Found gameplay systems", true);
     }
 
+    private IEnumerator WaitForPlayerSpawnComplete()
+    {
+      status = "Placing player";
+      detail = "Waiting for terrain collision and player grounding...";
+      UpdateLoadingUi();
+
+      float start = Time.realtimeSinceStartup;
+
+      while (playerSpawn == null || !playerSpawn.IsSpawnComplete)
+      {
+        FindRuntimeReferences();
+
+        // Terrain occupies the loading bar up to 95%.
+        // The final 5% is reserved for confirmed player placement.
+        terrainProgress = 1.0f;
+        detail = playerSpawn == null
+            ? "Waiting for player spawn controller..."
+            : "Grounding player on terrain...";
+
+        UpdateLoadingUi();
+
+        if (
+          preparationTimeoutSeconds > 0.0f &&
+          Time.realtimeSinceStartup - start > preparationTimeoutSeconds
+        )
+        {
+          Fail(
+            $"Timed out waiting for player spawn after " +
+            $"{preparationTimeoutSeconds:0.0}s."
+          );
+          yield break;
+        }
+
+        yield return null;
+      }
+
+      detail = "Player grounded and ready.";
+      UpdateLoadingUi();
+
+      // Allow one rendered frame with the player fully enabled before removing
+      // the loading overlay.
+      yield return new WaitForEndOfFrame();
+    }
+
     private IEnumerator WaitForInitialTerrainReady()
     {
       if (world == null)
@@ -309,28 +358,54 @@ namespace Assets.Demo.Scripts.Multiplayer
         return;
       }
 
-      float desired = Mathf.Max(0.0f, streamer.DesiredChunkCount);
-      float applied = Mathf.Max(streamer.TotalBlockMeshApplies, streamer.TotalDensityMeshApplies);
-      float pending = streamer.PendingLoadCount + streamer.PendingRenderCount;
-      float active = streamer.ActiveChunkLoadTaskCount + streamer.ActiveBlockBuildTaskCount + streamer.ActiveDensityBuildTaskCount;
+      float pending =
+        streamer.PendingLoadCount +
+        streamer.PendingRenderCount +
+        streamer.PendingUnloadCount;
 
-      if (desired > 0.0f)
-      {
-        float nonEmptyTarget = Mathf.Max(1.0f, desired - streamer.KnownEmptyChunkCount);
-        terrainProgress = Mathf.Clamp01(applied / nonEmptyTarget);
-      }
-      else if (world.IsGeneratingWorld)
-      {
-        terrainProgress = Mathf.Clamp01(world.GenerationProgress * 0.5f);
-      }
-      else
-      {
-        terrainProgress = 0.05f;
-      }
+      float active =
+        streamer.ActiveChunkLoadTaskCount +
+        streamer.ActiveBlockBuildTaskCount +
+        streamer.ActiveDensityBuildTaskCount;
 
-      detail = pending > 0.0f || active > 0.0f
+      float remainingWork = pending + active;
+
+      // Record the largest amount of current work observed during this load.
+      // Unlike TotalBlockMeshApplies and TotalDensityMeshApplies, this is scoped
+      // to the current loading session and cannot already exceed the target.
+      peakTerrainWork = Mathf.Max(
+        peakTerrainWork,
+        remainingWork,
+        streamer.DesiredChunkCount
+      );
+
+      float streamingProgress = peakTerrainWork > 0.0f
+          ? 1.0f - Mathf.Clamp01(remainingWork / peakTerrainWork)
+          : 0.0f;
+
+      float generationProgress = world.IsGeneratingWorld
+          ? Mathf.Clamp01(world.GenerationProgress)
+          : 0.0f;
+
+      // Generation and streaming may overlap. Use whichever stage has made more
+      // genuine progress, but never claim terrain is complete before the world
+      // itself releases initial terrain readiness.
+      terrainProgress = Mathf.Max(
+        generationProgress * 0.35f,
+        streamingProgress
+      );
+
+      terrainProgress = Mathf.Clamp(
+        terrainProgress,
+        0.0f,
+        world.IsInitialTerrainReady ? 1.0f : 0.98f
+      );
+
+      detail = remainingWork > 0.0f
           ? $"Streaming terrain... Pending {pending:0}, Active {active:0}"
-          : "Finalising terrain...";
+          : world.IsInitialTerrainReady
+              ? "Terrain ready. Placing player..."
+              : "Finalising terrain...";
     }
 
     private void TryReleaseSettledStreamedTerrain(float waitStartedAt)
@@ -518,12 +593,48 @@ namespace Assets.Demo.Scripts.Multiplayer
 
     private float GetCombinedProgress()
     {
-      if (failed || preparationDone)
+      if (preparationDone)
       {
-        return 1.0f;
+        displayedProgress = 1.0f;
+        return displayedProgress;
       }
 
-      return Mathf.Clamp01((sceneLoadProgress * 0.25f) + (terrainProgress * 0.75f));
+      if (failed)
+      {
+        return displayedProgress;
+      }
+
+      // Scene loading: 0-10%
+      float sceneStage = sceneLoadProgress * 0.10f;
+
+      // Terrain generation and streaming: 10-95%
+      float terrainStage = sceneLoadDone
+          ? terrainProgress * 0.85f
+          : 0.0f;
+
+      // Confirmed collision-grounded player spawn: 95-100%
+      float spawnStage =
+          playerSpawn != null && playerSpawn.IsSpawnComplete
+              ? 0.05f
+              : 0.0f;
+
+      float calculatedProgress = Mathf.Clamp01(
+        sceneStage + terrainStage + spawnStage
+      );
+
+      // Loading progress should never move backwards if new work is queued.
+      displayedProgress = Mathf.Max(
+        displayedProgress,
+        calculatedProgress
+      );
+
+      // Do not display 100% until the entire loading sequence is complete.
+      if (!preparationDone)
+      {
+        displayedProgress = Mathf.Min(displayedProgress, 0.99f);
+      }
+
+      return displayedProgress;
     }
 
     private void FindRuntimeReferences()
@@ -536,6 +647,11 @@ namespace Assets.Demo.Scripts.Multiplayer
       if (streamer == null && world != null)
       {
         streamer = world.GetComponent<WorldStreamer>();
+      }
+
+      if (playerSpawn == null)
+      {
+        playerSpawn = FindAnyObjectByType<DemoPlayerInitialSpawn>();
       }
 
       if (network == null)
