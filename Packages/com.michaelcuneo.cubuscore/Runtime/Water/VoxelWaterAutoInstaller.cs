@@ -13,9 +13,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Water
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     private static void InstallAfterInitialSceneLoad()
     {
-      InstallInLoadedScenes();
-      SceneManager.sceneLoaded -= OnSceneLoaded;
-      SceneManager.sceneLoaded += OnSceneLoaded;
+      // Water is disabled
     }
 
     private static void OnSceneLoaded(Scene scene, LoadSceneMode mode)
