@@ -7,6 +7,8 @@ namespace UnityEngine.AzureSky
 {
     public class AzureFogScatteringFeature : ScriptableRendererFeature
     {
+        [SerializeField] private bool m_enableFogScattering = true;
+
         /// <summary>The instance of the unity's RenderPassEvent class.</summary>
         public RenderPassEvent fogRenderPassEvent { get => m_fogRenderPassEvent; set => m_fogRenderPassEvent = value; }
         [SerializeField] private RenderPassEvent m_fogRenderPassEvent = RenderPassEvent.BeforeRenderingSkybox;
@@ -30,6 +32,18 @@ namespace UnityEngine.AzureSky
 
         public override void AddRenderPasses(ScriptableRenderer renderer, ref RenderingData renderingData)
         {
+            Camera camera = renderingData.cameraData.camera;
+            if (camera == null)
+            {
+                return;
+            }
+
+            // Skip non-game cameras to avoid unintended fog overlays in utility passes.
+            if (camera.cameraType != CameraType.Game && camera.cameraType != CameraType.SceneView)
+            {
+                return;
+            }
+
             if (m_fogRendererMaterial == null)
             {
                 Debug.LogWarningFormat("Missing the Fog Renderer Material. {0} blit pass will not execute. Check for missing reference in the assigned renderer.", GetType().Name);

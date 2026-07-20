@@ -13,6 +13,7 @@ MonoBehaviour:
   m_Name: AzureFogScatteringFeature
   m_EditorClassIdentifier: Assembly-CSharp-firstpass::UnityEngine.AzureSky.AzureFogScatteringFeature
   m_Active: 1
+  m_enableFogScattering: 1
   m_fogRenderPassEvent: 350
   m_fogRendererMaterial: {fileID: 2100000, guid: 7c44f023cdb4c0143a67ffa79e3be149, type: 2}
 --- !u!114 &11400000
@@ -64,7 +65,7 @@ MonoBehaviour:
     failOperation: 0
     zFailOperation: 0
   m_ShadowTransparentReceive: 1
-  m_RenderingMode: 2
+  m_RenderingMode: 0
   m_DepthPrimingMode: 0
   m_CopyDepthMode: 0
   m_DepthAttachmentFormat: 0

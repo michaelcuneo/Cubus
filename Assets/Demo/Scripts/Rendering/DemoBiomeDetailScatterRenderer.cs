@@ -25,6 +25,12 @@ namespace Assets.Demo.Scripts.Rendering
     [SerializeField][Range(0f, 3f)] private float densityMultiplier = 1f;
     [SerializeField] private bool castShadows = true;
 
+    [Header("Safety")]
+    [SerializeField][Min(1)] private int maxActiveDetailChunks = 700;
+    [SerializeField][Min(1)] private int maxRebuildsPerFrame = 6;
+    [SerializeField][Min(128)] private int maxDetailVerticesPerChunk = 20000;
+    [SerializeField][Min(256)] private int maxDetailVerticesTotal = 1500000;
+
     [Header("Appearance")]
     [SerializeField] private Color tint = Color.white;
     [SerializeField][Range(0f, 1f)] private float alphaCutoff = 0.4f;
@@ -39,6 +45,11 @@ namespace Assets.Demo.Scripts.Rendering
     private readonly Dictionary<Vector3Int, DetailView> activeViews = new();
     private readonly Stack<DetailView> pool = new();
     private readonly Dictionary<ulong, DemoDetailScatterProfile> generatedProfiles = new();
+    private readonly Queue<Vector3Int> rebuildQueue = new();
+    private readonly HashSet<Vector3Int> queuedRebuilds = new();
+    private readonly HashSet<Vector3Int> activeSetCache = new();
+
+    private int totalDetailVertices;
 
     private CubusWorld world;
     private WorldRenderer worldRenderer;
@@ -66,10 +77,10 @@ namespace Assets.Demo.Scripts.Rendering
 
       if (worldRenderer != null)
       {
-        worldRenderer.BlockChunkRendered -= RefreshChunkDetail;
+        worldRenderer.BlockChunkRendered -= QueueRefreshChunkDetail;
         worldRenderer.BlockChunkRemoved -= RemoveChunkDetail;
         worldRenderer.ChunksCleared -= ClearAllDetail;
-        worldRenderer.BlockChunkRendered += RefreshChunkDetail;
+        worldRenderer.BlockChunkRendered += QueueRefreshChunkDetail;
         worldRenderer.BlockChunkRemoved += RemoveChunkDetail;
         worldRenderer.ChunksCleared += ClearAllDetail;
       }
@@ -81,10 +92,18 @@ namespace Assets.Demo.Scripts.Rendering
     {
       if (worldRenderer != null)
       {
-        worldRenderer.BlockChunkRendered -= RefreshChunkDetail;
+        worldRenderer.BlockChunkRendered -= QueueRefreshChunkDetail;
         worldRenderer.BlockChunkRemoved -= RemoveChunkDetail;
         worldRenderer.ChunksCleared -= ClearAllDetail;
       }
+
+      rebuildQueue.Clear();
+      queuedRebuilds.Clear();
+    }
+
+    private void Update()
+    {
+      ProcessQueuedRebuilds();
     }
 
     private void OnValidate()
@@ -126,9 +145,35 @@ namespace Assets.Demo.Scripts.Rendering
       {
         if (world.Data.BlockChunks.ContainsKey(chunkCoord))
         {
-          RefreshChunkDetail(chunkCoord);
+          QueueRefreshChunkDetail(chunkCoord);
         }
       }
+    }
+
+    private void QueueRefreshChunkDetail(Vector3Int chunkCoord)
+    {
+      if (queuedRebuilds.Add(chunkCoord))
+      {
+        rebuildQueue.Enqueue(chunkCoord);
+      }
+    }
+
+    private void ProcessQueuedRebuilds()
+    {
+      if (!CanRender() || worldRenderer == null || world == null)
+      {
+        return;
+      }
+
+      int budget = Mathf.Max(1, maxRebuildsPerFrame);
+      while (budget-- > 0 && rebuildQueue.Count > 0)
+      {
+        Vector3Int chunkCoord = rebuildQueue.Dequeue();
+        queuedRebuilds.Remove(chunkCoord);
+        RefreshChunkDetail(chunkCoord);
+      }
+
+      PruneInactiveOrOverflowViews();
     }
 
     private void RefreshChunkDetail(Vector3Int chunkCoord)
@@ -157,12 +202,14 @@ namespace Assets.Demo.Scripts.Rendering
           Mathf.Max(1, settings.AtlasRows),
           voxelSize,
           densityMultiplier,
+          Mathf.Max(128, maxDetailVerticesPerChunk),
           view.Mesh);
 
       if (mesh == null)
       {
         if (existing != null)
         {
+          totalDetailVertices -= GetMeshVertexCount(existing.Mesh);
           activeViews.Remove(chunkCoord);
         }
 
@@ -181,7 +228,16 @@ namespace Assets.Demo.Scripts.Rendering
       view.Go.transform.localScale = Vector3.one;
       view.Go.name = $"Biome Detail {chunkCoord.x}, {chunkCoord.y}, {chunkCoord.z}";
 
+      int oldVertexCount = existing != null ? GetMeshVertexCount(existing.Mesh) : 0;
+      int newVertexCount = GetMeshVertexCount(mesh);
+      totalDetailVertices += newVertexCount - oldVertexCount;
+
       activeViews[chunkCoord] = view;
+
+      if (totalDetailVertices > Mathf.Max(256, maxDetailVerticesTotal))
+      {
+        PruneInactiveOrOverflowViews();
+      }
     }
 
     private DemoDetailScatterProfile ResolveScatterProfile(Vector3Int worldVoxel, ushort materialId)
@@ -403,6 +459,7 @@ namespace Assets.Demo.Scripts.Rendering
         return;
       }
 
+      totalDetailVertices -= GetMeshVertexCount(view.Mesh);
       activeViews.Remove(chunkCoord);
       ReleaseView(view);
     }
@@ -415,6 +472,69 @@ namespace Assets.Demo.Scripts.Rendering
       }
 
       activeViews.Clear();
+      totalDetailVertices = 0;
+      rebuildQueue.Clear();
+      queuedRebuilds.Clear();
+    }
+
+    private void PruneInactiveOrOverflowViews()
+    {
+      if (worldRenderer == null)
+      {
+        return;
+      }
+
+      activeSetCache.Clear();
+      foreach (Vector3Int coord in worldRenderer.ActiveChunkViews.Keys)
+      {
+        activeSetCache.Add(coord);
+      }
+
+      List<Vector3Int> stale = null;
+      foreach (KeyValuePair<Vector3Int, DetailView> pair in activeViews)
+      {
+        if (!activeSetCache.Contains(pair.Key))
+        {
+          stale ??= new List<Vector3Int>();
+          stale.Add(pair.Key);
+        }
+      }
+
+      if (stale != null)
+      {
+        for (int i = 0; i < stale.Count; i++)
+        {
+          RemoveChunkDetail(stale[i]);
+        }
+      }
+
+      int chunkLimit = Mathf.Max(1, maxActiveDetailChunks);
+      int vertexLimit = Mathf.Max(256, maxDetailVerticesTotal);
+
+      while (activeViews.Count > chunkLimit || totalDetailVertices > vertexLimit)
+      {
+        Vector3Int? removeCoord = null;
+        foreach (Vector3Int coord in activeViews.Keys)
+        {
+          removeCoord = coord;
+          if (!activeSetCache.Contains(coord))
+          {
+            break;
+          }
+        }
+
+        if (!removeCoord.HasValue)
+        {
+          break;
+        }
+
+        RemoveChunkDetail(removeCoord.Value);
+      }
+    }
+
+    private static int GetMeshVertexCount(Mesh mesh)
+    {
+      return mesh != null ? mesh.vertexCount : 0;
     }
 
     private Material EnsureMaterial()
@@ -519,7 +639,6 @@ namespace Assets.Demo.Scripts.Rendering
   internal static class DemoBiomeDetailMeshBuilder
   {
     private const int Size = VoxelConstants.ChunkSize;
-    private const int MaxVertices = 60000;
 
     private static readonly List<Vector3> Positions = new(8192);
     private static readonly List<Vector3> Normals = new(8192);
@@ -536,6 +655,7 @@ namespace Assets.Demo.Scripts.Rendering
         int atlasRows,
         float voxelSize,
         float densityMultiplier,
+      int maxVertices,
         Mesh reuseMesh)
     {
       if (chunkData == null || resolveProfile == null)
@@ -602,7 +722,7 @@ namespace Assets.Demo.Scripts.Rendering
 
             for (int cluster = 0; cluster < clusters; cluster++)
             {
-              if (Positions.Count >= MaxVertices)
+              if (Positions.Count >= maxVertices)
               {
                 break;
               }
