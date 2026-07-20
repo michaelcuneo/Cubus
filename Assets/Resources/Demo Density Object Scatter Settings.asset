@@ -18,16 +18,16 @@ MonoBehaviour:
     Prefabs:
     - {fileID: 100100000, guid: 3459eb48dfefbbe4384fa0f7f5e3ca20, type: 3}
     SpawnChance: 1
-    TriangleStride: 28
-    MinimumPerChunk: 1
-    MaximumPerChunk: 2
-    MinimumSpacing: 10
-    MinimumUpwardNormal: 0.5
+    TriangleStride: 8
+    MinimumPerChunk: 4
+    MaximumPerChunk: 12
+    MinimumSpacing: 3.5
+    MinimumUpwardNormal: 0.45
     MinimumWorldHeight: -10000
     MaximumWorldHeight: 10000
     AlignToSurface: 1
     RandomYaw: 1
-    UniformScaleRange: {x: 0.55, y: 1.15}
+    UniformScaleRange: {x: 0.45, y: 1.25}
     PositionOffset: {x: 0, y: -0.08, z: 0}
   BiomeRules:
   - BiomeId: 30
@@ -38,14 +38,14 @@ MonoBehaviour:
       Prefabs:
       - {fileID: 100100000, guid: 3459eb48dfefbbe4384fa0f7f5e3ca20, type: 3}
       SpawnChance: 1
-      TriangleStride: 14
-      MinimumPerChunk: 1
-      MaximumPerChunk: 6
-      MinimumSpacing: 5
-      MinimumUpwardNormal: 0.35
+      TriangleStride: 3
+      MinimumPerChunk: 10
+      MaximumPerChunk: 30
+      MinimumSpacing: 2.25
+      MinimumUpwardNormal: 0.25
       MinimumWorldHeight: -10000
       MaximumWorldHeight: 10000
       AlignToSurface: 1
       RandomYaw: 1
-      UniformScaleRange: {x: 0.45, y: 1.4}
+      UniformScaleRange: {x: 0.35, y: 1.5}
       PositionOffset: {x: 0, y: -0.08, z: 0}
