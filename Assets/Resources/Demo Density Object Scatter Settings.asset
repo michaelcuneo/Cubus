@@ -1,0 +1,51 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b122b73f7102ea7499d40354b33b3042, type: 3}
+  m_Name: Demo Density Object Scatter Settings
+  m_EditorClassIdentifier: 
+  DefaultGroups:
+  - DisplayName: Granite Rocks
+    Enabled: 1
+    Prefabs:
+    - {fileID: 100100000, guid: 3459eb48dfefbbe4384fa0f7f5e3ca20, type: 3}
+    SpawnChance: 0.08
+    TriangleStride: 28
+    MinimumPerChunk: 0
+    MaximumPerChunk: 2
+    MinimumSpacing: 10
+    MinimumUpwardNormal: 0.5
+    MinimumWorldHeight: -10000
+    MaximumWorldHeight: 10000
+    AlignToSurface: 1
+    RandomYaw: 1
+    UniformScaleRange: {x: 0.55, y: 1.15}
+    PositionOffset: {x: 0, y: -0.08, z: 0}
+  BiomeRules:
+  - BiomeId: 30
+    BiomeName: Rocky Hills
+    Groups:
+    - DisplayName: Granite Boulders
+      Enabled: 1
+      Prefabs:
+      - {fileID: 100100000, guid: 3459eb48dfefbbe4384fa0f7f5e3ca20, type: 3}
+      SpawnChance: 0.22
+      TriangleStride: 14
+      MinimumPerChunk: 0
+      MaximumPerChunk: 6
+      MinimumSpacing: 5
+      MinimumUpwardNormal: 0.35
+      MinimumWorldHeight: -10000
+      MaximumWorldHeight: 10000
+      AlignToSurface: 1
+      RandomYaw: 1
+      UniformScaleRange: {x: 0.45, y: 1.4}
+      PositionOffset: {x: 0, y: -0.08, z: 0}
