@@ -490,7 +490,6 @@ GameObject:
   - component: {fileID: 1298388488}
   - component: {fileID: 1298388489}
   - component: {fileID: 1298388490}
-  - component: {fileID: 1298388491}
   m_Layer: 0
   m_Name: VoxelWorld
   m_TagString: Untagged
@@ -650,26 +649,10 @@ MonoBehaviour:
   biomeTint: {r: 1, g: 1, b: 1, a: 1}
   biomeNormalAtlas: {fileID: 2800000, guid: 0902fdf5813ef7949a29cfce25590e23, type: 3}
   normalStrength: 0.5
-  densityTerrainNormalMapStrength: 1
   detailBumpStrength: 1
   surfaceSmoothness: 0.12
   specularStrength: 0.25
   fresnelStrength: 0.15
-  densityTerrainShadowStrength: 1
-  densityTerrainLightingNormalMapStrength: 1
-  terrainTextureDetileStrength: 0.42
-  terrainTextureNoiseScale: 0.23
-  terrainTextureNoiseStrength: 0.025
-  distanceTextureStart: 80
-  distanceTextureEnd: 240
-  distanceTextureScaleMultiplier: 0.18
-  distanceNormalFade: 0.85
-  distanceTextureWarpScale: 0.012
-  distanceTextureWarpStrength: 22
-  distanceTextureVariationStrength: 0.12
-  enableDensityTerrainDebugView: 0
-  densityTerrainDebugView: 0
-  logDensitySeamAuditDetails: 0
   logRenderedChunkMeshes: 0
   collisionMode: 1
   collisionViewer: {fileID: 1517188426}
@@ -854,23 +837,6 @@ MonoBehaviour:
   normalArray: {fileID: 0}
   maskArray: {fileID: 0}
   materialSliceLookup: {fileID: 0}
---- !u!114 &1298388491
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1298388476}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 9b31f8a9fbc34bb0bb3c05af5e57fb5f, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: CubusCore.Runtime::CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Water.VoxelWaterSystem
-  generateWater: 1
-  seaLevel: 34
-  waterMaterial: {fileID: 2100000, guid: 472bbabf2255c9f40be79614a550ab3d, type: 2}
-  chunkBuildsPerFrame: 2
-  refreshInterval: 0.25
 --- !u!1 &1453617040
 GameObject:
   m_ObjectHideFlags: 0
@@ -1111,8 +1077,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::CubusCore.Demo.DemoPlayerSpawnController
   world: {fileID: 1298388478}
   assignAsStreamingViewer: 1
-  terrainColliderWaitTimeoutSeconds: 15
-  terrainColliderRetrySeconds: 0.05
   characterController: {fileID: 1517188428}
   firstPersonController: {fileID: 1517188427}
 --- !u!114 &1517188430

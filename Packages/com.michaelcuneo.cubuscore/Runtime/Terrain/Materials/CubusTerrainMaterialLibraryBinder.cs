@@ -122,7 +122,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain.Material
       return result;
     }
 
-    public static Texture2D BuildMaterialSliceLookup(CubusTerrainMaterialLibrary library)
+    private static Texture2D BuildMaterialSliceLookup(CubusTerrainMaterialLibrary library)
     {
       Texture2D lookup = new(
         LookupTextureSize,

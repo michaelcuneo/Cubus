@@ -10,9 +10,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
   /// Describes the neighbour sample chunks used by the density marching-cubes mesh
   /// builder.
   ///
-  /// A density chunk mesh samples the root chunk plus the adjacent boundary shell.
-  /// Marching cubes uses the +X/+Y/+Z shell for surface extraction, while central
-  /// boundary normals also need the negative shell and edge/corner combinations.
+  /// A density chunk mesh samples the root chunk plus the +X/+Y/+Z boundary shell.
   /// WorldStreamer currently owns this dependency logic directly; this helper is a
   /// behaviour-neutral extraction target so the density path can move out of
   /// WorldStreamer in small steps.
@@ -22,15 +20,12 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     public static readonly Vector3Int[] SampleChunkOffsets =
     {
       new(0, 0, 0),
-      new(-1, -1, -1), new(0, -1, -1), new(1, -1, -1),
-      new(-1, 0, -1), new(0, 0, -1), new(1, 0, -1),
-      new(-1, 1, -1), new(0, 1, -1), new(1, 1, -1),
-      new(-1, -1, 0), new(0, -1, 0), new(1, -1, 0),
-      new(-1, 0, 0), new(1, 0, 0),
-      new(-1, 1, 0), new(0, 1, 0), new(1, 1, 0),
-      new(-1, -1, 1), new(0, -1, 1), new(1, -1, 1),
-      new(-1, 0, 1), new(0, 0, 1), new(1, 0, 1),
-      new(-1, 1, 1), new(0, 1, 1),
+      new(1, 0, 0),
+      new(0, 1, 0),
+      new(0, 0, 1),
+      new(1, 1, 0),
+      new(1, 0, 1),
+      new(0, 1, 1),
       new(1, 1, 1)
     };
 

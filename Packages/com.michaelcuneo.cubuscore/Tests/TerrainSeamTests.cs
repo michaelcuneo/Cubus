@@ -27,26 +27,7 @@ namespace CubusCore.Tests
     private enum Axis
     {
       X,
-      Y,
       Z
-    }
-
-    [Test]
-    public void NormalizeDensityMeshStep_ReturnsChunkSizeDivisors()
-    {
-      Assert.AreEqual(1, WorldSettings.NormalizeDensityMeshStep(0));
-      Assert.AreEqual(1, WorldSettings.NormalizeDensityMeshStep(1));
-      Assert.AreEqual(2, WorldSettings.NormalizeDensityMeshStep(2));
-      Assert.AreEqual(2, WorldSettings.NormalizeDensityMeshStep(3));
-      Assert.AreEqual(4, WorldSettings.NormalizeDensityMeshStep(4));
-      Assert.AreEqual(4, WorldSettings.NormalizeDensityMeshStep(7));
-      Assert.AreEqual(8, WorldSettings.NormalizeDensityMeshStep(8));
-      Assert.AreEqual(8, WorldSettings.NormalizeDensityMeshStep(99));
-
-      for (int step = 0; step <= 99; step++)
-      {
-        Assert.AreEqual(0, Size % WorldSettings.NormalizeDensityMeshStep(step), $"Step {step} does not land on chunk boundaries.");
-      }
     }
 
     [Test]
@@ -73,12 +54,6 @@ namespace CubusCore.Tests
     public void DensityField_IsContinuous_AcrossXBoundary()
     {
       AssertContinuousSeam(new Vector3Int(0, 0, 0), new Vector3Int(1, 0, 0), Axis.X);
-    }
-
-    [Test]
-    public void DensityField_IsContinuous_AcrossYBoundary()
-    {
-      AssertContinuousSeam(new Vector3Int(0, 0, 0), new Vector3Int(0, 1, 0), Axis.Y);
     }
 
     [Test]
@@ -125,12 +100,9 @@ namespace CubusCore.Tests
     // perpendicular axes.
     private static float SampleSeamPlane(DensityChunkData chunk, Axis axis, int main, int a, int b)
     {
-      return axis switch
-      {
-        Axis.X => chunk.GetVoxel(main, a, b).Density,
-        Axis.Y => chunk.GetVoxel(a, main, b).Density,
-        _ => chunk.GetVoxel(a, b, main).Density
-      };
+      return axis == Axis.X
+        ? chunk.GetVoxel(main, a, b).Density
+        : chunk.GetVoxel(a, b, main).Density;
     }
 
     private static float MaxAdjacentGap(DensityChunkData chunk, Axis axis)

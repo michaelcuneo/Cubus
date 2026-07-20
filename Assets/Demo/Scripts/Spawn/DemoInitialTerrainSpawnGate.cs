@@ -85,24 +85,21 @@ namespace Assets.Demo.Scripts.Spawn
             ? streamer.GetSurfaceChunkCoordFromVoxel(desiredSpawnVoxel)
             : streamer.VoxelToChunkCoord(desiredSpawnVoxel);
 
-        if (!streamer.HasRenderedTerrainForChunk(spawnChunk))
+        if (!streamer.HasChunkView(spawnChunk))
         {
           streamer.EnsureChunkQueuedForRender(spawnChunk);
           yield return null;
           continue;
         }
 
-        if (!streamer.HasTerrainCollisionForChunk(spawnChunk))
+        if (streamer.ActiveChunkViewCount < requiredRenderedChunks)
         {
-          streamer.EnsureChunkQueuedForRender(spawnChunk);
-          streamer.EnsureTerrainCollisionForChunk(spawnChunk);
           yield return null;
           continue;
         }
 
-        if (!streamer.IsInitialTerrainCoverageRendered(requiredRenderedChunks, requireFullViewDistanceBeforeSpawn))
+        if (requireFullViewDistanceBeforeSpawn && !streamer.IsStreamingSettled)
         {
-          streamer.EnsureDesiredTerrainCoverageQueued(requiredRenderedChunks);
           yield return null;
           continue;
         }

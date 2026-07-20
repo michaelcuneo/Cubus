@@ -5,22 +5,24 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain
   // Single shared, Burst-safe surface-height function. This is the one place the
   // terrain landform equations live; TerrainSampler, TerrainSamplerBurst and
   // MarchingCubesMesher all call it so the three paths can never drift apart.
+  //
+  // Height layers are built on CubusNoise (Perlin fbm + ridged), seeded by
+  // profile.WorldSeed, replacing the old non-seeded sin/cos pattern noise.
   public static class TerrainHeight
   {
+    // Base layer frequencies (multiplied by the per-profile frequency knobs).
     private const double MacroBaseFrequency = 0.0040;
     private const double HillsBaseFrequency = 0.0150;
     private const double DetailBaseFrequency = 0.0480;
     private const double RidgeBaseFrequency = 0.0100;
     private const double ValleyBaseFrequency = 0.0055;
 
+    // Per-layer seed offsets so the layers decorrelate.
     private const int SeedMacro = 0;
     private const int SeedHills = 1000;
     private const int SeedDetail = 2000;
     private const int SeedRidge = 3000;
     private const int SeedValley = 4000;
-    private const int SeedRange = 5000;
-    private const int SeedTributary = 6000;
-    private const int SeedValleyWarp = 7000;
 
     // Column-invariant: pure function of world X/Z. Hoist out of per-voxel loops.
     public static double ComputeSurfaceHeight(
@@ -50,116 +52,48 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain
       double ridgeFrequency = RidgeBaseFrequency * System.Math.Max(0.01, profile.RidgeFrequency);
       double valleyFrequency = ValleyBaseFrequency * System.Math.Max(0.01, profile.ValleyFrequency);
 
-      // Broad continental shape. This remains the large-scale elevation field,
-      // but it now also controls where ranges, foothills and drainage can form.
-      double contRaw = SampleLayer(
-          NoiseAlgorithm.Perlin,
-          FractalMode.Fbm,
-          wx,
-          wy,
-          macroFrequency,
-          5,
-          SeedMacro,
-          seed,
-          0.55f,
-          2.0f);
-
+      // Broad continental shape: low frequency, domain-warped for natural
+      // meandering coastlines, then redistributed (hypsometry) so most of the
+      // world is gentle lowland with occasional high country.
+      double contRaw = SampleLayer(NoiseAlgorithm.Perlin, FractalMode.Fbm, wx, wy, macroFrequency, 5, SeedMacro, seed, 0.55f, 2.0f);
       double cont01 = Clamp01(contRaw * 0.5 + 0.5);
       double contShaped = (System.Math.Pow(cont01, 1.25) * 2.0) - 1.0;
       double continental = contShaped * 48.0 * System.Math.Max(0.0, profile.MacroStrength);
 
-      // Broad range backbone. A low-frequency ridged field creates connected
-      // mountain belts instead of allowing every fine ridge sample to become an
-      // isolated mountain. Fine ridges are then nested inside this backbone.
-      double rangeNoise = SampleLayer(
-          NoiseAlgorithm.Simplex,
-          FractalMode.Ridged,
-          wx,
-          wy,
-          ridgeFrequency * 0.28,
-          3,
-          SeedRange,
-          seed,
-          1.15f,
-          1.35f);
-
-      double rangeBackbone = SmoothStep(Clamp01((rangeNoise - 0.24) / 0.62));
-      double highCountryMask = SmoothStep(Clamp01((cont01 - 0.48) / 0.34));
-      double mountainMask = rangeBackbone * highCountryMask;
-      double foothillMask = SmoothStep(Clamp01((rangeNoise - 0.08) / 0.58)) * highCountryMask;
-
-      // Rolling terrain follows broad geography and fades in valley floors.
-      double hillsNoise = SampleLayer(
-          NoiseAlgorithm.Perlin,
-          FractalMode.Fbm,
-          wx,
-          wy,
-          hillsFrequency,
-          4,
-          SeedHills,
-          seed,
-          0.40f,
-          2.0f);
-
+      // Rolling hills (domain-warped), stronger on higher ground than in basins.
       double hills =
-          hillsNoise *
-          19.0 *
-          System.Math.Max(0.0, profile.HillsStrength) *
-          (0.42 + 0.42 * cont01 + 0.16 * foothillMask);
+          SampleLayer(NoiseAlgorithm.Perlin, FractalMode.Fbm, wx, wy, hillsFrequency, 4, SeedHills, seed, 0.40f, 2.0f)
+          * 22.0 * System.Math.Max(0.0, profile.HillsStrength) * (0.45 + 0.55 * cont01);
 
-      // Fine surface detail. It is deliberately restrained in the broadest low
-      // areas so floodplains and valley bottoms do not become noisy corrugations.
-      double detailNoise = SampleLayer(
-          NoiseAlgorithm.Perlin,
-          FractalMode.Fbm,
-          wx,
-          wy,
-          detailFrequency,
-          3,
-          SeedDetail,
-          seed,
-          0.0f,
-          0.0f);
-
+      // Fine surface detail.
       double detail =
-          detailNoise *
-          5.0 *
-          System.Math.Max(0.0, profile.DetailStrength);
+          SampleLayer(NoiseAlgorithm.Perlin, FractalMode.Fbm, wx, wy, detailFrequency, 3, SeedDetail, seed, 0.0f, 0.0f)
+          * 6.0 * System.Math.Max(0.0, profile.DetailStrength);
 
-      // Fine ridges only gain significant height inside the connected range
-      // backbone. Foothills use a softer copy of the same structure.
-      double ridgeNoise = SampleLayer(
-          NoiseAlgorithm.Perlin,
-          FractalMode.Ridged,
-          wx,
-          wy,
-          ridgeFrequency,
-          4,
-          SeedRidge,
-          seed,
-          0.30f,
-          2.0f);
-
-      double sharpRidges = System.Math.Pow(
-          Clamp01(ridgeNoise),
-          System.Math.Max(0.25, profile.RidgeSharpness));
-
+      // Mountain ridges (ridged fractal, sharpened) that only build up in
+      // high-continent regions, so mountains form ranges instead of random
+      // spikes scattered across lowlands.
+      double ridgeNoise = SampleLayer(NoiseAlgorithm.Perlin, FractalMode.Ridged, wx, wy, ridgeFrequency, 4, SeedRidge, seed, 0.0f, 0.0f);
+      double mountainMask = SmoothStep(Clamp01((cont01 - 0.55) / 0.30));
       double ridges =
-          sharpRidges *
-          43.0 *
-          System.Math.Max(0.0, profile.RidgeStrength) *
-          mountainMask;
-
-      double foothills =
-          hillsNoise *
-          10.0 *
-          System.Math.Max(0.0, profile.RidgeStrength) *
-          foothillMask *
-          (1.0 - mountainMask * 0.55);
+          System.Math.Pow(
+              Clamp01(ridgeNoise),
+              System.Math.Max(0.25, profile.RidgeSharpness))
+          * 38.0 * System.Math.Max(0.0, profile.RidgeStrength) * mountainMask;
 
       double edgeDrop = profile.UseWorldEdgeFalloff
           ? System.Math.Pow(edgeT, 3.0) * 140.0
           : 0.0;
+
+      // Valley / erosion carving.
+      double valleyMask = SampleLayer(NoiseAlgorithm.Perlin, FractalMode.Fbm, wx, wy, valleyFrequency, 2, SeedValley, seed, 0.0f, 0.0f);
+      double valleyCut =
+          System.Math.Max(0.0, valleyMask) *
+          16.0 *
+          edgeFalloff *
+          System.Math.Max(0.0, profile.ValleyStrength);
+
+      double reliefBudget = System.Math.Max(8.0, profile.HeightScale * 0.85);
 
       ApplyLandformPreset(
           profile,
@@ -174,39 +108,21 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain
           out double basinSink,
           out double dunes);
 
-      double preValleyHeight =
-          baseHeight +
-          mainHeight +
-          (continental * macroMul) * edgeFalloff +
-          ((hills + foothills) * hillsMul) * edgeFalloff +
-          (detail * detailMul) * edgeFalloff +
-          (ridges * ridgeMul) * edgeFalloff -
-          basinSink -
-          edgeDrop +
-          dunes;
-
-      // Connected drainage approximation. Zero-crossings from two differently
-      // scaled, domain-warped fields form long trunk channels and branching
-      // tributaries. The network is widened in lower terrain and cut deeper in
-      // high relief, producing mountain gullies, V valleys and broader lowland
-      // corridors instead of unrelated positive-noise depressions.
-      double drainage = ComputeDrainageCarve(
-          profile,
-          wx,
-          wy,
-          valleyFrequency,
-          seed,
-          cont01,
-          mountainMask,
-          preValleyHeight,
-          edgeFalloff);
-
-      double reliefBudget = System.Math.Max(8.0, profile.HeightScale * 0.85);
-      drainage = Clamp(drainage * valleyMul, 0.0, reliefBudget * 0.92);
+      valleyCut = Clamp(valleyCut, 0.0, reliefBudget * 0.85);
       basinSink = Clamp(basinSink, 0.0, reliefBudget);
       dunes = Clamp(dunes, -reliefBudget * 0.35, reliefBudget * 0.35);
 
-      double surfaceHeight = preValleyHeight - drainage;
+      double surfaceHeight =
+          baseHeight +
+          mainHeight +
+          (continental * macroMul) * edgeFalloff +
+          (hills * hillsMul) * edgeFalloff +
+          (detail * detailMul) * edgeFalloff +
+          (ridges * ridgeMul) * edgeFalloff -
+          basinSink -
+          edgeDrop -
+          (valleyCut * valleyMul) +
+          dunes;
 
       if (profile.UseWorldEdgeFalloff && edgeT > 0.78)
       {
@@ -216,109 +132,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain
       }
 
       return surfaceHeight;
-    }
-
-    private static double ComputeDrainageCarve(
-        in TerrainGenerationProfileSnapshot profile,
-        double wx,
-        double wy,
-        double valleyFrequency,
-        int seed,
-        double continent01,
-        double mountainMask,
-        double preValleyHeight,
-        double edgeFalloff)
-    {
-      double strength = System.Math.Max(0.0, profile.ValleyStrength);
-      if (strength <= 0.0)
-      {
-        return 0.0;
-      }
-
-      // Separate low-frequency warp keeps the channel network coherent while
-      // removing obvious straight or grid-like zero contours.
-      double warpX = SampleLayer(
-          NoiseAlgorithm.Simplex,
-          FractalMode.Fbm,
-          wx,
-          wy,
-          valleyFrequency * 0.45,
-          2,
-          SeedValleyWarp,
-          seed,
-          0.0f,
-          0.0f);
-
-      double warpY = SampleLayer(
-          NoiseAlgorithm.Simplex,
-          FractalMode.Fbm,
-          wx + 917.0,
-          wy - 613.0,
-          valleyFrequency * 0.45,
-          2,
-          SeedValleyWarp + 71,
-          seed,
-          0.0f,
-          0.0f);
-
-      double warpedX = wx + warpX * 34.0;
-      double warpedY = wy + warpY * 34.0;
-
-      double trunkField = SampleLayer(
-          NoiseAlgorithm.Simplex,
-          FractalMode.Fbm,
-          warpedX,
-          warpedY,
-          valleyFrequency * 0.62,
-          3,
-          SeedValley,
-          seed,
-          0.0f,
-          0.0f);
-
-      double tributaryField = SampleLayer(
-          NoiseAlgorithm.Simplex,
-          FractalMode.Fbm,
-          warpedX + 251.0,
-          warpedY - 137.0,
-          valleyFrequency * 1.55,
-          2,
-          SeedTributary,
-          seed,
-          0.0f,
-          0.0f);
-
-      double trunkWidth = Lerp(0.105, 0.205, 1.0 - continent01);
-      double tributaryWidth = Lerp(0.060, 0.105, mountainMask);
-
-      double trunk = 1.0 - SmoothStep(Clamp01(System.Math.Abs(trunkField) / trunkWidth));
-      double tributary = 1.0 - SmoothStep(Clamp01(System.Math.Abs(tributaryField) / tributaryWidth));
-
-      // Tributaries mostly appear near trunk drainage or in mountain country,
-      // avoiding a uniform web of equally strong channels across plains.
-      double tributaryAccess = Clamp01(trunk * 0.65 + mountainMask * 0.85);
-      double channelNetwork = Clamp01(trunk + tributary * tributaryAccess * 0.72);
-
-      // High terrain receives narrow, deeper incision. Lower terrain receives a
-      // wider but gentler floodplain depression around the trunk channel.
-      double highRelief = Clamp01((preValleyHeight - profile.BaseHeight) /
-          System.Math.Max(24.0, profile.HeightScale * 0.95));
-
-      double channelDepth =
-          channelNetwork *
-          (7.0 + 17.0 * highRelief + 8.0 * mountainMask) *
-          strength;
-
-      double floodplainWidth = Lerp(0.28, 0.14, highRelief);
-      double floodplain = 1.0 - SmoothStep(
-          Clamp01(System.Math.Abs(trunkField) / floodplainWidth));
-
-      double floodplainDepth =
-          floodplain *
-          (1.5 + 5.5 * (1.0 - highRelief)) *
-          strength;
-
-      return (channelDepth + floodplainDepth) * edgeFalloff;
     }
 
     private static double SampleLayer(
@@ -346,6 +159,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain
         WarpFrequency = warpFrequency,
       };
 
+      // Pre-scale by frequency in double precision, then cast, so large world
+      // coordinates keep precision before the float noise evaluation.
       float2 p = new float2((float)(wx * frequency), (float)(wy * frequency));
       return CubusNoise.Sample(settings, p, worldSeed);
     }
@@ -376,33 +191,33 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain
         case TerrainLandformStyle.Plains:
           macroMul = 0.70;
           hillsMul = 0.35;
-          detailMul = 0.55;
+          detailMul = 0.65;
           ridgeMul = 0.08;
-          valleyMul = 0.42;
+          valleyMul = 0.25;
           break;
 
         case TerrainLandformStyle.RollingHills:
           macroMul = 0.90;
           hillsMul = 1.20;
-          detailMul = 0.82;
+          detailMul = 0.90;
           ridgeMul = 0.35;
-          valleyMul = 0.68;
+          valleyMul = 0.45;
           break;
 
         case TerrainLandformStyle.Mountains:
           macroMul = 1.10;
           hillsMul = 1.15;
-          detailMul = 0.72;
+          detailMul = 0.85;
           ridgeMul = 2.10;
-          valleyMul = 1.12;
+          valleyMul = 0.70;
           break;
 
         case TerrainLandformStyle.Basin:
           macroMul = 0.65;
           hillsMul = 0.55;
-          detailMul = 0.65;
+          detailMul = 0.75;
           ridgeMul = 0.15;
-          valleyMul = 0.82;
+          valleyMul = 1.00;
           basinSink = (4.0 + System.Math.Max(0.0, profile.BasinDepth) * 0.45) * edgeFalloff;
           break;
 
@@ -412,7 +227,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain
             hillsMul = 0.45;
             detailMul = 0.80;
             ridgeMul = 0.20;
-            valleyMul = 0.48;
+            valleyMul = 0.70;
             double duneFrequency = 0.014 * System.Math.Max(0.01, profile.DuneFrequency);
             double duneWave =
                 System.Math.Sin(wx * duneFrequency + System.Math.Sin(wy * duneFrequency * 0.60) * 2.2) *
@@ -425,9 +240,9 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Terrain
         case TerrainLandformStyle.Badlands:
           macroMul = 0.75;
           hillsMul = 0.90;
-          detailMul = 1.05;
+          detailMul = 1.10;
           ridgeMul = 1.00;
-          valleyMul = 1.25;
+          valleyMul = 0.90;
           basinSink = (2.0 + System.Math.Max(0.0, profile.BasinDepth) * 0.25) * edgeFalloff;
           break;
 
