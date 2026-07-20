@@ -33,7 +33,7 @@ namespace Assets.Demo.Scripts.Multiplayer
     [Tooltip("Automatically attach the in-game chat overlay (DemoChatUI) to this object on startup.")]
     [SerializeField] private bool enableChatOverlay = true;
 
-    [Tooltip("Automatically attach the Escape exit-to-Windows overlay (DemoExitMenu) to this object on startup.")]
+    [Tooltip("Automatically attach the Escape pause menu overlay (DemoPauseMenu) to this object on startup.")]
     [SerializeField] private bool enableExitMenu = true;
 
     [Tooltip("If the first connect fails (commonly a stale auth token saved while connected to a different server), clear the saved token and retry once with a fresh identity.")]
@@ -77,9 +77,9 @@ namespace Assets.Demo.Scripts.Multiplayer
         gameObject.AddComponent<DemoChatUi>();
       }
 
-      if (enableExitMenu && GetComponent<DemoExitMenu>() == null)
+      if (enableExitMenu && GetComponent<DemoPauseMenu>() == null)
       {
-        gameObject.AddComponent<DemoExitMenu>();
+        gameObject.AddComponent<DemoPauseMenu>();
       }
     }
 

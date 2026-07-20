@@ -50,6 +50,32 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         }
     }
 
+    private bool IsInPrimaryVerticalCoverage(int chunkY, int surfaceChunkY, int viewerChunkY)
+    {
+      return IsInVerticalRange(chunkY, surfaceChunkY - SurfaceVerticalChunkMargin, surfaceChunkY + SurfaceVerticalChunkMargin) ||
+             IsInVerticalRange(chunkY, viewerChunkY - ViewerVerticalChunkMargin, viewerChunkY + ViewerVerticalChunkMargin);
+    }
+
+    private static bool IsInVerticalRange(int chunkY, int minY, int maxY)
+    {
+      return chunkY >= Mathf.Min(minY, maxY) && chunkY <= Mathf.Max(minY, maxY);
+    }
+
+    private bool IsSecondaryVerticalCoverageChunk(Vector3Int chunkCoord)
+    {
+      if (!hasLastViewerChunkCoord)
+      {
+        return false;
+      }
+
+      int surfaceChunkY = GetSurfaceChunkYForColumn(
+        chunkCoord.x,
+        chunkCoord.z,
+        lastViewerChunkCoord.y * VoxelConstants.ChunkSize);
+
+      return !IsInPrimaryVerticalCoverage(chunkCoord.y, surfaceChunkY, lastViewerChunkCoord.y);
+    }
+
     private void AddVerticalChunkRange(
       HashSet<Vector3Int> targetSet,
       int chunkX,

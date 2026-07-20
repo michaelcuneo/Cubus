@@ -185,7 +185,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
       Func<Vector3Int, CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Voxels.DensityVoxel> sampleVoxelAtWorld = null)
     {
       // Use requested density mesh LOD. Higher cellStep reduces mesh cost for distant chunks.
-      int safeCellStep = Mathf.Clamp(cellStep, 1, 8);
+      int safeCellStep = WorldSettings.NormalizeDensityMeshStep(cellStep);
       int numCellsAxis = Mathf.CeilToInt((float)VoxelConstants.ChunkSize / safeCellStep);
       int numSamplesAxis = numCellsAxis + 1;
       int totalSamples = numSamplesAxis * numSamplesAxis * numSamplesAxis;
@@ -1042,7 +1042,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
     bool flipWinding,
     Func<Vector3Int, CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Voxels.DensityVoxel> sampleVoxelAtWorld)
     {
-      int safeCellStep = Mathf.Clamp(cellStep, 1, 4);
+      int safeCellStep = WorldSettings.NormalizeDensityMeshStep(cellStep);
       int numCellsAxis = Mathf.CeilToInt((float)VoxelConstants.ChunkSize / safeCellStep);
       int numSamplesAxis = numCellsAxis + 1;
 
