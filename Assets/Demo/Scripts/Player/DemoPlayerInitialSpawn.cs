@@ -1,4 +1,5 @@
 using System.Collections;
+using Assets.Demo.Scripts.Spawn;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Editing;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming;
@@ -27,31 +28,13 @@ namespace Assets.Demo.Scripts.Player
 
     private void Awake()
     {
-      if (world == null)
-      {
-        world = FindAnyObjectByType<CubusWorld>();
-      }
-
-      if (characterController == null)
-      {
-        characterController = GetComponent<CharacterController>();
-      }
-
-      if (firstPersonController == null)
-      {
-        firstPersonController = GetComponent<DemoFirstPersonController>();
-      }
-
-      IsSpawnComplete = false;
+      ResolveReferences();
       SetPlayerEnabled(false);
     }
 
     private void OnEnable()
     {
-      if (world == null)
-      {
-        world = FindAnyObjectByType<CubusWorld>();
-      }
+      ResolveReferences();
 
       if (world == null)
       {
@@ -82,6 +65,24 @@ namespace Assets.Demo.Scripts.Player
       }
     }
 
+    private void ResolveReferences()
+    {
+      if (world == null)
+      {
+        world = FindAnyObjectByType<CubusWorld>();
+      }
+
+      if (characterController == null)
+      {
+        characterController = GetComponent<CharacterController>();
+      }
+
+      if (firstPersonController == null)
+      {
+        firstPersonController = GetComponent<DemoFirstPersonController>();
+      }
+    }
+
     private void SetPlayerEnabled(bool enabled)
     {
       if (firstPersonController != null)
@@ -103,12 +104,45 @@ namespace Assets.Demo.Scripts.Player
       if (spawnRoutine != null)
       {
         StopCoroutine(spawnRoutine);
+        spawnRoutine = null;
       }
 
-      spawnRoutine = StartCoroutine(SpawnWhenTerrainColliderReady(suggestedSpawnLocation));
+      Vector3 requestedSpawnLocation = ResolveRequestedSpawnLocation(suggestedSpawnLocation);
+
+      // The normal spawn gate only broadcasts readiness after it has already
+      // verified a ChunkView collider beneath the requested spawn column. Finish
+      // that spawn synchronously so the loading screen cannot advance one frame
+      // ahead of the actual player placement.
+      Physics.SyncTransforms();
+      if (TryResolveTerrainSpawnPosition(requestedSpawnLocation, out Vector3 spawnPosition))
+      {
+        ApplySpawnPosition(spawnPosition);
+        return;
+      }
+
+      // Manual/debug release paths can still arrive before collision is ready.
+      // Keep the loading screen and player gated while we retry safely.
+      spawnRoutine = StartCoroutine(SpawnWhenTerrainColliderReady(requestedSpawnLocation));
     }
 
-    private IEnumerator SpawnWhenTerrainColliderReady(Vector3 suggestedSpawnLocation)
+    private Vector3 ResolveRequestedSpawnLocation(Vector3 suggestedSpawnLocation)
+    {
+      DemoInitialTerrainSpawnGate spawnGate = FindAnyObjectByType<DemoInitialTerrainSpawnGate>();
+      WorldStreamer streamer = world != null ? world.GetComponent<WorldStreamer>() : null;
+
+      if (spawnGate == null || streamer == null)
+      {
+        return suggestedSpawnLocation;
+      }
+
+      return spawnGate.SnapSpawnToSurface
+          ? streamer.CalculateSurfaceWorldPositionFromVoxel(
+              spawnGate.DesiredSpawnVoxel,
+              spawnGate.SpawnClearance)
+          : streamer.VoxelToWorldPosition(spawnGate.DesiredSpawnVoxel);
+    }
+
+    private IEnumerator SpawnWhenTerrainColliderReady(Vector3 requestedSpawnLocation)
     {
       float startTime = Time.realtimeSinceStartup;
       float retryDelay = Mathf.Max(0.01f, terrainColliderRetrySeconds);
@@ -118,26 +152,26 @@ namespace Assets.Demo.Scripts.Player
       {
         Physics.SyncTransforms();
 
-        if (TryResolveTerrainSpawnPosition(suggestedSpawnLocation, out Vector3 spawnPosition))
+        if (TryResolveTerrainSpawnPosition(requestedSpawnLocation, out Vector3 spawnPosition))
         {
           ApplySpawnPosition(spawnPosition);
-          IsSpawnComplete = true;
           spawnRoutine = null;
           yield break;
         }
 
-        bool timedOut = timeout > 0.0f && Time.realtimeSinceStartup - startTime >= timeout;
+        bool timedOut = timeout > 0.0f &&
+                        Time.realtimeSinceStartup - startTime >= timeout;
 
         if (timedOut)
         {
           Debug.LogWarning(
-            $"DemoPlayerInitialSpawn timed out waiting for a terrain collider below {suggestedSpawnLocation}. " +
-            "Keeping the player controller disabled to avoid falling through the world.");
-          spawnRoutine = null;
-          yield break;
+            $"DemoPlayerInitialSpawn timed out waiting for a terrain collider below {requestedSpawnLocation}. " +
+            "Continuing to wait; player remains disabled to avoid falling through the world.");
+
+          startTime = Time.realtimeSinceStartup;
         }
 
-        yield return new WaitForSeconds(retryDelay);
+        yield return new WaitForSecondsRealtime(retryDelay);
       }
     }
 
@@ -150,14 +184,13 @@ namespace Assets.Demo.Scripts.Player
 
       Physics.SyncTransforms();
 
+      // The spawn gate already prewarms streaming around this player and the
+      // scene normally assigns the same viewer. Calling SetViewer here forced
+      // another full streaming-set refresh at the exact moment gameplay began,
+      // which could cause a large native allocation spike and an immediate CTD.
       if (assignAsStreamingViewer)
       {
-        WorldStreamer streamer = FindAnyObjectByType<WorldStreamer>();
-
-        if (streamer != null)
-        {
-          streamer.SetViewer(transform);
-        }
+        Debug.Log("Demo player using the streaming viewer prepared by the spawn gate.");
       }
 
       BlockEditTool editTool = BlockEditTool.FindWorldEditTool()
@@ -169,13 +202,15 @@ namespace Assets.Demo.Scripts.Player
       }
 
       SetPlayerEnabled(true);
-
+      IsSpawnComplete = true;
       Debug.Log($"Demo player spawned at {transform.position}");
     }
 
-    private bool TryResolveTerrainSpawnPosition(Vector3 suggestedSpawnLocation, out Vector3 spawnPosition)
+    private bool TryResolveTerrainSpawnPosition(
+      Vector3 requestedSpawnLocation,
+      out Vector3 spawnPosition)
     {
-      spawnPosition = suggestedSpawnLocation;
+      spawnPosition = requestedSpawnLocation;
 
       if (characterController == null)
       {
@@ -184,7 +219,7 @@ namespace Assets.Demo.Scripts.Player
 
       const float rayUp = 128.0f;
       const float rayDistance = 512.0f;
-      Vector3 rayOrigin = suggestedSpawnLocation + Vector3.up * rayUp;
+      Vector3 rayOrigin = requestedSpawnLocation + Vector3.up * rayUp;
       RaycastHit[] hits = Physics.RaycastAll(
         rayOrigin,
         Vector3.down,
@@ -194,18 +229,14 @@ namespace Assets.Demo.Scripts.Player
       );
 
       float bestDistance = float.PositiveInfinity;
-      Vector3 bestPoint = suggestedSpawnLocation;
+      Vector3 bestPoint = requestedSpawnLocation;
 
       for (int i = 0; i < hits.Length; i++)
       {
         RaycastHit hit = hits[i];
 
-        if (hit.collider == null)
-        {
-          continue;
-        }
-
-        if (hit.collider.GetComponentInParent<ChunkView>() == null)
+        if (hit.collider == null ||
+            hit.collider.GetComponentInParent<ChunkView>() == null)
         {
           continue;
         }
@@ -222,9 +253,16 @@ namespace Assets.Demo.Scripts.Player
         return false;
       }
 
-      float halfHeight = characterController.height * 0.5f;
-      float y = bestPoint.y + halfHeight + characterController.skinWidth + 0.05f;
-      spawnPosition = new Vector3(suggestedSpawnLocation.x, y, suggestedSpawnLocation.z);
+      float controllerBottomOffset =
+        characterController.center.y - characterController.height * 0.5f;
+      float y = bestPoint.y - controllerBottomOffset +
+                characterController.skinWidth + 0.05f;
+
+      spawnPosition = new Vector3(
+        requestedSpawnLocation.x,
+        y,
+        requestedSpawnLocation.z
+      );
       return true;
     }
   }

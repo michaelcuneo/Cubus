@@ -83,7 +83,6 @@ Material:
     m_Ints: []
     m_Floats:
     - _AddPrecomputedVelocity: 0
-    - _AlbedoBrightness: 1.35
     - _AlphaClip: 0
     - _AlphaToMask: 0
     - _AmbientStrength: 0.28
@@ -108,12 +107,10 @@ Material:
     - _MaterialBlendNoiseStrength: 0.45
     - _MaterialBlendWidth: 0.35
     - _Metallic: 0
-    - _NormalStrength: 1.25
     - _OcclusionStrength: 1
     - _Parallax: 0.005
     - _QueueOffset: 0
     - _ReceiveShadows: 1
-    - _ShadowStrength: 0.45
     - _Smoothness: 0.5
     - _SmoothnessTextureChannel: 0
     - _SpecularHighlights: 1

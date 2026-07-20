@@ -14,8 +14,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
     private MeshCollider meshCollider;
 
     private Mesh currentMesh;
-    private Bounds localChunkBounds;
-    private bool hasChunkBounds;
     private static Material fallbackMaterial;
 
     // Naming chunk meshes allocates a fresh interpolated string on every mesh
@@ -34,12 +32,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
 
     /// <summary>The Unity mesh currently applied to this view, or null.</summary>
     public Mesh CurrentMesh => currentMesh;
-
-    /// <summary>The chunk bounds in the view's local space.</summary>
-    public Bounds LocalBounds => hasChunkBounds ? localChunkBounds : new Bounds(Vector3.zero, Vector3.zero);
-
-    /// <summary>The chunk bounds in world space.</summary>
-    public Bounds WorldBounds => GetWorldBounds(0.0f);
 
     /// <summary>
     /// Assigns the shared baker that cooks collision meshes off the main thread. When
@@ -71,26 +63,17 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
     public void SetRenderVisible(bool visible)
     {
       RenderCulled = !visible;
-      ApplyRendererVisibilityForCurrentMesh();
-    }
 
-    public Bounds GetWorldBounds(float padding)
-    {
-      Bounds bounds = hasChunkBounds ? localChunkBounds : new Bounds(Vector3.zero, Vector3.zero);
-
-      if (padding > 0.0f)
+      if (meshRenderer == null)
       {
-        bounds.Expand(padding * 2.0f);
+        return;
       }
 
-      Vector3 worldCenter = transform.TransformPoint(bounds.center);
-      Vector3 scale = transform.lossyScale;
-      Vector3 worldSize = new(
-        Mathf.Abs(scale.x) * bounds.size.x,
-        Mathf.Abs(scale.y) * bounds.size.y,
-        Mathf.Abs(scale.z) * bounds.size.z);
-
-      return new Bounds(worldCenter, worldSize);
+      bool shouldEnable = visible && currentMesh != null;
+      if (meshRenderer.enabled != shouldEnable)
+      {
+        meshRenderer.enabled = shouldEnable;
+      }
     }
 
     private void Awake()
@@ -150,10 +133,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
       transform.localScale = Vector3.one;
       gameObject.layer = parent != null ? parent.gameObject.layer : gameObject.layer;
 
-      float chunkWorldSize = VoxelConstants.ChunkSize * Mathf.Max(0.0001f, voxelSize);
-      localChunkBounds = new Bounds(Vector3.one * (chunkWorldSize * 0.5f), Vector3.one * chunkWorldSize);
-      hasChunkBounds = true;
-
       gameObject.name = $"Chunk {chunkCoord.x}, {chunkCoord.y}, {chunkCoord.z}";
       gameObject.SetActive(true);
 
@@ -203,7 +182,10 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
         hasCollisionMesh = false;
       }
 
-      ApplyRendererVisibilityForCurrentMesh();
+      if (meshRenderer != null)
+      {
+        meshRenderer.enabled = true;
+      }
 
       if (oldMesh != null)
       {
@@ -249,12 +231,15 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
         hasCollisionMesh = false;
       }
 
-      if (meshRenderer != null && meshRenderer.sharedMaterial == null)
+      if (meshRenderer != null)
       {
-        meshRenderer.sharedMaterial = GetFallbackMaterial();
-      }
+        if (meshRenderer.sharedMaterial == null)
+        {
+          meshRenderer.sharedMaterial = GetFallbackMaterial();
+        }
 
-      ApplyRendererVisibilityForCurrentMesh();
+        meshRenderer.enabled = true;
+      }
 
       if (oldMesh != null)
       {
@@ -266,20 +251,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
       else
       {
         DestroyImmediate(oldMesh);
-      }
-    }
-
-    private void ApplyRendererVisibilityForCurrentMesh()
-    {
-      if (meshRenderer == null)
-      {
-        return;
-      }
-
-      bool shouldEnable = currentMesh != null && !RenderCulled;
-      if (meshRenderer.enabled != shouldEnable)
-      {
-        meshRenderer.enabled = shouldEnable;
       }
     }
 
@@ -458,10 +429,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
       ClearMesh();
 
       IsActive = false;
-      RenderCulled = false;
       ChunkCoord = Vector3Int.zero;
-      hasChunkBounds = false;
-      localChunkBounds = default;
 
       transform.SetParent(poolParent, false);
       transform.localPosition = Vector3.zero;

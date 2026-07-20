@@ -27,16 +27,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
     {
       public Vector3 Position;
       public Vector3 Normal;
-
-      // COLOR = material blend weights.
-      // R/G/B/A are weights for material ids stored in UV / UV1.
       public Color32 Color;
-
-      // UV.xy = material ids 0 and 1.
       public Vector2 UV;
-
-      // UV1.xy = material ids 2 and 3.
-      public Vector2 UV1;
     }
 
     private static NativeArray<int> s_CubeCornerOffset;
@@ -54,7 +46,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
       public static NativeArray<Vector3> Verts;
       public static NativeArray<Vector3> Normals;
       public static NativeArray<Vector2> UVs;
-      public static NativeArray<Vector2> UV1s;
       public static NativeArray<Color32> Colors;
       public static NativeArray<int> Indices;
 
@@ -93,14 +84,12 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
             Verts.Dispose();
             Normals.Dispose();
             UVs.Dispose();
-            UV1s.Dispose();
             Colors.Dispose();
           }
 
           Verts = new NativeArray<Vector3>(totalVerts, Allocator.Persistent, NativeArrayOptions.UninitializedMemory);
           Normals = new NativeArray<Vector3>(totalVerts, Allocator.Persistent, NativeArrayOptions.UninitializedMemory);
           UVs = new NativeArray<Vector2>(totalVerts, Allocator.Persistent, NativeArrayOptions.UninitializedMemory);
-          UV1s = new NativeArray<Vector2>(totalVerts, Allocator.Persistent, NativeArrayOptions.UninitializedMemory);
           Colors = new NativeArray<Color32>(totalVerts, Allocator.Persistent, NativeArrayOptions.UninitializedMemory);
           VertCap = totalVerts;
         }
@@ -148,7 +137,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
       if (StripeBuffers.Verts.IsCreated) StripeBuffers.Verts.Dispose();
       if (StripeBuffers.Normals.IsCreated) StripeBuffers.Normals.Dispose();
       if (StripeBuffers.UVs.IsCreated) StripeBuffers.UVs.Dispose();
-      if (StripeBuffers.UV1s.IsCreated) StripeBuffers.UV1s.Dispose();
       if (StripeBuffers.Colors.IsCreated) StripeBuffers.Colors.Dispose();
       if (StripeBuffers.Indices.IsCreated) StripeBuffers.Indices.Dispose();
       StripeBuffers.StripesCap = 0; StripeBuffers.VertCap = 0; StripeBuffers.IndexCap = 0;
@@ -295,7 +283,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
           StripeVertices = StripeBuffers.Verts,
           StripeNormals = StripeBuffers.Normals,
           StripeUVs = StripeBuffers.UVs,
-          StripeUV1s = StripeBuffers.UV1s,
           StripeColors = StripeBuffers.Colors,
           StripeIndices = StripeBuffers.Indices,
           StripeVertexCounts = StripeBuffers.VCounts,
@@ -332,7 +319,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
               vert.Normal = StripeBuffers.Normals[srcVBase + i];
               vert.Color = StripeBuffers.Colors[srcVBase + i];
               vert.UV = StripeBuffers.UVs[srcVBase + i];
-              vert.UV1 = StripeBuffers.UV1s[srcVBase + i];
               finalVertices[vertexOffset + i] = vert;
             }
 
@@ -383,8 +369,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
             new(VertexAttribute.Position, VertexAttributeFormat.Float32, 3),
             new(VertexAttribute.Normal, VertexAttributeFormat.Float32, 3),
             new(VertexAttribute.Color, VertexAttributeFormat.UNorm8, 4),
-            new(VertexAttribute.TexCoord0, VertexAttributeFormat.Float32, 2),
-            new(VertexAttribute.TexCoord1, VertexAttributeFormat.Float32, 2)
+            new(VertexAttribute.TexCoord0, VertexAttributeFormat.Float32, 2)
           };
 
           meshData.SetVertexBufferParams(totalVerts, layout);
@@ -462,7 +447,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
       [NativeDisableParallelForRestriction] public NativeArray<Vector3> StripeVertices;
       [NativeDisableParallelForRestriction] public NativeArray<Vector3> StripeNormals;
       [NativeDisableParallelForRestriction] public NativeArray<Vector2> StripeUVs;
-      [NativeDisableParallelForRestriction] public NativeArray<Vector2> StripeUV1s;
       [NativeDisableParallelForRestriction] public NativeArray<Color32> StripeColors;
       [NativeDisableParallelForRestriction] public NativeArray<int> StripeIndices;
       public NativeArray<int> StripeVertexCounts;
@@ -525,10 +509,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
 
             for (int i = 0; i < 12; i++) { edgeIndices[i] = -1; hasEdge[i] = false; }
 
-            MaterialBlend materialBlend = BuildMaterialBlend(densities, materials);
-            Color32 vertexColor = MaterialBlendToColor(materialBlend);
-            Vector2 materialIds01 = MaterialBlendIds01(materialBlend);
-            Vector2 materialIds23 = MaterialBlendIds23(materialBlend);
+            ushort materialId = ChooseMaterial(densities, materials);
+            Color32 vertexColor = MaterialToColor(materialId);
 
             for (int t = 0; t < 16; t += 3)
             {
@@ -538,9 +520,9 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
               int edge2 = TriangleTable[cubeIndex * 16 + t + 2];
               if (edge1 < 0 || edge2 < 0 || edge0 >= 12 || edge1 >= 12 || edge2 >= 12) break;
 
-              int v0 = BuildEdgeIndex(edge0, positions, densities, normals, edgeVertices, edgeNormals, edgeIndices, hasEdge, vertexColor, materialIds01, materialIds23, vBase, ref vWrite);
-              int v1 = BuildEdgeIndex(edge1, positions, densities, normals, edgeVertices, edgeNormals, edgeIndices, hasEdge, vertexColor, materialIds01, materialIds23, vBase, ref vWrite);
-              int v2 = BuildEdgeIndex(edge2, positions, densities, normals, edgeVertices, edgeNormals, edgeIndices, hasEdge, vertexColor, materialIds01, materialIds23, vBase, ref vWrite);
+              int v0 = BuildEdgeIndex(edge0, positions, densities, normals, edgeVertices, edgeNormals, edgeIndices, hasEdge, vertexColor, vBase, ref vWrite);
+              int v1 = BuildEdgeIndex(edge1, positions, densities, normals, edgeVertices, edgeNormals, edgeIndices, hasEdge, vertexColor, vBase, ref vWrite);
+              int v2 = BuildEdgeIndex(edge2, positions, densities, normals, edgeVertices, edgeNormals, edgeIndices, hasEdge, vertexColor, vBase, ref vWrite);
               if (v0 < 0 || v1 < 0 || v2 < 0 || v0 == v1 || v1 == v2 || v0 == v2) continue;
 
               if (iWrite + 3 > MaxIndicesPerStripe)
@@ -569,19 +551,17 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
       }
 
       private int BuildEdgeIndex(
-        int edgeIndex,
-        Span<Vector3> positions,
-        Span<float> densities,
-        Span<Vector3> normals,
-        Span<Vector3> edgeVertices,
-        Span<Vector3> edgeNormals,
-        Span<int> edgeIndices,
-        Span<bool> hasEdge,
-        Color32 vertexColor,
-        Vector2 materialIds01,
-        Vector2 materialIds23,
-        int vBase,
-        ref int vWrite)
+          int edgeIndex,
+          Span<Vector3> positions,
+          Span<float> densities,
+          Span<Vector3> normals,
+          Span<Vector3> edgeVertices,
+          Span<Vector3> edgeNormals,
+          Span<int> edgeIndices,
+          Span<bool> hasEdge,
+          Color32 vertexColor,
+          int vBase,
+          ref int vWrite)
       {
         if (hasEdge[edgeIndex])
         {
@@ -592,20 +572,22 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
         int cornerB = EdgeConnection[edgeIndex * 2 + 1];
 
         edgeVertices[edgeIndex] = InterpolateVertex(
-          positions[cornerA],
-          positions[cornerB],
-          densities[cornerA],
-          densities[cornerB]);
+            positions[cornerA],
+            positions[cornerB],
+            densities[cornerA],
+            densities[cornerB]
+        );
 
         edgeNormals[edgeIndex] = InterpolateNormal(
-          normals[cornerA],
-          normals[cornerB],
-          densities[cornerA],
-          densities[cornerB]);
+            normals[cornerA],
+            normals[cornerB],
+            densities[cornerA],
+            densities[cornerB]
+        );
 
         Vector3 finalNormal = edgeNormals[edgeIndex].sqrMagnitude > 0.000001f
-          ? edgeNormals[edgeIndex].normalized
-          : Vector3.up;
+            ? edgeNormals[edgeIndex].normalized
+            : Vector3.up;
 
         if (vWrite >= MaxVertsPerStripe)
         {
@@ -613,13 +595,10 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
         }
 
         int newIndex = vWrite;
-
         StripeVertices[vBase + vWrite] = edgeVertices[edgeIndex];
         StripeNormals[vBase + vWrite] = finalNormal;
-        StripeUVs[vBase + vWrite] = materialIds01;
-        StripeUV1s[vBase + vWrite] = materialIds23;
+        StripeUVs[vBase + vWrite] = ProjectUv(edgeVertices[edgeIndex], finalNormal);
         StripeColors[vBase + vWrite] = vertexColor;
-
         vWrite++;
 
         edgeIndices[edgeIndex] = newIndex;
@@ -763,10 +742,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
 
             for (int i = 0; i < 12; i++) { edgeIndices[i] = -1; hasEdge[i] = false; }
 
-            MaterialBlend materialBlend = BuildMaterialBlend(densities, materials);
-            Color32 col = MaterialBlendToColor(materialBlend);
-            Vector2 materialIds01 = MaterialBlendIds01(materialBlend);
-            Vector2 materialIds23 = MaterialBlendIds23(materialBlend);
+            ushort materialId = ChooseMaterial(densities, materials);
+            Color32 vertexColor = MaterialToColor(materialId);
 
             for (int t = 0; t < 16; t += 3)
             {
@@ -775,9 +752,9 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
               int edge2 = TriangleTable[cubeIndex * 16 + t + 2];
               if (edge1 < 0 || edge2 < 0 || edge0 >= 12 || edge1 >= 12 || edge2 >= 12) break;
 
-              int v0 = BuildEdgeIndex(edge0, positions, densities, normals, edgeVertices, edgeNormals, edgeIndices, hasEdge, col, materialIds01, materialIds23, vBase, ref vWrite);
-              int v1 = BuildEdgeIndex(edge1, positions, densities, normals, edgeVertices, edgeNormals, edgeIndices, hasEdge, col, materialIds01, materialIds23, vBase, ref vWrite);
-              int v2 = BuildEdgeIndex(edge2, positions, densities, normals, edgeVertices, edgeNormals, edgeIndices, hasEdge, col, materialIds01, materialIds23, vBase, ref vWrite);
+              int v0 = BuildEdgeIndex(edge0, positions, densities, normals, edgeVertices, edgeNormals, edgeIndices, hasEdge, vertexColor, vBase, ref vWrite);
+              int v1 = BuildEdgeIndex(edge1, positions, densities, normals, edgeVertices, edgeNormals, edgeIndices, hasEdge, vertexColor, vBase, ref vWrite);
+              int v2 = BuildEdgeIndex(edge2, positions, densities, normals, edgeVertices, edgeNormals, edgeIndices, hasEdge, vertexColor, vBase, ref vWrite);
               if (v0 < 0 || v1 < 0 || v2 < 0 || v0 == v1 || v1 == v2 || v0 == v2) continue;
 
               if (iWrite + 3 > iCap) continue; // prevent overflow
@@ -800,51 +777,31 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
       }
 
       private int BuildEdgeIndex(
-        int edgeIndex,
-        Span<Vector3> positions,
-        Span<float> densities,
-        Span<Vector3> normals,
-        Span<Vector3> edgeVertices,
-        Span<Vector3> edgeNormals,
-        Span<int> edgeIndices,
-        Span<bool> hasEdge,
-        Color32 vertexColor,
-        Vector2 materialIds01,
-        Vector2 materialIds23,
-        int vBase,
+      int edgeIndex,
+      Span<Vector3> positions,
+      Span<float> densities,
+      Span<Vector3> normals,
+      Span<Vector3> edgeVertices,
+      Span<Vector3> edgeNormals,
+      Span<int> edgeIndices,
+      Span<bool> hasEdge,
+      Color32 vertexColor,
+      int vBase,
         ref int vWrite)
       {
-        if (hasEdge[edgeIndex])
-        {
-          return edgeIndices[edgeIndex];
-        }
+        if (hasEdge[edgeIndex]) return edgeIndices[edgeIndex];
 
         int cornerA = EdgeConnection[edgeIndex * 2 + 0];
         int cornerB = EdgeConnection[edgeIndex * 2 + 1];
-
-        edgeVertices[edgeIndex] = InterpolateVertex(
-          positions[cornerA],
-          positions[cornerB],
-          densities[cornerA],
-          densities[cornerB]);
-
-        edgeNormals[edgeIndex] = InterpolateNormal(
-          normals[cornerA],
-          normals[cornerB],
-          densities[cornerA],
-          densities[cornerB]);
-
-        Vector3 finalNormal = edgeNormals[edgeIndex].sqrMagnitude > 0.000001f
-          ? edgeNormals[edgeIndex].normalized
-          : Vector3.up;
+        edgeVertices[edgeIndex] = InterpolateVertex(positions[cornerA], positions[cornerB], densities[cornerA], densities[cornerB]);
+        edgeNormals[edgeIndex] = InterpolateNormal(normals[cornerA], normals[cornerB], densities[cornerA], densities[cornerB]);
+        Vector3 finalNormal = edgeNormals[edgeIndex].sqrMagnitude > 0.000001f ? edgeNormals[edgeIndex].normalized : Vector3.up;
 
         int newIndex = vWrite;
-
         FinalVertices[vBase + vWrite] = edgeVertices[edgeIndex];
         FinalNormals[vBase + vWrite] = finalNormal;
-        FinalUVs[vBase + vWrite] = materialIds01;
+        FinalUVs[vBase + vWrite] = ProjectUv(edgeVertices[edgeIndex], finalNormal);
         FinalColors[vBase + vWrite] = vertexColor;
-
         vWrite++;
 
         edgeIndices[edgeIndex] = newIndex;
@@ -970,10 +927,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
             if (TriangleTable[cubeIndex * 16 + 0] < 0) continue;
             for (int i = 0; i < 12; i++) { edgeIndices[i] = -1; hasEdge[i] = false; }
 
-            MaterialBlend materialBlend = BuildMaterialBlend(densities, materials);
-            Color32 col = MaterialBlendToColor(materialBlend);
-            Vector2 materialIds01 = MaterialBlendIds01(materialBlend);
-            Vector2 materialIds23 = MaterialBlendIds23(materialBlend);
+            ushort mat = ChooseMaterial(densities, materials);
+            Color32 col = MaterialToColor(mat);
 
             for (int t = 0; t < 16; t += 3)
             {
@@ -991,7 +946,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
                 Vector3 v = InterpolateVertex(positions[a], positions[b], densities[a], densities[b]);
                 Vector3 n = InterpolateNormal(normals[a], normals[b], densities[a], densities[b]);
                 int newIndex = vBase + vWrite;
-                Vertex vert; vert.Position = v; vert.Normal = n; vert.Color = col; vert.UV = ProjectUv(v, n); vert.UV = materialIds01; vert.UV1 = materialIds23;
+                Vertex vert; vert.Position = v; vert.Normal = n; vert.Color = col; vert.UV = ProjectUv(v, n);
                 OutVertices[newIndex] = vert;
                 edgeIndices[e0] = vWrite; hasEdge[e0] = true; lv0 = edgeIndices[e0]; vWrite++;
               }
@@ -1005,7 +960,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
                 Vector3 v = InterpolateVertex(positions[a], positions[b], densities[a], densities[b]);
                 Vector3 n = InterpolateNormal(normals[a], normals[b], densities[a], densities[b]);
                 int newIndex = vBase + vWrite;
-                Vertex vert; vert.Position = v; vert.Normal = n; vert.Color = col; vert.UV = ProjectUv(v, n); vert.UV = materialIds01; vert.UV1 = materialIds23;
+                Vertex vert; vert.Position = v; vert.Normal = n; vert.Color = col; vert.UV = ProjectUv(v, n);
                 OutVertices[newIndex] = vert;
                 edgeIndices[e1] = vWrite; hasEdge[e1] = true; lv1 = edgeIndices[e1]; vWrite++;
               }
@@ -1019,7 +974,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
                 Vector3 v = InterpolateVertex(positions[a], positions[b], densities[a], densities[b]);
                 Vector3 n = InterpolateNormal(normals[a], normals[b], densities[a], densities[b]);
                 int newIndex = vBase + vWrite;
-                Vertex vert; vert.Position = v; vert.Normal = n; vert.Color = col; vert.UV = ProjectUv(v, n); vert.UV = materialIds01; vert.UV1 = materialIds23;
+                Vertex vert; vert.Position = v; vert.Normal = n; vert.Color = col; vert.UV = ProjectUv(v, n);
                 OutVertices[newIndex] = vert;
                 edgeIndices[e2] = vWrite; hasEdge[e2] = true; lv2 = edgeIndices[e2]; vWrite++;
               }
@@ -1358,175 +1313,10 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
         }
 
         float depthBelowSurface = (float)surfaceHeight - (float)wz;
-        solidMaterialId = ClampMat(profile.GetMaterialId(depthBelowSurface, wx, wy, wz));
+        solidMaterialId = ClampMat(profile.GetMaterialId(depthBelowSurface));
       }
 
       private static int ClampMat(int v) => Mathf.Clamp(v, 1, 65535);
-    }
-
-    private struct MaterialBlend
-    {
-      public ushort Id0;
-      public ushort Id1;
-      public ushort Id2;
-      public ushort Id3;
-
-      public float W0;
-      public float W1;
-      public float W2;
-      public float W3;
-    }
-
-    private static MaterialBlend BuildMaterialBlend(Span<float> densities, Span<ushort> materials)
-    {
-      MaterialBlend blend = default;
-
-      for (int i = 0; i < 8; i++)
-      {
-        ushort materialId = materials[i];
-
-        if (materialId == 0 || densities[i] <= 0.0f)
-        {
-          continue;
-        }
-
-        float weight = Mathf.Max(0.001f, densities[i]);
-        AddMaterialWeight(ref blend, materialId, weight);
-      }
-
-      NormalizeMaterialBlend(ref blend);
-      return blend;
-    }
-
-    private static void AddMaterialWeight(ref MaterialBlend blend, ushort materialId, float weight)
-    {
-      if (materialId == 0 || weight <= 0.0f)
-      {
-        return;
-      }
-
-      if (blend.Id0 == materialId)
-      {
-        blend.W0 += weight;
-        return;
-      }
-
-      if (blend.Id1 == materialId)
-      {
-        blend.W1 += weight;
-        return;
-      }
-
-      if (blend.Id2 == materialId)
-      {
-        blend.W2 += weight;
-        return;
-      }
-
-      if (blend.Id3 == materialId)
-      {
-        blend.W3 += weight;
-        return;
-      }
-
-      if (blend.Id0 == 0)
-      {
-        blend.Id0 = materialId;
-        blend.W0 = weight;
-        return;
-      }
-
-      if (blend.Id1 == 0)
-      {
-        blend.Id1 = materialId;
-        blend.W1 = weight;
-        return;
-      }
-
-      if (blend.Id2 == 0)
-      {
-        blend.Id2 = materialId;
-        blend.W2 = weight;
-        return;
-      }
-
-      if (blend.Id3 == 0)
-      {
-        blend.Id3 = materialId;
-        blend.W3 = weight;
-        return;
-      }
-
-      // Keep the four strongest materials only.
-      if (weight > blend.W0 && blend.W0 <= blend.W1 && blend.W0 <= blend.W2 && blend.W0 <= blend.W3)
-      {
-        blend.Id0 = materialId;
-        blend.W0 = weight;
-        return;
-      }
-
-      if (weight > blend.W1 && blend.W1 <= blend.W0 && blend.W1 <= blend.W2 && blend.W1 <= blend.W3)
-      {
-        blend.Id1 = materialId;
-        blend.W1 = weight;
-        return;
-      }
-
-      if (weight > blend.W2 && blend.W2 <= blend.W0 && blend.W2 <= blend.W1 && blend.W2 <= blend.W3)
-      {
-        blend.Id2 = materialId;
-        blend.W2 = weight;
-        return;
-      }
-
-      if (weight > blend.W3)
-      {
-        blend.Id3 = materialId;
-        blend.W3 = weight;
-      }
-    }
-
-    private static void NormalizeMaterialBlend(ref MaterialBlend blend)
-    {
-      float total = blend.W0 + blend.W1 + blend.W2 + blend.W3;
-
-      if (total <= 0.000001f)
-      {
-        blend.Id0 = 1;
-        blend.Id1 = 0;
-        blend.Id2 = 0;
-        blend.Id3 = 0;
-        blend.W0 = 1.0f;
-        blend.W1 = 0.0f;
-        blend.W2 = 0.0f;
-        blend.W3 = 0.0f;
-        return;
-      }
-
-      float inv = 1.0f / total;
-      blend.W0 *= inv;
-      blend.W1 *= inv;
-      blend.W2 *= inv;
-      blend.W3 *= inv;
-    }
-
-    private static Color32 MaterialBlendToColor(MaterialBlend blend)
-    {
-      return new Color32(
-        (byte)Mathf.Clamp(Mathf.RoundToInt(blend.W0 * 255.0f), 0, 255),
-        (byte)Mathf.Clamp(Mathf.RoundToInt(blend.W1 * 255.0f), 0, 255),
-        (byte)Mathf.Clamp(Mathf.RoundToInt(blend.W2 * 255.0f), 0, 255),
-        (byte)Mathf.Clamp(Mathf.RoundToInt(blend.W3 * 255.0f), 0, 255));
-    }
-
-    private static Vector2 MaterialBlendIds01(MaterialBlend blend)
-    {
-      return new Vector2(blend.Id0, blend.Id1);
-    }
-
-    private static Vector2 MaterialBlendIds23(MaterialBlend blend)
-    {
-      return new Vector2(blend.Id2, blend.Id3);
     }
 
     private static Vector3 InterpolateVertex(Vector3 p0, Vector3 p1, float d0, float d1)

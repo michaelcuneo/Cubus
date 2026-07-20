@@ -11,16 +11,19 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
 {
   public static class DensityMeshDataBuilder
   {
+    private delegate float SampleDensityAtGrid(int sx, int sy, int sz);
+
     public static MeshData Generate(
       Vector3Int chunkCoord,
       WorldGenerationSnapshot snapshot,
       int cellStep,
       bool flipWinding,
-      Func<Vector3Int, DensityVoxel> sampleVoxelAtWorld)
+      Func<Vector3Int, DensityVoxel> sampleVoxelAtWorld
+    )
     {
       if (sampleVoxelAtWorld == null) return null;
 
-      int safeCellStep = Mathf.Clamp(cellStep, 1, 4);
+      int safeCellStep = WorldSettings.NormalizeDensityMeshStep(cellStep);
       int numCellsAxis = Mathf.CeilToInt((float)VoxelConstants.ChunkSize / safeCellStep);
       int numSamplesAxis = numCellsAxis + 1;
       int totalSamples = numSamplesAxis * numSamplesAxis * numSamplesAxis;
@@ -50,7 +53,16 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
           }
         }
 
-        return BuildFromGrids(densityGrid, materialGrid, numCellsAxis, safeCellStep * snapshot.VoxelSize, flipWinding);
+        return BuildFromGrids(
+          densityGrid,
+          materialGrid,
+          numCellsAxis,
+          safeCellStep * snapshot.VoxelSize,
+          flipWinding,
+          (sx, sy, sz) => sampleVoxelAtWorld(new Vector3Int(
+            baseWorldX + sx * safeCellStep,
+            baseWorldY + sy * safeCellStep,
+            baseWorldZ + sz * safeCellStep)).Density);
       }
       finally
       {
@@ -66,12 +78,13 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
       bool flipWinding,
       DensityChunkData rootChunkData,
       IReadOnlyDictionary<Vector3Int, DensityChunkData> chunkDataSnapshots,
-      Func<Vector3Int, DensityVoxel> fallbackSampleVoxelAtWorld)
+      Func<Vector3Int, DensityVoxel> fallbackSampleVoxelAtWorld
+    )
     {
       if (rootChunkData == null) return Generate(chunkCoord, snapshot, cellStep, flipWinding, fallbackSampleVoxelAtWorld);
 
       const int chunkSize = VoxelConstants.ChunkSize;
-      int safeCellStep = Mathf.Clamp(cellStep, 1, 4);
+      int safeCellStep = WorldSettings.NormalizeDensityMeshStep(cellStep);
       int numCellsAxis = Mathf.CeilToInt((float)chunkSize / safeCellStep);
       int numSamplesAxis = numCellsAxis + 1;
       int totalSamples = numSamplesAxis * numSamplesAxis * numSamplesAxis;
@@ -115,7 +128,19 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
           }
         }
 
-        return BuildFromGrids(densityGrid, materialGrid, numCellsAxis, safeCellStep * snapshot.VoxelSize, flipWinding);
+        return BuildFromGrids(
+          densityGrid,
+          materialGrid,
+          numCellsAxis,
+          safeCellStep * snapshot.VoxelSize,
+          flipWinding,
+          (sx, sy, sz) => SampleSnapshotOrFallback(
+            chunkDataSnapshots,
+            fallbackSampleVoxelAtWorld,
+            new Vector3Int(
+              baseWorldX + sx * safeCellStep,
+              baseWorldY + sy * safeCellStep,
+              baseWorldZ + sz * safeCellStep)).Density);
       }
       finally
       {
@@ -127,7 +152,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
     private static DensityVoxel SampleSnapshotOrFallback(
       IReadOnlyDictionary<Vector3Int, DensityChunkData> chunkDataSnapshots,
       Func<Vector3Int, DensityVoxel> fallbackSampleVoxelAtWorld,
-      Vector3Int worldVoxel)
+      Vector3Int worldVoxel
+    )
     {
       Vector3Int sampleChunkCoord = VoxelMath.WorldVoxelToChunkCoord(worldVoxel);
       Vector3Int localCoord = VoxelMath.WorldVoxelToLocalCoord(worldVoxel);
@@ -144,7 +170,20 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
       DensityMaterialSet[] materialGrid,
       int numCellsAxis,
       float cellWorldSize,
-      bool flipWinding)
+      bool flipWinding
+    )
+    {
+      return BuildFromGrids(densityGrid, materialGrid, numCellsAxis, cellWorldSize, flipWinding, null);
+    }
+
+    private static MeshData BuildFromGrids(
+      float[] densityGrid,
+      DensityMaterialSet[] materialGrid,
+      int numCellsAxis,
+      float cellWorldSize,
+      bool flipWinding,
+      SampleDensityAtGrid sampleDensityAtGrid
+    )
     {
       if (densityGrid == null || materialGrid == null || numCellsAxis <= 0) return null;
 
@@ -235,16 +274,14 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
               positions[6] = new Vector3(px1, py1, pz1);
               positions[7] = new Vector3(px0, py1, pz1);
 
-              normals[0] = SampleNormalCached(densityGrid, normalCache, normalComputed, numSamplesAxis, 0, 0, i000);
-              normals[1] = SampleNormalCached(densityGrid, normalCache, normalComputed, numSamplesAxis, 1, 0, i100);
-              normals[2] = SampleNormalCached(densityGrid, normalCache, normalComputed, numSamplesAxis, 1, 1, i110);
-              normals[3] = SampleNormalCached(densityGrid, normalCache, normalComputed, numSamplesAxis, 0, 1, i010);
-              normals[4] = SampleNormalCached(densityGrid, normalCache, normalComputed, numSamplesAxis, 0, 0, i001);
-              normals[5] = SampleNormalCached(densityGrid, normalCache, normalComputed, numSamplesAxis, 1, 0, i101);
-              normals[6] = SampleNormalCached(densityGrid, normalCache, normalComputed, numSamplesAxis, 1, 1, i111);
-              normals[7] = SampleNormalCached(densityGrid, normalCache, normalComputed, numSamplesAxis, 0, 1, i011);
-
-              DensityMaterialSet cellSlots = BuildCellMaterialSlots(materials, densities);
+              normals[0] = SampleNormalCached(densityGrid, normalCache, normalComputed, numSamplesAxis, 0, 0, i000, sampleDensityAtGrid);
+              normals[1] = SampleNormalCached(densityGrid, normalCache, normalComputed, numSamplesAxis, 1, 0, i100, sampleDensityAtGrid);
+              normals[2] = SampleNormalCached(densityGrid, normalCache, normalComputed, numSamplesAxis, 1, 1, i110, sampleDensityAtGrid);
+              normals[3] = SampleNormalCached(densityGrid, normalCache, normalComputed, numSamplesAxis, 0, 1, i010, sampleDensityAtGrid);
+              normals[4] = SampleNormalCached(densityGrid, normalCache, normalComputed, numSamplesAxis, 0, 0, i001, sampleDensityAtGrid);
+              normals[5] = SampleNormalCached(densityGrid, normalCache, normalComputed, numSamplesAxis, 1, 0, i101, sampleDensityAtGrid);
+              normals[6] = SampleNormalCached(densityGrid, normalCache, normalComputed, numSamplesAxis, 1, 1, i111, sampleDensityAtGrid);
+              normals[7] = SampleNormalCached(densityGrid, normalCache, normalComputed, numSamplesAxis, 0, 1, i011, sampleDensityAtGrid);
 
               for (int i = 0; i < 12; i++) edgeIndices[i] = -1;
 
@@ -256,9 +293,9 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
                 int e2 = MarchingCubesTables.TriangleTable[cubeIndex, t + 2];
                 if (e1 < 0 || e2 < 0 || e0 >= 12 || e1 >= 12 || e2 >= 12) break;
 
-                int v0 = AddOrGetEdgeVertex(mesh, e0, positions, densities, materials, cellSlots, normals, edgeVertices, edgeNormals, edgeIndices);
-                int v1 = AddOrGetEdgeVertex(mesh, e1, positions, densities, materials, cellSlots, normals, edgeVertices, edgeNormals, edgeIndices);
-                int v2 = AddOrGetEdgeVertex(mesh, e2, positions, densities, materials, cellSlots, normals, edgeVertices, edgeNormals, edgeIndices);
+                int v0 = AddOrGetEdgeVertex(mesh, e0, positions, densities, materials, normals, edgeVertices, edgeNormals, edgeIndices);
+                int v1 = AddOrGetEdgeVertex(mesh, e1, positions, densities, materials, normals, edgeVertices, edgeNormals, edgeIndices);
+                int v2 = AddOrGetEdgeVertex(mesh, e2, positions, densities, materials, normals, edgeVertices, edgeNormals, edgeIndices);
 
                 if (v0 < 0 || v1 < 0 || v2 < 0 || v0 == v1 || v1 == v2 || v0 == v2) continue;
 
@@ -292,33 +329,92 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
       }
     }
 
-    private static Vector3 SampleNormalCached(float[] densities, Vector3[] normalCache, bool[] normalComputed, int samplesAxis, int xOffset, int yOffset, int index)
+    private static Vector3 SampleNormalCached(
+      float[] densities,
+      Vector3[] normalCache,
+      bool[] normalComputed,
+      int samplesAxis,
+      int xOffset,
+      int yOffset,
+      int index,
+      SampleDensityAtGrid sampleDensityAtGrid)
     {
       if (normalComputed[index]) return normalCache[index];
-      Vector3 normal = SampleNormal(densities, samplesAxis, xOffset, yOffset, index);
+      Vector3 normal = SampleNormal(densities, samplesAxis, xOffset, yOffset, index, sampleDensityAtGrid);
       normalCache[index] = normal;
       normalComputed[index] = true;
       return normal;
     }
 
-    private static Vector3 SampleNormal(float[] densities, int samplesAxis, int xOffset, int yOffset, int index)
+    private static Vector3 SampleNormal(float[] densities, int samplesAxis, int xOffset, int yOffset, int index, SampleDensityAtGrid sampleDensityAtGrid)
     {
       int samplesAxisSquared = samplesAxis * samplesAxis;
       int ix = index % samplesAxis;
+      int iy = (index / samplesAxis) % samplesAxis;
       int iz = index / samplesAxisSquared;
 
-      int leftIndex = xOffset == 0 && ix == 0 ? index : index - 1;
-      int rightIndex = xOffset == 1 && ix == samplesAxis - 1 ? index : index + 1;
-      int downIndex = yOffset == 0 && ((index / samplesAxis) % samplesAxis) == 0 ? index : index - samplesAxis;
-      int upIndex = yOffset == 1 && ((index / samplesAxis) % samplesAxis) == samplesAxis - 1 ? index : index + samplesAxis;
-      int backIndex = iz == 0 ? index : index - samplesAxisSquared;
-      int forwardIndex = iz == samplesAxis - 1 ? index : index + samplesAxisSquared;
+      bool canSampleExternal = sampleDensityAtGrid != null;
 
-      float dx = densities[rightIndex] - densities[leftIndex];
-      float dy = densities[upIndex] - densities[downIndex];
-      float dz = densities[forwardIndex] - densities[backIndex];
+      float dx;
+      float dy;
+      float dz;
+
+      if (canSampleExternal)
+      {
+        dx = SampleCentralDifference(densities, samplesAxis, samplesAxisSquared, ix, iy, iz, 1, 0, 0, sampleDensityAtGrid);
+        dy = SampleCentralDifference(densities, samplesAxis, samplesAxisSquared, ix, iy, iz, 0, 1, 0, sampleDensityAtGrid);
+        dz = SampleCentralDifference(densities, samplesAxis, samplesAxisSquared, ix, iy, iz, 0, 0, 1, sampleDensityAtGrid);
+      }
+      else
+      {
+        int leftIndex = xOffset == 0 && ix == 0 ? index : index - 1;
+        int rightIndex = xOffset == 1 && ix == samplesAxis - 1 ? index : index + 1;
+        int downIndex = yOffset == 0 && iy == 0 ? index : index - samplesAxis;
+        int upIndex = yOffset == 1 && iy == samplesAxis - 1 ? index : index + samplesAxis;
+        int backIndex = iz == 0 ? index : index - samplesAxisSquared;
+        int forwardIndex = iz == samplesAxis - 1 ? index : index + samplesAxisSquared;
+
+        dx = densities[rightIndex] - densities[leftIndex];
+        dy = densities[upIndex] - densities[downIndex];
+        dz = densities[forwardIndex] - densities[backIndex];
+      }
+
       Vector3 normal = new(-dx, -dy, -dz);
       return normal.sqrMagnitude > 0.000001f ? normal.normalized : Vector3.up;
+    }
+
+    private static float SampleCentralDifference(
+      float[] densities,
+      int samplesAxis,
+      int samplesAxisSquared,
+      int ix,
+      int iy,
+      int iz,
+      int stepX,
+      int stepY,
+      int stepZ,
+      SampleDensityAtGrid sampleDensityAtGrid)
+    {
+      float previous = SampleDensityAtGridCoordinate(densities, samplesAxis, samplesAxisSquared, ix - stepX, iy - stepY, iz - stepZ, sampleDensityAtGrid);
+      float next = SampleDensityAtGridCoordinate(densities, samplesAxis, samplesAxisSquared, ix + stepX, iy + stepY, iz + stepZ, sampleDensityAtGrid);
+      return next - previous;
+    }
+
+    private static float SampleDensityAtGridCoordinate(
+      float[] densities,
+      int samplesAxis,
+      int samplesAxisSquared,
+      int ix,
+      int iy,
+      int iz,
+      SampleDensityAtGrid sampleDensityAtGrid)
+    {
+      if (ix >= 0 && ix < samplesAxis && iy >= 0 && iy < samplesAxis && iz >= 0 && iz < samplesAxis)
+      {
+        return densities[ix + samplesAxis * iy + samplesAxisSquared * iz];
+      }
+
+      return sampleDensityAtGrid(ix, iy, iz);
     }
 
     private static int AddOrGetEdgeVertex(
@@ -327,7 +423,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
       Span<Vector3> positions,
       Span<float> densities,
       Span<DensityMaterialSet> materials,
-      DensityMaterialSet cellSlots,
       Span<Vector3> normals,
       Span<Vector3> edgeVertices,
       Span<Vector3> edgeNormals,
@@ -356,11 +451,10 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
       normal = normal.sqrMagnitude > 0.000001f ? normal.normalized : Vector3.up;
 
       BuildSplatPayload(
-        positions,
-        densities,
-        materials,
-        cellSlots,
-        position,
+        materials[cornerA],
+        materials[cornerB],
+        densities[cornerA],
+        densities[cornerB],
         out Color32 splatWeights,
         out Vector2 materialIds01,
         out Vector2 materialIds23);
@@ -395,49 +489,11 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
       return Vector3.Lerp(a, b, t);
     }
 
-    private static DensityMaterialSet BuildCellMaterialSlots(Span<DensityMaterialSet> materials, Span<float> densities)
-    {
-      Span<ushort> ids = stackalloc ushort[16];
-      Span<float> weights = stackalloc float[16];
-      int uniqueCount = 0;
-
-      for (int corner = 0; corner < 8; corner++)
-      {
-        float densityWeight = Mathf.Clamp01(densities[corner] + 0.75f);
-        if (densityWeight <= 0.000001f) continue;
-        DensityMaterialSet set = materials[corner];
-        AccumulateMaterial(ref uniqueCount, ids, weights, set.Material0, set.Weight0 * densityWeight);
-        AccumulateMaterial(ref uniqueCount, ids, weights, set.Material1, set.Weight1 * densityWeight);
-        AccumulateMaterial(ref uniqueCount, ids, weights, set.Material2, set.Weight2 * densityWeight);
-        AccumulateMaterial(ref uniqueCount, ids, weights, set.Material3, set.Weight3 * densityWeight);
-      }
-
-      if (uniqueCount == 0)
-      {
-        return DensityMaterialSet.Single(1);
-      }
-
-      SortMaterialsByWeight(ids, weights, uniqueCount);
-
-      return new DensityMaterialSet
-      {
-        Material0 = uniqueCount > 0 ? ids[0] : (ushort)1,
-        Material1 = uniqueCount > 1 ? ids[1] : (ushort)0,
-        Material2 = uniqueCount > 2 ? ids[2] : (ushort)0,
-        Material3 = uniqueCount > 3 ? ids[3] : (ushort)0,
-        Weight0 = 255,
-        Weight1 = 0,
-        Weight2 = 0,
-        Weight3 = 0
-      };
-    }
-
     private static void BuildSplatPayload(
-      Span<Vector3> positions,
-      Span<float> densities,
-      Span<DensityMaterialSet> materials,
-      DensityMaterialSet cellSlots,
-      Vector3 surfacePosition,
+      DensityMaterialSet materialA,
+      DensityMaterialSet materialB,
+      float densityA,
+      float densityB,
       out Color32 splatWeights,
       out Vector2 materialIds01,
       out Vector2 materialIds23)
@@ -446,40 +502,33 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
       Span<float> weights = stackalloc float[16];
       int uniqueCount = 0;
 
-      for (int corner = 0; corner < 8; corner++)
+      float denom = densityA - densityB;
+      float t = Mathf.Abs(denom) < 0.000001f ? 0.5f : Mathf.Clamp01(densityA / denom);
+      float weightA = 1.0f - t;
+      float weightB = t;
+
+      AccumulateMaterialSet(ref uniqueCount, ids, weights, materialA, weightA);
+      AccumulateMaterialSet(ref uniqueCount, ids, weights, materialB, weightB);
+
+      if (uniqueCount == 0)
       {
-        DensityMaterialSet set = materials[corner];
-
-        float cornerWeight = CalculateCornerMaterialInfluence(
-          positions[corner],
-          densities[corner],
-          surfacePosition);
-
-        if (cornerWeight <= 0.000001f)
-        {
-          continue;
-        }
-
-        AccumulateMaterial(ref uniqueCount, ids, weights, set.Material0, set.Weight0 * cornerWeight);
-        AccumulateMaterial(ref uniqueCount, ids, weights, set.Material1, set.Weight1 * cornerWeight);
-        AccumulateMaterial(ref uniqueCount, ids, weights, set.Material2, set.Weight2 * cornerWeight);
-        AccumulateMaterial(ref uniqueCount, ids, weights, set.Material3, set.Weight3 * cornerWeight);
+        splatWeights = new Color32(255, 0, 0, 0);
+        materialIds01 = new Vector2(1, 0);
+        materialIds23 = Vector2.zero;
+        return;
       }
 
-      ushort material0 = cellSlots.Material0 != 0 ? cellSlots.Material0 : (ushort)1;
-      ushort material1 = cellSlots.Material1;
-      ushort material2 = cellSlots.Material2;
-      ushort material3 = cellSlots.Material3;
+      SortMaterialsByWeight(ids, weights, uniqueCount);
 
-      float weight0 = GetAccumulatedWeight(ids, weights, uniqueCount, material0);
-      float weight1 = GetAccumulatedWeight(ids, weights, uniqueCount, material1);
-      float weight2 = GetAccumulatedWeight(ids, weights, uniqueCount, material2);
-      float weight3 = GetAccumulatedWeight(ids, weights, uniqueCount, material3);
+      ushort material0 = uniqueCount > 0 ? ids[0] : (ushort)1;
+      ushort material1 = uniqueCount > 1 ? ids[1] : (ushort)0;
+      ushort material2 = uniqueCount > 2 ? ids[2] : (ushort)0;
+      ushort material3 = uniqueCount > 3 ? ids[3] : (ushort)0;
 
-      if (weight0 + weight1 + weight2 + weight3 <= 0.000001f)
-      {
-        weight0 = 1.0f;
-      }
+      float weight0 = uniqueCount > 0 ? weights[0] : 0.0f;
+      float weight1 = uniqueCount > 1 ? weights[1] : 0.0f;
+      float weight2 = uniqueCount > 2 ? weights[2] : 0.0f;
+      float weight3 = uniqueCount > 3 ? weights[3] : 0.0f;
 
       NormalizeTopFourWeights(
         weight0,
@@ -496,21 +545,22 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
       materialIds23 = new Vector2(material2, material3);
     }
 
-    private static float CalculateCornerMaterialInfluence(
-      Vector3 cornerPosition,
-      float density,
-      Vector3 surfacePosition)
+    private static void AccumulateMaterialSet(
+      ref int uniqueCount,
+      Span<ushort> ids,
+      Span<float> weights,
+      DensityMaterialSet set,
+      float setWeight)
     {
-      if (density <= -0.75f)
+      if (setWeight <= 0.000001f)
       {
-        return 0.0f;
+        return;
       }
 
-      float distanceSq = (cornerPosition - surfacePosition).sqrMagnitude;
-      float distanceWeight = 1.0f / Mathf.Max(0.0001f, distanceSq + 0.08f);
-      float densityWeight = Mathf.Clamp01(density + 0.75f);
-
-      return distanceWeight * densityWeight;
+      AccumulateMaterial(ref uniqueCount, ids, weights, set.Material0, set.Weight0 * setWeight);
+      AccumulateMaterial(ref uniqueCount, ids, weights, set.Material1, set.Weight1 * setWeight);
+      AccumulateMaterial(ref uniqueCount, ids, weights, set.Material2, set.Weight2 * setWeight);
+      AccumulateMaterial(ref uniqueCount, ids, weights, set.Material3, set.Weight3 * setWeight);
     }
 
     private static void AccumulateMaterial(
@@ -544,26 +594,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
       uniqueCount++;
     }
 
-    private static float GetAccumulatedWeight(
-      Span<ushort> ids,
-      Span<float> weights,
-      int count,
-      ushort materialId)
-    {
-      if (materialId == 0) return 0.0f;
-      float result = 0.0f;
-      int safeCount = Mathf.Min(count, ids.Length);
-      for (int i = 0; i < safeCount; i++)
-      {
-        if (ids[i] == materialId)
-        {
-          result += weights[i];
-        }
-      }
-
-      return result;
-    }
-
     private static void SortMaterialsByWeight(
       Span<ushort> ids,
       Span<float> weights,
@@ -577,7 +607,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Meshing
 
         for (int j = i + 1; j < safeCount; j++)
         {
-          if (weights[j] > weights[best])
+          if (weights[j] > weights[best] + 0.000001f ||
+              (Mathf.Abs(weights[j] - weights[best]) <= 0.000001f && ids[j] < ids[best]))
           {
             best = j;
           }

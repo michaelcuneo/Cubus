@@ -377,22 +377,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     {
       if (hasOverrideStreamingFocusVoxel)
       {
-        // The spawn-prewarm focus override only pins streaming to the spawn point
-        // until the world reports its initial terrain ready. If the ready signal
-        // arrives from a path that does not clear the override (for example
-        // CubusLoadingController's settled/visible-terrain fallback racing ahead of
-        // DemoInitialTerrainSpawnGate's own release), the streaming set would stay
-        // locked on the spawn point and never follow the player. Auto-release it so
-        // streaming always tracks the viewer once gameplay begins.
-        if (world != null && world.IsInitialTerrainReady)
-        {
-          hasOverrideStreamingFocusVoxel = false;
-          RestoreInitialStreamingStageAfterFocusPrewarm();
-        }
-        else
-        {
-          return VoxelToChunkCoord(overrideStreamingFocusVoxel);
-        }
+        return VoxelToChunkCoord(overrideStreamingFocusVoxel);
       }
 
       if (viewer != null)

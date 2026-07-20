@@ -18,6 +18,9 @@ Shader "Cubus/BiomeAtlasURP"
     _FresnelStrength("Fresnel Rim", Range(0, 2)) = 0.15
     _AmbientStrength("Ambient Strength", Range(0, 1)) = 0.28
     _DirectLightStrength("Direct Sun Strength", Range(0, 2)) = 1.15
+    _TerrainTextureDetileStrength("Terrain Texture Detile Strength", Range(0, 1)) = 0.42
+    _TerrainTextureNoiseScale("Terrain Texture Noise Scale", Float) = 0.23
+    _TerrainTextureNoiseStrength("Terrain Texture Noise Strength", Range(0, 0.35)) = 0.025
   }
 
   SubShader
@@ -50,6 +53,7 @@ Shader "Cubus/BiomeAtlasURP"
 
       #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
       #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
+      #include "Packages/com.michaelcuneo.cubuscore/Runtime/Resources/Cubus/Shaders/CubusAzureWeather.hlsl"
 
       TEXTURE2D(_Atlas);
       SAMPLER(sampler_Atlas);
@@ -94,6 +98,9 @@ Shader "Cubus/BiomeAtlasURP"
       float _FresnelStrength;
       float _AmbientStrength;
       float _DirectLightStrength;
+      float _TerrainTextureDetileStrength;
+      float _TerrainTextureNoiseScale;
+      float _TerrainTextureNoiseStrength;
       CBUFFER_END
 
       float DecodeU16(float2 rg)
@@ -207,6 +214,51 @@ Shader "Cubus/BiomeAtlasURP"
         return SafeNormalize(mul(tangentNormal, tbn));
       }
 
+      float Hash31(float3 p)
+      {
+        p = frac(p * 0.1031);
+        p += dot(p, p.yzx + 33.33);
+        return frac((p.x + p.y) * p.z);
+      }
+
+      float ValueNoise(float3 p)
+      {
+        float3 i = floor(p);
+        float3 f = frac(p);
+
+        f = f * f * (3.0 - 2.0 * f);
+
+        float n000 = Hash31(i + float3(0, 0, 0));
+        float n100 = Hash31(i + float3(1, 0, 0));
+        float n010 = Hash31(i + float3(0, 1, 0));
+        float n110 = Hash31(i + float3(1, 1, 0));
+        float n001 = Hash31(i + float3(0, 0, 1));
+        float n101 = Hash31(i + float3(1, 0, 1));
+        float n011 = Hash31(i + float3(0, 1, 1));
+        float n111 = Hash31(i + float3(1, 1, 1));
+
+        float nx00 = lerp(n000, n100, f.x);
+        float nx10 = lerp(n010, n110, f.x);
+        float nx01 = lerp(n001, n101, f.x);
+        float nx11 = lerp(n011, n111, f.x);
+
+        float nxy0 = lerp(nx00, nx10, f.y);
+        float nxy1 = lerp(nx01, nx11, f.y);
+
+        return lerp(nxy0, nxy1, f.z);
+      }
+
+      float TerrainTextureNoise(float3 positionWS)
+      {
+        float scale = max(0.0001, _TerrainTextureNoiseScale);
+        float3 noisePosition = positionWS * scale;
+
+        float broad = ValueNoise(noisePosition * float3(1.0, 0.71, 1.37));
+        float detail = ValueNoise(noisePosition * float3(2.73, 1.91, 3.41) + 37.19);
+
+        return (broad * 0.42 + detail * 0.58) - 0.5;
+      }
+
       float3 ApplyLighting(float3 albedoRgb, float3 positionWS, float3 normalWS)
       {
         float3 n = normalize(normalWS);
@@ -214,23 +266,23 @@ Shader "Cubus/BiomeAtlasURP"
         float4 shadowCoord = TransformWorldToShadowCoord(positionWS);
         Light mainLight = GetMainLight(shadowCoord);
 
-        // Use shadowAttenuation only. distanceAttenuation can read 0 on runtime-streamed
-        // chunks, which would zero the sun everywhere and erase cast shadows entirely.
         float atten = mainLight.shadowAttenuation;
         float ndl = saturate(dot(n, mainLight.direction));
-        float3 direct = mainLight.color * ndl * atten * _DirectLightStrength;
+        float cloudShadow = CubusCloudShadow(positionWS, n);
+        float3 direct = CubusAzureDirectLightColor(mainLight.color) * ndl * atten * _DirectLightStrength * cloudShadow * CubusAzureLightFlashMultiplier();
 
         // Keep a small sky/base ambient so unlit faces are readable, but do not let
         // it wash out the directional sun contrast like the old block shader did.
         float3 skyAmbient = SampleSH(n) * _AmbientStrength;
         float3 floorAmbient = 0.06.xxx;
-        float3 ambient = max(skyAmbient, floorAmbient);
+        float3 ambient = CubusAzureAmbientLight(max(skyAmbient, floorAmbient));
 
         float3 halfVec = SafeNormalize(mainLight.direction + viewDir);
         float ndh = saturate(dot(n, halfVec));
         float shininess = exp2(lerp(3.0, 11.0, saturate(_Smoothness)));
-        float specTerm = pow(ndh, shininess) * _SpecularStrength * ndl * atten;
-        float3 specular = mainLight.color * specTerm;
+        float specTerm = pow(ndh, shininess) * _SpecularStrength * ndl * atten * cloudShadow;
+        specTerm *= CubusWeatherSpecularMultiplier(positionWS, n);
+        float3 specular = CubusAzureDirectLightColor(mainLight.color) * specTerm * CubusAzureLightFlashMultiplier();
 
         float fresnel = pow(1.0 - saturate(dot(n, viewDir)), 5.0) * _FresnelStrength;
         float3 rim = skyAmbient * fresnel;
@@ -274,6 +326,19 @@ Shader "Cubus/BiomeAtlasURP"
           discard;
         }
 
+        float detileStrength = saturate(_TerrainTextureDetileStrength);
+        if (detileStrength > 0.0001)
+        {
+          float materialSeed = materialId * 23.731;
+          float2 detileTileUv = unwrappedTileUv * 1.618 + float2(0.37, 0.61) + materialSeed * 0.013;
+          float2 detileAtlasDx = atlasDx * 1.618;
+          float2 detileAtlasDy = atlasDy * 1.618;
+          float2 detileAtlasUv = AtlasUv(detileTileUv, atlasGrid, tileOffset);
+          half4 detileAlbedo = SAMPLE_TEXTURE2D_GRAD(_Atlas, sampler_Atlas, detileAtlasUv, detileAtlasDx, detileAtlasDy);
+          float detileBlend = saturate(ValueNoise(IN.positionWS * 0.173 + materialSeed) * 0.65 + 0.18) * detileStrength;
+          albedo.rgb = lerp(albedo.rgb, detileAlbedo.rgb, detileBlend);
+        }
+
         float3 normalAtlasSample = SAMPLE_TEXTURE2D_GRAD(_NormalAtlas, sampler_NormalAtlas, atlasUv, atlasDx, atlasDy).rgb;
         float3 tangentNormal = normalAtlasSample * 2.0 - 1.0;
         tangentNormal.xy *= _NormalStrength;
@@ -295,9 +360,20 @@ Shader "Cubus/BiomeAtlasURP"
         }
 
         float3 perturbedNormalWS = PerturbNormal(normalWS, IN.positionWS, unwrappedTileUv, tangentNormal);
-        float3 lit = ApplyLighting(albedo.rgb * _Tint.rgb, IN.positionWS, perturbedNormalWS);
+  float terrainTextureNoise = TerrainTextureNoise(IN.positionWS) * _TerrainTextureNoiseStrength;
+  albedo.rgb *= max(0.0, 1.0 + terrainTextureNoise);
 
-        if (_UseSceneFog > 0.5)
+        float roughness = saturate(1.0 - _Smoothness);
+        float3 shadedAlbedo = albedo.rgb * _Tint.rgb;
+        CubusApplyGroundWeather(shadedAlbedo, roughness, IN.positionWS, perturbedNormalWS);
+
+        float3 lit = ApplyLighting(shadedAlbedo, IN.positionWS, perturbedNormalWS);
+
+        if (_Azure_GlobalFogDistance > 0.0)
+        {
+          lit = CubusApplyAzureFog(lit, IN.positionWS);
+        }
+        else if (_UseSceneFog > 0.5)
         {
           lit = MixFog(lit, IN.fogCoord);
         }
