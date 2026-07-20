@@ -36,19 +36,38 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     private readonly Dictionary<Vector3Int, float> chunkLastInViewTime = new();
     private readonly List<Vector3Int> renderCullPruneBuffer = new();
 
-    /// <summary>
-    /// Minecraft-style rule: do not use the camera frustum as a hard mesh/load gate.
-    /// Keep the world around the player generated/renderable, then use the camera only
-    /// for priority and renderer visibility. Otherwise a fast camera turn exposes empty
-    /// chunks that were never built because they were behind the player.
-    /// </summary>
     private bool ShouldQueueMeshWorkForChunk(Vector3Int chunkCoord)
     {
-      return world == null || world.Settings == null || world.Settings.IsInsideEffectiveWorldBounds3D(chunkCoord);
+      if (world != null && world.Settings != null && !world.Settings.IsInsideEffectiveWorldBounds3D(chunkCoord))
+      {
+        return false;
+      }
+
+      if (UseInitialStreamingStageNow)
+      {
+        return true;
+      }
+
+      if (hasPriorityChunkCoord && chunkCoord == priorityChunkCoord)
+      {
+        return true;
+      }
+
+      if (IsChunkNearViewerForImmediateMesh(chunkCoord))
+      {
+        return true;
+      }
+
+      return IsChunkInCameraFrustum(chunkCoord);
     }
 
     private bool ShouldStartChunkLoadForCurrentVisibility(Vector3Int chunkCoord)
     {
+      if (UseInitialStreamingStageNow)
+      {
+        return true;
+      }
+
       return ShouldQueueMeshWorkForChunk(chunkCoord);
     }
 

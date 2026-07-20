@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Text;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Chunks;
@@ -108,8 +109,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
 
     private CubusWorld world;
     private ChunkPool chunkPool;
-    private WorldDetailRenderer detailRenderer;
-    private bool hasResolvedDetailRenderer;
     private Vector3Int lastCollisionViewerChunkCoord;
     private bool hasLastCollisionViewerChunkCoord;
     private float timeSinceLastCollisionUpdate;
@@ -118,6 +117,10 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
     private const int LookupTextureSize = 256;
 
     public IReadOnlyDictionary<Vector3Int, ChunkView> ActiveChunkViews => activeChunkViews;
+
+    public event Action<Vector3Int> BlockChunkRendered;
+    public event Action<Vector3Int> BlockChunkRemoved;
+    public event Action ChunksCleared;
 
     public WorldCollisionMode CollisionMode
     {
@@ -263,7 +266,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
       chunkView.ApplyMesh(meshData, ShouldGenerateCollisionForChunk(chunkView));
       MeshDataPool.Return(meshData);
       ApplyCollisionStateToChunk(chunkView);
-      ResolveDetailRenderer()?.RefreshChunkDetail(chunkCoord);
+      BlockChunkRendered?.Invoke(chunkCoord);
     }
 
     public void RenderDensityChunkMesh(Vector3Int chunkCoord, Mesh unityMesh, bool generateCollision = false)
@@ -393,8 +396,13 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
 
     public bool RemoveBlockChunkMesh(Vector3Int chunkCoord)
     {
-      ResolveDetailRenderer()?.RemoveChunkDetail(chunkCoord);
-      return RemoveLayerChunk(chunkCoord, activeBlockChunkViews);
+      bool removed = RemoveLayerChunk(chunkCoord, activeBlockChunkViews);
+      if (removed)
+      {
+        BlockChunkRemoved?.Invoke(chunkCoord);
+      }
+
+      return removed;
     }
 
     public bool RemoveDensityChunkMesh(Vector3Int chunkCoord)
@@ -410,7 +418,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
       ClearLayerViews(activeDensityChunkViews);
       activeChunkViews.Clear();
       hasLastCollisionViewerChunkCoord = false;
-      ResolveDetailRenderer()?.ClearAllDetail();
+      ChunksCleared?.Invoke();
     }
 
     public bool HasChunkView(Vector3Int chunkCoord)
@@ -610,17 +618,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
       }
 
       activeChunkViews.Remove(chunkCoord);
-    }
-
-    private WorldDetailRenderer ResolveDetailRenderer()
-    {
-      if (!hasResolvedDetailRenderer)
-      {
-        detailRenderer = GetComponent<WorldDetailRenderer>();
-        hasResolvedDetailRenderer = true;
-      }
-
-      return detailRenderer;
     }
 
     private void NormalizeCollisionMode()
