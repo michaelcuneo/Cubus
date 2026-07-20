@@ -6,7 +6,7 @@ using UnityEngine.UI;
 
 namespace Assets.Demo.Scripts.UI
 {
-  public sealed class DemoPauseMenu : MonoBehaviour
+  public sealed class DemoExitMenu : MonoBehaviour
   {
     [SerializeField] private Key toggleKey = Key.Escape;
     [SerializeField] private string mainMenuSceneName = "DemoLauncher";
@@ -169,28 +169,18 @@ namespace Assets.Demo.Scripts.UI
 
     private void ExitToMainMenu()
     {
-      if (string.IsNullOrWhiteSpace(mainMenuSceneName))
-      {
-        Debug.LogError("[DemoPauseMenu] Main Menu Scene Name is empty.");
-        return;
-      }
-
-      // Hide and disable the pause menu immediately.
-      SetOpen(false, restoreCursor: false);
-
-      // Prevent OnDestroy from restoring the gameplay cursor state.
-      hasSavedCursorState = false;
-
       DemoUiInput.MenuOpen = false;
-
+      RestoreCursorIfNeeded();
       Cursor.lockState = CursorLockMode.None;
       Cursor.visible = true;
 
-      // Prevent Escape or another input event reopening the menu
-      // while the launcher scene is loading.
-      enabled = false;
+      if (string.IsNullOrWhiteSpace(mainMenuSceneName))
+      {
+        Debug.LogError("[DemoExitMenu] Main Menu Scene Name is empty.");
+        return;
+      }
 
-      SceneManager.LoadScene(mainMenuSceneName, LoadSceneMode.Single);
+      SceneManager.LoadScene(mainMenuSceneName);
     }
 
     private void SelectDefaultButton()

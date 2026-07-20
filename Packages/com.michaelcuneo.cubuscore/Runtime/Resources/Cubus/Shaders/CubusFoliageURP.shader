@@ -224,7 +224,7 @@ Shader "Cubus/FoliageURP"
         float3 n = normalize(normalWS);
         float4 shadowCoord = TransformWorldToShadowCoord(positionWS);
         Light mainLight = GetMainLight(shadowCoord);
-        float atten = mainLight.shadowAttenuation;
+        float atten = mainLight.shadowAttenuation * mainLight.distanceAttenuation;
 
         // Half-lambert wrap keeps foliage soft and readable on both faces.
         float ndl = saturate(dot(n, mainLight.direction)) * 0.5 + 0.5;

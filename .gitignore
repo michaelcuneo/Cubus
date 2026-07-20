@@ -107,8 +107,3 @@ InitTestScene*.unity*
 
 # Auto-generated scenes by play mode tests
 /[Aa]ssets/[Ii]nit[Tt]est[Ss]cene*.unity*
-
-# Azure Sky runtime-mutated materials
-Assets/Plugins/Azure[Sky] Dynamic Skybox/Core/Materials/Rain.mat
-Assets/Plugins/Azure[Sky] Dynamic Skybox/Core/Materials/Snow.mat
-Assets/Plugins/Azure[Sky] Dynamic Skybox/Core/Materials/Storm.mat

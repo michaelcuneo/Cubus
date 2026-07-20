@@ -60,9 +60,6 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
     /// <summary>True when this view currently holds a renderable mesh.</summary>
     public bool HasRenderableMesh => currentMesh != null;
 
-    public bool HasActiveCollisionMesh =>
-      meshCollider != null && meshCollider.enabled && meshCollider.sharedMesh != null;
-
     /// <summary>
     /// Shows or hides only the renderer for view-frustum culling, without touching the
     /// mesh, collider, or active/pooling state. A hidden chunk keeps its mesh so

@@ -1,0 +1,154 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 908e7166578e84448a1c2778475fc27f, type: 3}
+  m_Name: World Detail Scatter Database
+  m_EditorClassIdentifier: CubusCore.Runtime::CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering.DetailScatterDatabase
+  AtlasColumns: 4
+  AtlasRows: 4
+  Profiles:
+  - DisplayName: Valley Grass
+    MaterialId: 1
+    AtlasTiles:
+    - 0
+    - 0
+    - 0
+    - 1
+    - 1
+    - 2
+    - 4
+    - 12
+    Coverage: 0.55
+    MaxClustersPerVoxel: 3
+    MinHeight: 0.5
+    MaxHeight: 0.95
+    MinWidth: 0.5
+    MaxWidth: 0.9
+    Tint: {r: 1, g: 1, b: 1, a: 1}
+    TintVariation: 0.14
+    SwayStrength: 1
+  - DisplayName: Grass Block
+    MaterialId: 4
+    AtlasTiles:
+    - 0
+    - 0
+    - 0
+    - 1
+    - 1
+    - 2
+    - 5
+    - 13
+    Coverage: 0.6
+    MaxClustersPerVoxel: 3
+    MinHeight: 0.5
+    MaxHeight: 1
+    MinWidth: 0.5
+    MaxWidth: 0.9
+    Tint: {r: 1, g: 1, b: 1, a: 1}
+    TintVariation: 0.14
+    SwayStrength: 1
+  - DisplayName: Dirt Flowers
+    MaterialId: 8
+    AtlasTiles:
+    - 11
+    - 2
+    - 0
+    - 5
+    - 4
+    - 12
+    - 13
+    Coverage: 0.4
+    MaxClustersPerVoxel: 2
+    MinHeight: 0.5
+    MaxHeight: 1
+    MinWidth: 0.5
+    MaxWidth: 0.9
+    Tint: {r: 1, g: 1, b: 1, a: 1}
+    TintVariation: 0.16
+    SwayStrength: 1
+  - DisplayName: Sand Shells And Weeds
+    MaterialId: 5
+    AtlasTiles:
+    - 8
+    - 10
+    - 3
+    - 8
+    - 9
+    - 10
+    Coverage: 0.3
+    MaxClustersPerVoxel: 2
+    MinHeight: 0.3
+    MaxHeight: 0.7
+    MinWidth: 0.4
+    MaxWidth: 0.8
+    Tint: {r: 1, g: 1, b: 1, a: 1}
+    TintVariation: 0.12
+    SwayStrength: 0.7
+  - DisplayName: Sandstone Brush
+    MaterialId: 7
+    AtlasTiles:
+    - 3
+    - 10
+    - 8
+    Coverage: 0.2
+    MaxClustersPerVoxel: 2
+    MinHeight: 0.3
+    MaxHeight: 0.65
+    MinWidth: 0.4
+    MaxWidth: 0.75
+    Tint: {r: 1, g: 1, b: 1, a: 1}
+    TintVariation: 0.12
+    SwayStrength: 0.7
+  - DisplayName: Dry Brush Grass
+    MaterialId: 18
+    AtlasTiles:
+    - 3
+    - 7
+    - 3
+    - 2
+    Coverage: 0.55
+    MaxClustersPerVoxel: 3
+    MinHeight: 0.45
+    MaxHeight: 0.85
+    MinWidth: 0.5
+    MaxWidth: 0.85
+    Tint: {r: 1, g: 1, b: 1, a: 1}
+    TintVariation: 0.14
+    SwayStrength: 0.9
+  - DisplayName: Mossy Stone Tufts
+    MaterialId: 17
+    AtlasTiles:
+    - 0
+    - 2
+    - 0
+    Coverage: 0.28
+    MaxClustersPerVoxel: 2
+    MinHeight: 0.4
+    MaxHeight: 0.75
+    MinWidth: 0.45
+    MaxWidth: 0.8
+    Tint: {r: 0.85, g: 1, b: 0.85, a: 1}
+    TintVariation: 0.12
+    SwayStrength: 0.9
+  - DisplayName: Gravel Pebbles
+    MaterialId: 3
+    AtlasTiles:
+    - 10
+    - 10
+    Coverage: 0.18
+    MaxClustersPerVoxel: 1
+    MinHeight: 0.25
+    MaxHeight: 0.4
+    MinWidth: 0.4
+    MaxWidth: 0.7
+    Tint: {r: 1, g: 1, b: 1, a: 1}
+    TintVariation: 0.1
+    SwayStrength: 0
