@@ -1,5 +1,4 @@
 using System.Collections;
-using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming;
 using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World;
 using UnityEngine;
@@ -19,9 +18,6 @@ namespace Assets.Demo.Scripts.Spawn
     [Header("Readiness")]
     [SerializeField] private bool requireFullViewDistanceBeforeSpawn = true;
     [SerializeField][Min(1)] private int requiredRenderedChunks = 9;
-    [SerializeField] private bool requireSpawnCollisionBeforeRelease = true;
-    [SerializeField][Min(1.0f)] private float spawnCollisionProbeHeight = 128.0f;
-    [SerializeField][Min(1.0f)] private float spawnCollisionProbeDistance = 512.0f;
 
     public Vector3Int DesiredSpawnVoxel
     {
@@ -51,12 +47,6 @@ namespace Assets.Demo.Scripts.Spawn
     {
       get => requiredRenderedChunks;
       set => requiredRenderedChunks = Mathf.Max(1, value);
-    }
-
-    public bool RequireSpawnCollisionBeforeRelease
-    {
-      get => requireSpawnCollisionBeforeRelease;
-      set => requireSpawnCollisionBeforeRelease = value;
     }
 
     public bool IsWaiting { get; private set; }
@@ -107,12 +97,6 @@ namespace Assets.Demo.Scripts.Spawn
           continue;
         }
 
-        if (snapSpawnToSurface && requireSpawnCollisionBeforeRelease && !HasSpawnTerrainCollision())
-        {
-          yield return null;
-          continue;
-        }
-
         Vector3 spawnWorld = snapSpawnToSurface
             ? streamer.CalculateSurfaceWorldPositionFromVoxel(desiredSpawnVoxel, spawnClearance)
             : streamer.VoxelToWorldPosition(desiredSpawnVoxel);
@@ -123,41 +107,6 @@ namespace Assets.Demo.Scripts.Spawn
       }
 
       IsWaiting = false;
-    }
-
-    private bool HasSpawnTerrainCollision()
-    {
-      if (streamer == null)
-      {
-        return false;
-      }
-
-      Vector3 probeCenter = streamer.CalculateSurfaceWorldPositionFromVoxel(desiredSpawnVoxel, spawnClearance);
-      Vector3 rayOrigin = probeCenter + Vector3.up * Mathf.Max(1.0f, spawnCollisionProbeHeight);
-      float rayDistance = Mathf.Max(1.0f, spawnCollisionProbeDistance);
-
-      RaycastHit[] hits = Physics.RaycastAll(
-        rayOrigin,
-        Vector3.down,
-        rayDistance,
-        ~0,
-        QueryTriggerInteraction.Ignore);
-
-      for (int i = 0; i < hits.Length; i++)
-      {
-        Collider hitCollider = hits[i].collider;
-        if (hitCollider == null)
-        {
-          continue;
-        }
-
-        if (hitCollider.GetComponentInParent<ChunkView>() != null)
-        {
-          return true;
-        }
-      }
-
-      return false;
     }
 
     private void ResolveReferences()
