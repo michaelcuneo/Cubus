@@ -19,19 +19,19 @@ MonoBehaviour:
     WorldEdgeRadius: 100000
     WorldEdgeTargetHeight: -55
     BaseHeight: 16
-    HeightScale: 34
+    HeightScale: 30
     LandformStyle: 1
-    MacroFrequency: 0.72
-    MacroStrength: 0.9
-    HillsFrequency: 0.78
-    HillsStrength: 0.38
-    DetailFrequency: 0.72
-    DetailStrength: 0.3
-    RidgeFrequency: 0.7
-    RidgeStrength: 0.05
-    RidgeSharpness: 1.2
-    ValleyFrequency: 0.68
-    ValleyStrength: 0.42
+    MacroFrequency: 0.85
+    MacroStrength: 0.8
+    HillsFrequency: 1.2
+    HillsStrength: 0.45
+    DetailFrequency: 1.15
+    DetailStrength: 0.55
+    RidgeFrequency: 0.8
+    RidgeStrength: 0.08
+    RidgeSharpness: 1.4
+    ValleyFrequency: 0.9
+    ValleyStrength: 0.35
     BasinDepth: 0
     DuneFrequency: 1
     DuneStrength: 0
@@ -41,29 +41,20 @@ MonoBehaviour:
     MaterialLayers:
     - MaxDepthBelowSurface: 3
       MaterialId: 4
-      BlendWidth: 3
-      Weight: 1
-      NoiseScale: 0.037
-      NoiseStrength: 0.25
       Label: Grass
     - MaxDepthBelowSurface: 14
       MaterialId: 8
-      BlendWidth: 3
-      Weight: 1
-      NoiseScale: 0.037
-      NoiseStrength: 0.25
       Label: Dirt
     - MaxDepthBelowSurface: 99999
       MaterialId: 12
-      BlendWidth: 3
-      Weight: 1
-      NoiseScale: 0.037
-      NoiseStrength: 0.25
       Label: Clay
-    MaterialVeins: []
   MaterialSet: {fileID: 11400000, guid: b2f1d3e4a5c6482fb0d1e2f3a4b5c602, type: 2}
   AutoApplyMaterialSet: 1
   SettingsXYZ: {x: 1, y: 1, z: 1}
   TextureXYZ: {x: 1, y: 1, z: 1}
   RuleXYZ: {x: 1, y: 1, z: 1}
-  VariableOverrides: []
+  Temperature: 0.62
+  Elevation: 0.32
+  Rise: 0.28
+  Harshness: 0.22
+  Erosion: 0.58

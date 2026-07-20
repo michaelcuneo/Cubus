@@ -26,12 +26,12 @@ MonoBehaviour:
     HillsFrequency: 1.04
     HillsStrength: 1.08
     DetailFrequency: 0.92
-    DetailStrength: 0.6
+    DetailStrength: 0.72
     RidgeFrequency: 1.22
-    RidgeStrength: 1
-    RidgeSharpness: 2
+    RidgeStrength: 1.55
+    RidgeSharpness: 2.9
     ValleyFrequency: 0.95
-    ValleyStrength: 0.8
+    ValleyStrength: 0.95
     BasinDepth: 0
     DuneFrequency: 1
     DuneStrength: 0

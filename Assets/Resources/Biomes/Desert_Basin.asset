@@ -19,51 +19,42 @@ MonoBehaviour:
     WorldEdgeRadius: 100000
     WorldEdgeTargetHeight: -55
     BaseHeight: 10
-    HeightScale: 30
+    HeightScale: 24
     LandformStyle: 5
-    MacroFrequency: 0.68
-    MacroStrength: 0.78
-    HillsFrequency: 0.72
-    HillsStrength: 0.28
-    DetailFrequency: 0.68
-    DetailStrength: 0.26
-    RidgeFrequency: 0.76
-    RidgeStrength: 0.18
-    RidgeSharpness: 1.3
-    ValleyFrequency: 0.66
-    ValleyStrength: 0.48
-    BasinDepth: 5
-    DuneFrequency: 0.82
-    DuneStrength: 0.7
+    MacroFrequency: 0.82
+    MacroStrength: 0.68
+    HillsFrequency: 0.95
+    HillsStrength: 0.32
+    DetailFrequency: 1.15
+    DetailStrength: 0.62
+    RidgeFrequency: 1.05
+    RidgeStrength: 0.22
+    RidgeSharpness: 1.55
+    ValleyFrequency: 0.9
+    ValleyStrength: 0.35
+    BasinDepth: 4
+    DuneFrequency: 1.15
+    DuneStrength: 0.45
     CaveStrength: 0.015
     CaveFrequency: 0.022
     CaveStartDepth: 20
     MaterialLayers:
     - MaxDepthBelowSurface: 2
       MaterialId: 5
-      BlendWidth: 3
-      Weight: 1
-      NoiseScale: 0.037
-      NoiseStrength: 0.25
       Label: Sand
     - MaxDepthBelowSurface: 10
       MaterialId: 9
-      BlendWidth: 3
-      Weight: 1
-      NoiseScale: 0.037
-      NoiseStrength: 0.25
       Label: Sandstone
     - MaxDepthBelowSurface: 99999
       MaterialId: 13
-      BlendWidth: 3
-      Weight: 1
-      NoiseScale: 0.037
-      NoiseStrength: 0.25
       Label: Limestone
-    MaterialVeins: []
   MaterialSet: {fileID: 11400000, guid: e5f4b6c7d8a95b52e3f4a5b6c7d8e905, type: 2}
   AutoApplyMaterialSet: 1
   SettingsXYZ: {x: 1, y: 1, z: 1}
   TextureXYZ: {x: 1, y: 1, z: 1}
   RuleXYZ: {x: 1, y: 1, z: 1}
-  VariableOverrides: []
+  Temperature: 0.9
+  Elevation: 0.2
+  Rise: 0.14
+  Harshness: 0.7
+  Erosion: 0.78
