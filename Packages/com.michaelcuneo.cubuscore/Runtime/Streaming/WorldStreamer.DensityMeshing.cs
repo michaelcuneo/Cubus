@@ -40,7 +40,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
         ChunkCoord = chunkCoord,
         GenerationId = densityBuildQueue.GenerationId,
         WorldSnapshot = worldSnapshot,
-        CellStep = Mathf.Clamp(world.Settings.DensityMeshStep, 1, 8),
+        CellStep = WorldSettings.NormalizeDensityMeshStep(world.Settings.DensityMeshStep),
         FlipWinding = true,
         OverrideSnapshot = world.CreateDensityOverrideSnapshot(chunkCoord),
         ChunkDataSnapshot = chunkData.Clone(),
@@ -63,10 +63,10 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
     private Dictionary<Vector3Int, DensityChunkData> CreateDensityMeshChunkSnapshots(Vector3Int root)
     {
-      // The marching-cubes sampler only reads the +X/+Y/+Z boundary slab of each
-      // neighbour (thickness bounded by the mesh cell step), so clone just that
-      // slab into a pooled array instead of copying whole ~0.75 MB chunks.
-      int boundaryThickness = Mathf.Clamp(world.Settings.DensityMeshStep, 1, 4);
+      // Marching cubes reads the +X/+Y/+Z boundary slab. Central boundary normals
+      // also read the negative shell and edge/corner combinations, so copy only
+      // the relevant low/high slabs for every adjacent chunk.
+      int boundaryThickness = WorldSettings.NormalizeDensityMeshStep(world.Settings.DensityMeshStep) + 1;
       Dictionary<Vector3Int, DensityChunkData> snapshots = null;
 
       for (int i = 0; i < DensityMeshSampleChunkOffsets.Length; i++)
@@ -96,19 +96,21 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       DensityVoxel[] rented = DensityVoxelArrayPool.Rent();
       DensityVoxel[] src = source.GetRawVoxelArray();
 
-      // Copy the low-corner slab [0,tx) x [0,ty) x [0,tz). For a +axis neighbour
-      // the sampler only reads the low boundary planes on that axis; on the other
-      // axes it reads the full sampled range. Index layout is z*size*size + y*size + x.
+      // Copy the low or high slab for each offset axis; on zero-offset axes copy
+      // the full sampled range. Index layout is z*size*size + y*size + x.
       int tx = offset.x != 0 ? thickness : size;
       int ty = offset.y != 0 ? thickness : size;
       int tz = offset.z != 0 ? thickness : size;
+      int startX = offset.x < 0 ? size - tx : 0;
+      int startY = offset.y < 0 ? size - ty : 0;
+      int startZ = offset.z < 0 ? size - tz : 0;
 
-      for (int z = 0; z < tz; z++)
+      for (int z = startZ; z < startZ + tz; z++)
       {
-        for (int y = 0; y < ty; y++)
+        for (int y = startY; y < startY + ty; y++)
         {
           int rowBase = size * (y + size * z);
-          System.Array.Copy(src, rowBase, rented, rowBase, tx);
+          System.Array.Copy(src, rowBase + startX, rented, rowBase + startX, tx);
         }
       }
 

@@ -12,6 +12,9 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World
   [Serializable]
   public sealed class WorldSettings
   {
+    private const int DefaultMinChunkY = -1;
+    private const int DefaultMaxChunkY = 2;
+
     [Header("World")]
     public TerrainSystem TerrainSystem = TerrainSystem.SmoothDensity;
 
@@ -64,6 +67,14 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World
     [Range(1, 8)]
     public int DensityMeshStep = 1;
 
+    public static int NormalizeDensityMeshStep(int step)
+    {
+      if (step >= 8) return 8;
+      if (step >= 4) return 4;
+      if (step >= 2) return 2;
+      return 1;
+    }
+
     [Tooltip("Multiplies world voxel coordinates before sampling the density field. >1.0 increases frequency (more detail), <1.0 stretches features.")]
     public float DensitySampleScale = 1.0f;
 
@@ -96,10 +107,10 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.World
 
     [HideInInspector] public Vector2Int GenerationMinChunkXZ = new(-4, -4);
     [HideInInspector] public Vector2Int GenerationMaxChunkXZ = new(4, 4);
-    [HideInInspector] public int BlockMinChunkY = -1;
-    [HideInInspector] public int BlockMaxChunkY = 2;
-    [HideInInspector] public int DensityMinChunkY = -1;
-    [HideInInspector] public int DensityMaxChunkY = 2;
+    [HideInInspector] public int BlockMinChunkY = DefaultMinChunkY;
+    [HideInInspector] public int BlockMaxChunkY = DefaultMaxChunkY;
+    [HideInInspector] public int DensityMinChunkY = DefaultMinChunkY;
+    [HideInInspector] public int DensityMaxChunkY = DefaultMaxChunkY;
 
     [Header("World Bounds")]
     public bool UseWorldBounds = true;
