@@ -19,20 +19,20 @@ MonoBehaviour:
     WorldEdgeRadius: 100000
     WorldEdgeTargetHeight: -55
     BaseHeight: 18
-    HeightScale: 54
+    HeightScale: 58
     LandformStyle: 2
-    MacroFrequency: 1.05
-    MacroStrength: 1
-    HillsFrequency: 1.18
-    HillsStrength: 1.05
-    DetailFrequency: 1.1
-    DetailStrength: 0.95
-    RidgeFrequency: 1.15
-    RidgeStrength: 0.95
-    RidgeSharpness: 2.15
-    ValleyFrequency: 1.05
-    ValleyStrength: 0.6
-    BasinDepth: 1
+    MacroFrequency: 0.9
+    MacroStrength: 1.05
+    HillsFrequency: 0.92
+    HillsStrength: 1.15
+    DetailFrequency: 0.82
+    DetailStrength: 0.55
+    RidgeFrequency: 0.92
+    RidgeStrength: 0.72
+    RidgeSharpness: 1.65
+    ValleyFrequency: 0.82
+    ValleyStrength: 0.65
+    BasinDepth: 0
     DuneFrequency: 1
     DuneStrength: 0
     CaveStrength: 0.11
@@ -41,20 +41,29 @@ MonoBehaviour:
     MaterialLayers:
     - MaxDepthBelowSurface: 1
       MaterialId: 3
+      BlendWidth: 3
+      Weight: 1
+      NoiseScale: 0.037
+      NoiseStrength: 0.25
       Label: Gravel
     - MaxDepthBelowSurface: 12
       MaterialId: 7
+      BlendWidth: 3
+      Weight: 1
+      NoiseScale: 0.037
+      NoiseStrength: 0.25
       Label: Sandstone
     - MaxDepthBelowSurface: 99999
       MaterialId: 11
+      BlendWidth: 3
+      Weight: 1
+      NoiseScale: 0.037
+      NoiseStrength: 0.25
       Label: Granite
+    MaterialVeins: []
   MaterialSet: {fileID: 11400000, guid: c3f2e4a5b6d74930c1e2f3a4b5c6d703, type: 2}
   AutoApplyMaterialSet: 1
   SettingsXYZ: {x: 1, y: 1, z: 1}
   TextureXYZ: {x: 1, y: 1, z: 1}
   RuleXYZ: {x: 1, y: 1, z: 1}
-  Temperature: 0.42
-  Elevation: 0.58
-  Rise: 0.57
-  Harshness: 0.63
-  Erosion: 0.33
+  VariableOverrides: []

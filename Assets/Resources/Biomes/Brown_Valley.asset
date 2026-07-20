@@ -18,21 +18,21 @@ MonoBehaviour:
     UseWorldEdgeFalloff: 0
     WorldEdgeRadius: 100000
     WorldEdgeTargetHeight: -55
-    BaseHeight: 8
-    HeightScale: 30
+    BaseHeight: 10
+    HeightScale: 42
     LandformStyle: 4
-    MacroFrequency: 0.78
-    MacroStrength: 0.82
-    HillsFrequency: 0.94
-    HillsStrength: 0.45
-    DetailFrequency: 0.92
-    DetailStrength: 0.62
-    RidgeFrequency: 0.95
-    RidgeStrength: 0.22
-    RidgeSharpness: 1.5
-    ValleyFrequency: 0.86
-    ValleyStrength: 0.75
-    BasinDepth: 6
+    MacroFrequency: 0.68
+    MacroStrength: 0.95
+    HillsFrequency: 0.82
+    HillsStrength: 0.58
+    DetailFrequency: 0.78
+    DetailStrength: 0.38
+    RidgeFrequency: 0.82
+    RidgeStrength: 0.32
+    RidgeSharpness: 1.35
+    ValleyFrequency: 0.72
+    ValleyStrength: 1.05
+    BasinDepth: 4
     DuneFrequency: 1
     DuneStrength: 0
     CaveStrength: 0.05
@@ -41,20 +41,29 @@ MonoBehaviour:
     MaterialLayers:
     - MaxDepthBelowSurface: 3
       MaterialId: 1
+      BlendWidth: 3
+      Weight: 1
+      NoiseScale: 0.037
+      NoiseStrength: 0.25
       Label: Surface
     - MaxDepthBelowSurface: 18
       MaterialId: 5
+      BlendWidth: 3
+      Weight: 1
+      NoiseScale: 0.037
+      NoiseStrength: 0.25
       Label: Topsoil
     - MaxDepthBelowSurface: 99999
       MaterialId: 9
+      BlendWidth: 3
+      Weight: 1
+      NoiseScale: 0.037
+      NoiseStrength: 0.25
       Label: Bedrock
+    MaterialVeins: []
   MaterialSet: {fileID: 11400000, guid: a1f0c2d3e4b5471fa9c0d1e2f3a4b501, type: 2}
   AutoApplyMaterialSet: 1
   SettingsXYZ: {x: 1, y: 1, z: 1}
   TextureXYZ: {x: 1, y: 1, z: 1}
   RuleXYZ: {x: 1, y: 1, z: 1}
-  Temperature: 0.46
-  Elevation: 0.24
-  Rise: 0.18
-  Harshness: 0.41
-  Erosion: 0.64
+  VariableOverrides: []
