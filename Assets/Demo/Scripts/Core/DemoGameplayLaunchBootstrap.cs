@@ -32,6 +32,11 @@ namespace Assets.Demo.Scripts.Core
     private bool disabledStreamerAutoStartForLaunch;
     private WorldStreamer cachedStreamer;
 
+    public string LoadingStage => loadingStage;
+    public string LoadingDetail => loadingDetail;
+    public bool IsPreparingWorld => isPreparingWorld;
+    public bool HasFinishedPreparation => hasFinishedPreparation;
+
     private void Awake()
     {
       WorldPersistence.SuppressAutoLoadOnStart = true;
@@ -145,7 +150,15 @@ namespace Assets.Demo.Scripts.Core
 
     private IEnumerator PrepareLocalWorldThenSpawn()
     {
-      SetStage("Preparing local world", "Disconnecting network and clearing local runtime state.");
+      SetStage(
+        "Preparing local world",
+        "Disconnecting network and preparing local runtime state."
+      );
+
+      // Allow the additive scene load to finish visually before performing
+      // synchronous world cleanup.
+      yield return null;
+
       network?.Disconnect();
 
       if (world == null)
@@ -153,15 +166,50 @@ namespace Assets.Demo.Scripts.Core
         yield break;
       }
 
+      SetStage(
+        "Clearing previous world state",
+        "Removing existing chunks, overrides and cached terrain data."
+      );
+
+      // Give the loading overlay one complete rendered frame with the correct
+      // status before ClearWorldAndOverrides performs synchronous work.
+      yield return new WaitForEndOfFrame();
+
       world.ClearWorldAndOverrides();
 
       WorldStreamer streamer = GetStreamer();
       if (streamer != null)
       {
-        SetStage("Prewarming streamed terrain", "Starting the WorldStreamer under launcher control.");
-        Debug.Log($"[DemoLaunch] Preparing local streamed world '{DemoGameLaunchContext.WorldId}' before spawning.");
+        SetStage(
+          "Initialising terrain streamer",
+          "Starting the WorldStreamer under launcher control."
+        );
+
+        yield return null;
+
+        Debug.Log(
+          $"[DemoLaunch] Preparing local streamed world " +
+          $"'{DemoGameLaunchContext.WorldId}' before spawning."
+        );
+
         yield return EnableStreamerForBootstrap(streamer);
+
+        SetStage(
+          "Resetting streamed terrain",
+          "Clearing previous streaming queues and chunk state."
+        );
+
+        yield return null;
+
         streamer.ClearStreamingState();
+
+        SetStage(
+          "Building initial chunk set",
+          "Calculating the initial terrain region around the player."
+        );
+
+        yield return null;
+
         streamer.RegenerateStreamedWorld();
 
         DemoInitialTerrainSpawnGate gate = ResolveSpawnGate();
@@ -171,19 +219,37 @@ namespace Assets.Demo.Scripts.Core
         }
         else
         {
-          yield return WaitForInitialTerrainReady("local streamed world", 0.0f);
+          yield return WaitForInitialTerrainReady(
+            "local streamed world",
+            0.0f
+          );
         }
       }
       else
       {
-        SetStage("Generating non-streamed world", "Running DemoWorld.GenerateWorldAsync before player spawn.");
-        Debug.Log($"[DemoLaunch] Generating local world '{DemoGameLaunchContext.WorldId}' before spawning.");
+        SetStage(
+          "Generating non-streamed world",
+          "Running DemoWorld.GenerateWorldAsync before player spawn."
+        );
+
+        Debug.Log(
+          $"[DemoLaunch] Generating local world " +
+          $"'{DemoGameLaunchContext.WorldId}' before spawning."
+        );
+
         yield return world.GenerateWorldAsync();
         world.BroadcastInitialTerrainReady(Vector3.zero);
       }
 
-      SetStage("Local world ready", "Initial terrain is ready. Player spawn released.");
-      Debug.Log($"[DemoLaunch] Local world '{DemoGameLaunchContext.WorldId}' is ready. Player spawn released.");
+      SetStage(
+        "Local world ready",
+        "Initial terrain is ready. Player spawn released."
+      );
+
+      Debug.Log(
+        $"[DemoLaunch] Local world '{DemoGameLaunchContext.WorldId}' " +
+        "is ready. Player spawn released."
+      );
     }
 
     private IEnumerator PrepareConnectedWorldThenSpawn()
