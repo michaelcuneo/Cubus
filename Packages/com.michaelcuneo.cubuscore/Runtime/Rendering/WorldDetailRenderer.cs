@@ -11,3 +11,13 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
     public void RefreshChunkDetail(Vector3Int chunkCoord)
     {
     }
+
+    public void RemoveChunkDetail(Vector3Int chunkCoord)
+    {
+    }
+
+    public void ClearAllDetail()
+    {
+    }
+  }
+}
