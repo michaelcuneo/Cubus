@@ -18,15 +18,16 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Water
   [RequireComponent(typeof(WorldStreamer))]
   public sealed class VoxelWaterSystem : MonoBehaviour
   {
-    private const float DefaultRefreshInterval = 0.25f;
     private const float SurfaceInsetInVoxels = 0.06f;
+    private const float DepthFadeInVoxels = 7.0f;
 
     [Header("Static Voxel Water")]
     [SerializeField] private bool generateWater = true;
     [SerializeField] private int seaLevel = 34;
     [SerializeField] private Material waterMaterial;
-    [SerializeField, Min(1)] private int chunkBuildsPerFrame = 2;
-    [SerializeField, Min(0.05f)] private float refreshInterval = DefaultRefreshInterval;
+    [SerializeField] private bool buildAfterInitialTerrainReady = true;
+    [SerializeField, Min(1)] private int chunkBuildsPerFrame = 1;
+    [SerializeField, Min(0.05f)] private float refreshInterval = 0.5f;
 
     private readonly Dictionary<Vector2Int, WaterChunkView> activeChunks = new();
     private readonly Queue<Vector2Int> pendingBuilds = new();
@@ -38,6 +39,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Water
     private WorldStreamer streamer;
     private Transform waterRoot;
     private Material runtimeMaterial;
+    private WorldGenerationSnapshot waterSnapshot;
+    private bool hasWaterSnapshot;
     private float nextRefreshTime;
     private int cachedSeaLevel;
     private float cachedVoxelSize;
@@ -79,6 +82,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Water
       EnsureWaterRoot();
       cachedSeaLevel = seaLevel;
       cachedVoxelSize = GetVoxelSize();
+      RefreshWaterSnapshot();
     }
 
     private void OnEnable()
@@ -96,6 +100,11 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Water
       if (!generateWater)
       {
         ClearAllChunks();
+        return;
+      }
+
+      if (buildAfterInitialTerrainReady && !world.IsInitialTerrainReady)
+      {
         return;
       }
 
@@ -148,7 +157,17 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Water
       ClearAllChunks();
       pendingBuilds.Clear();
       pendingBuildSet.Clear();
+      RefreshWaterSnapshot();
       nextRefreshTime = 0.0f;
+    }
+
+    private void RefreshWaterSnapshot()
+    {
+      hasWaterSnapshot = world != null && world.Settings != null;
+      if (hasWaterSnapshot)
+      {
+        waterSnapshot = WorldGenerationSnapshot.FromSettings(world.Settings);
+      }
     }
 
     private void RefreshDesiredColumns()
@@ -219,24 +238,35 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Water
     private Mesh BuildWaterMesh(Vector2Int column)
     {
       const int size = VoxelConstants.ChunkSize;
-      bool[,] wet = new bool[size, size];
+      float[,] waterDepths = new float[size + 2, size + 2];
+      if (!hasWaterSnapshot)
+      {
+        RefreshWaterSnapshot();
+        if (!hasWaterSnapshot)
+        {
+          return null;
+        }
+      }
+
+      TerrainColumnSampler columnSampler = new();
       float densityScale = Mathf.Max(0.001f, world.Settings.DensitySampleScale);
       int originX = column.x * size;
       int originZ = column.y * size;
 
       bool hasWater = false;
-      for (int z = 0; z < size; z++)
+      for (int z = -1; z <= size; z++)
       {
-        for (int x = 0; x < size; x++)
+        for (int x = -1; x <= size; x++)
         {
-          TerrainSample sample = BiomeTerrainSampler.Sample(
-              world.Settings,
-              new Vector3Int(originX + x, seaLevel, originZ + z),
+          columnSampler.Prepare(
+              waterSnapshot,
+              originX + x,
+              originZ + z,
               densityScale);
 
-          bool isWet = sample.SurfaceHeight < seaLevel - SurfaceInsetInVoxels;
-          wet[x, z] = isWet;
-          hasWater |= isWet;
+          float waterDepth = seaLevel - SurfaceInsetInVoxels - columnSampler.SurfaceHeight;
+          waterDepths[x + 1, z + 1] = waterDepth;
+          hasWater |= x >= 0 && x < size && z >= 0 && z < size && waterDepth > 0.0f;
         }
       }
 
@@ -245,10 +275,10 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Water
         return null;
       }
 
-      bool[,] consumed = new bool[size, size];
       List<Vector3> vertices = new();
       List<Vector3> normals = new();
       List<Vector2> uvs = new();
+      List<Vector2> waterData = new();
       List<int> triangles = new();
       float voxelSize = GetVoxelSize();
       float y = (seaLevel - SurfaceInsetInVoxels) * voxelSize;
@@ -257,45 +287,15 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Water
       {
         for (int x = 0; x < size; x++)
         {
-          if (!wet[x, z] || consumed[x, z])
+          float waterDepth = waterDepths[x + 1, z + 1];
+          if (waterDepth <= 0.0f)
           {
             continue;
           }
 
-          int width = 1;
-          while (x + width < size && wet[x + width, z] && !consumed[x + width, z])
-          {
-            width++;
-          }
-
-          int depth = 1;
-          bool canGrow = true;
-          while (z + depth < size && canGrow)
-          {
-            for (int dx = 0; dx < width; dx++)
-            {
-              if (!wet[x + dx, z + depth] || consumed[x + dx, z + depth])
-              {
-                canGrow = false;
-                break;
-              }
-            }
-
-            if (canGrow)
-            {
-              depth++;
-            }
-          }
-
-          for (int dz = 0; dz < depth; dz++)
-          {
-            for (int dx = 0; dx < width; dx++)
-            {
-              consumed[x + dx, z + dz] = true;
-            }
-          }
-
-          AddTopQuad(vertices, normals, uvs, triangles, x, z, width, depth, y, voxelSize);
+          float normalizedDepth = Mathf.Clamp01(waterDepth / DepthFadeInVoxels);
+          float shore = ComputeShoreMask(waterDepths, x + 1, z + 1, waterDepth);
+          AddTopQuad(vertices, normals, uvs, waterData, triangles, x, z, y, voxelSize, normalizedDepth, shore);
         }
       }
 
@@ -308,28 +308,45 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Water
       mesh.SetVertices(vertices);
       mesh.SetNormals(normals);
       mesh.SetUVs(0, uvs);
+      mesh.SetUVs(1, waterData);
       mesh.SetTriangles(triangles, 0, true);
       mesh.RecalculateBounds();
+      Bounds bounds = mesh.bounds;
+      bounds.Expand(new Vector3(0.0f, voxelSize * 0.25f, 0.0f));
+      mesh.bounds = bounds;
       return mesh;
+    }
+
+    private static float ComputeShoreMask(float[,] waterDepths, int x, int z, float waterDepth)
+    {
+      float dryNeighborCount = 0.0f;
+      dryNeighborCount += waterDepths[x - 1, z] <= 0.0f ? 1.0f : 0.0f;
+      dryNeighborCount += waterDepths[x + 1, z] <= 0.0f ? 1.0f : 0.0f;
+      dryNeighborCount += waterDepths[x, z - 1] <= 0.0f ? 1.0f : 0.0f;
+      dryNeighborCount += waterDepths[x, z + 1] <= 0.0f ? 1.0f : 0.0f;
+
+      float shallow = 1.0f - Mathf.Clamp01(waterDepth / 2.5f);
+      return Mathf.Clamp01(dryNeighborCount * 0.25f + shallow * 0.7f);
     }
 
     private static void AddTopQuad(
         List<Vector3> vertices,
         List<Vector3> normals,
         List<Vector2> uvs,
+        List<Vector2> waterData,
         List<int> triangles,
         int x,
         int z,
-        int width,
-        int depth,
         float y,
-        float voxelSize)
+        float voxelSize,
+        float normalizedDepth,
+        float shore)
     {
       int start = vertices.Count;
       float x0 = x * voxelSize;
-      float x1 = (x + width) * voxelSize;
+      float x1 = (x + 1) * voxelSize;
       float z0 = z * voxelSize;
-      float z1 = (z + depth) * voxelSize;
+      float z1 = (z + 1) * voxelSize;
 
       vertices.Add(new Vector3(x0, y, z0));
       vertices.Add(new Vector3(x0, y, z1));
@@ -342,9 +359,15 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Water
       normals.Add(Vector3.up);
 
       uvs.Add(new Vector2(x, z));
-      uvs.Add(new Vector2(x, z + depth));
-      uvs.Add(new Vector2(x + width, z + depth));
-      uvs.Add(new Vector2(x + width, z));
+      uvs.Add(new Vector2(x, z + 1));
+      uvs.Add(new Vector2(x + 1, z + 1));
+      uvs.Add(new Vector2(x + 1, z));
+
+      Vector2 data = new(normalizedDepth, shore);
+      waterData.Add(data);
+      waterData.Add(data);
+      waterData.Add(data);
+      waterData.Add(data);
 
       triangles.Add(start + 0);
       triangles.Add(start + 1);
@@ -358,6 +381,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Water
     {
       if (waterMaterial != null)
       {
+        ConfigureTransparentMaterial(waterMaterial);
         return waterMaterial;
       }
 
@@ -377,12 +401,36 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Water
         name = "Cubus Runtime Voxel Water"
       };
 
+      ConfigureTransparentMaterial(runtimeMaterial);
+
       if (runtimeMaterial.HasProperty("_BaseColor"))
       {
-        runtimeMaterial.SetColor("_BaseColor", new Color(0.055f, 0.32f, 0.48f, 0.72f));
+        runtimeMaterial.SetColor("_BaseColor", new Color(0.10f, 0.50f, 0.58f, 0.38f));
+      }
+
+      if (runtimeMaterial.HasProperty("_DeepColor"))
+      {
+        runtimeMaterial.SetColor("_DeepColor", new Color(0.015f, 0.14f, 0.20f, 0.58f));
+      }
+
+      if (runtimeMaterial.HasProperty("_FoamColor"))
+      {
+        runtimeMaterial.SetColor("_FoamColor", new Color(0.78f, 0.92f, 0.86f, 0.55f));
       }
 
       return runtimeMaterial;
+    }
+
+    private static void ConfigureTransparentMaterial(Material material)
+    {
+      if (material == null)
+      {
+        return;
+      }
+
+      material.renderQueue = (int)RenderQueue.Transparent;
+      material.SetOverrideTag("RenderType", "Transparent");
+      material.SetOverrideTag("Queue", "Transparent");
     }
 
     private void EnsureWaterRoot()

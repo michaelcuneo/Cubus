@@ -540,7 +540,7 @@ namespace Assets.Demo.Scripts.Multiplayer
         return;
       }
 
-      ForceBroadcastInitialTerrainReady("settled rendered terrain fallback");
+      detail = "Terrain coverage rendered. Waiting for spawn collision gate...";
     }
 
     private void ForceBroadcastInitialTerrainReady(string reason)
