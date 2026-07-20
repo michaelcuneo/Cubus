@@ -170,84 +170,6 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!1 &616502403 stripped
-GameObject:
-  m_CorrespondingSourceObject: {fileID: 1714448373971688800, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
-  m_PrefabInstance: {fileID: 844205374}
-  m_PrefabAsset: {fileID: 0}
---- !u!114 &616502405 stripped
-MonoBehaviour:
-  m_CorrespondingSourceObject: {fileID: 1974823580454898308, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
-  m_PrefabInstance: {fileID: 844205374}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 616502403}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 6a46283b0b60485418d668150e6d1c7b, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
---- !u!114 &616502407
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 616502403}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 35e8a34e61bb5af4d9ff27bf04e7d9f9, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::Assets.Demo.Scripts.Sky.AzureRandomEventDirector
-  azureCore: {fileID: 616502405}
-  templatePreset: {fileID: 643807740}
-  autoSubscribe: 1
-  transitionTime: 18
-  newWeatherEachDay: 1
-  hourlyChangeChance: 0.25
-  rareNightEventChance: 0.12
-  grandYearEventChance: 0.5
-  stormThunderChancePerMinute: 0.03
-  randomness: 0.45
-  colorJitter: 0.08
-  randomizeColors: 1
-  useKeywordBias: 1
-  thunderVariantCount: 1
-  summerDayLength: 60
-  normalDayLength: 120
-  winterDayLength: 240
-  onBloodMoon:
-    m_PersistentCalls:
-      m_Calls: []
-  onAurora:
-    m_PersistentCalls:
-      m_Calls: []
-  onMeteorShower:
-    m_PersistentCalls:
-      m_Calls: []
-  onEclipse:
-    m_PersistentCalls:
-      m_Calls: []
-  onEerieFog:
-    m_PersistentCalls:
-      m_Calls: []
-  onLightningStrike:
-    m_PersistentCalls:
-      m_Calls: []
-  onCalmRestored:
-    m_PersistentCalls:
-      m_Calls: []
-  logEvents: 1
---- !u!114 &643807740 stripped
-MonoBehaviour:
-  m_CorrespondingSourceObject: {fileID: 7496194973537726388, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
-  m_PrefabInstance: {fileID: 844205374}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 0}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: dc14414660dbd0c41b2b7f8b4ab272d5, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
 --- !u!1 &832575517
 GameObject:
   m_ObjectHideFlags: 0
@@ -297,251 +219,6 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!1001 &844205374
-PrefabInstance:
-  m_ObjectHideFlags: 0
-  serializedVersion: 2
-  m_Modification:
-    serializedVersion: 3
-    m_TransformParent: {fileID: 0}
-    m_Modifications:
-    - target: {fileID: 1714448373971688800, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
-      propertyPath: m_Name
-      value: AzureCoreSystem
-      objectReference: {fileID: 0}
-    - target: {fileID: 1974823580454898308, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
-      propertyPath: m_eventSystem.m_onMinuteChangeEvent.m_PersistentCalls.m_Calls.Array.size
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 1974823580454898308, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
-      propertyPath: m_eventSystem.m_onMinuteChangeEvent.m_PersistentCalls.m_Calls.Array.data[0].m_Mode
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 1974823580454898308, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
-      propertyPath: m_eventSystem.m_onMinuteChangeEvent.m_PersistentCalls.m_Calls.Array.data[0].m_CallState
-      value: 2
-      objectReference: {fileID: 0}
-    - target: {fileID: 4055571998922016943, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
-      propertyPath: m_mie
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 4055571998922016943, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
-      propertyPath: m_rayleigh
-      value: 1.5
-      objectReference: {fileID: 0}
-    - target: {fileID: 4055571998922016943, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
-      propertyPath: m_mieColor.b
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 4055571998922016943, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
-      propertyPath: m_mieColor.g
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 4055571998922016943, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
-      propertyPath: m_mieColor.r
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 4055571998922016943, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
-      propertyPath: m_sunTexture
-      value: 
-      objectReference: {fileID: 0}
-    - target: {fileID: 4055571998922016943, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
-      propertyPath: m_updateMode
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 4055571998922016943, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
-      propertyPath: m_mieDistance
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 4055571998922016943, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
-      propertyPath: m_moonTexture
-      value: 
-      objectReference: {fileID: 0}
-    - target: {fileID: 4055571998922016943, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
-      propertyPath: m_sunTransform
-      value: 
-      objectReference: {fileID: 0}
-    - target: {fileID: 4055571998922016943, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
-      propertyPath: m_moonTransform
-      value: 
-      objectReference: {fileID: 0}
-    - target: {fileID: 4055571998922016943, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
-      propertyPath: m_starsIntensity
-      value: 0.5
-      objectReference: {fileID: 0}
-    - target: {fileID: 4055571998922016943, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
-      propertyPath: m_rayleighColor.g
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 4055571998922016943, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
-      propertyPath: m_rayleighColor.r
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 4055571998922016943, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
-      propertyPath: m_heightFogDensity
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 4055571998922016943, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
-      propertyPath: m_molecularDensity
-      value: 2.545
-      objectReference: {fileID: 0}
-    - target: {fileID: 4055571998922016943, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
-      propertyPath: m_globalFogDistance
-      value: 1000
-      objectReference: {fileID: 0}
-    - target: {fileID: 4055571998922016943, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
-      propertyPath: m_heightFogDistance
-      value: 100
-      objectReference: {fileID: 0}
-    - target: {fileID: 4055571998922016943, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
-      propertyPath: m_dynamicCloudShader
-      value: 
-      objectReference: {fileID: 0}
-    - target: {fileID: 4055571998922016943, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
-      propertyPath: m_starfieldTransform
-      value: 
-      objectReference: {fileID: 0}
-    - target: {fileID: 4055571998922016943, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
-      propertyPath: m_dynamicCloudTexture
-      value: 
-      objectReference: {fileID: 0}
-    - target: {fileID: 4055571998922016943, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
-      propertyPath: m_heightFogSmoothStep
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 4055571998922016943, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
-      propertyPath: m_constellationColor.g
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 4055571998922016943, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
-      propertyPath: m_constellationColor.r
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 4055571998922016943, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
-      propertyPath: m_constellationTexture
-      value: 
-      objectReference: {fileID: 0}
-    - target: {fileID: 4055571998922016943, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
-      propertyPath: m_dynamicCloudColor1.b
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 4055571998922016943, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
-      propertyPath: m_dynamicCloudColor1.g
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 4055571998922016943, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
-      propertyPath: m_dynamicCloudColor1.r
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 4055571998922016943, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
-      propertyPath: m_dynamicCloudColor2.b
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 4055571998922016943, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
-      propertyPath: m_dynamicCloudColor2.g
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 4055571998922016943, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
-      propertyPath: m_heightFogEndAltitude
-      value: 100
-      objectReference: {fileID: 0}
-    - target: {fileID: 4055571998922016943, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
-      propertyPath: m_EditorClassIdentifier
-      value: Assembly-CSharp-firstpass::UnityEngine.AzureSky.AzureSkyRenderer
-      objectReference: {fileID: 0}
-    - target: {fileID: 4055571998922016943, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
-      propertyPath: m_starfieldRotationOffset.y
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 4055571998922016943, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
-      propertyPath: m_heightFogScatteringMultiplier
-      value: 0.5
-      objectReference: {fileID: 0}
-    - target: {fileID: 7953403546012018190, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
-      propertyPath: m_LocalPosition.x
-      value: 46.16227
-      objectReference: {fileID: 0}
-    - target: {fileID: 7953403546012018190, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
-      propertyPath: m_LocalPosition.y
-      value: 0.00002
-      objectReference: {fileID: 0}
-    - target: {fileID: 7953403546012018190, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
-      propertyPath: m_LocalPosition.z
-      value: 42.27485
-      objectReference: {fileID: 0}
-    - target: {fileID: 7953403546012018190, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
-      propertyPath: m_LocalRotation.w
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 7953403546012018190, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
-      propertyPath: m_LocalRotation.x
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 7953403546012018190, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
-      propertyPath: m_LocalRotation.y
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 7953403546012018190, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
-      propertyPath: m_LocalRotation.z
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 7953403546012018190, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
-      propertyPath: m_LocalEulerAnglesHint.x
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 7953403546012018190, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
-      propertyPath: m_LocalEulerAnglesHint.y
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 7953403546012018190, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
-      propertyPath: m_LocalEulerAnglesHint.z
-      value: 0
-      objectReference: {fileID: 0}
-    m_RemovedComponents: []
-    m_RemovedGameObjects: []
-    m_AddedGameObjects: []
-    m_AddedComponents:
-    - targetCorrespondingSourceObject: {fileID: 1714448373971688800, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
-      insertIndex: -1
-      addedObject: {fileID: 616502407}
-    - targetCorrespondingSourceObject: {fileID: 4380352413285918650, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
-      insertIndex: -1
-      addedObject: {fileID: 844205376}
-  m_SourcePrefab: {fileID: 100100000, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
---- !u!1 &844205375 stripped
-GameObject:
-  m_CorrespondingSourceObject: {fileID: 4380352413285918650, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
-  m_PrefabInstance: {fileID: 844205374}
-  m_PrefabAsset: {fileID: 0}
---- !u!114 &844205376
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 844205375}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 474bcb49853aa07438625e644c072ee6, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Unity.RenderPipelines.Universal.Runtime::UnityEngine.Rendering.Universal.UniversalAdditionalLightData
-  m_UsePipelineSettings: 1
-  m_AdditionalLightsShadowResolutionTier: 2
-  m_CustomShadowLayers: 0
-  m_LightCookieSize: {x: 1, y: 1}
-  m_LightCookieOffset: {x: 0, y: 0}
-  m_SoftShadowQuality: 0
-  m_RenderingLayersMask:
-    serializedVersion: 0
-    m_Bits: 1
-  m_ShadowRenderingLayersMask:
-    serializedVersion: 0
-    m_Bits: 1
-  m_Version: 4
-  m_LightLayerMask: 1
-  m_ShadowLayerMask: 1
-  m_RenderingLayers: 1
-  m_ShadowRenderingLayers: 1
 --- !u!1 &1026888079
 GameObject:
   m_ObjectHideFlags: 0
@@ -1315,6 +992,100 @@ MonoBehaviour:
   remoteAvatarPrefab: {fileID: 0}
   interpolationSpeed: 12
   showNameLabels: 1
+--- !u!1001 &2119884484
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 0}
+    m_Modifications:
+    - target: {fileID: 1714448373971688800, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
+      propertyPath: m_Name
+      value: AzureCoreSystem
+      objectReference: {fileID: 0}
+    - target: {fileID: 7953403546012018190, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: -55.6499
+      objectReference: {fileID: 0}
+    - target: {fileID: 7953403546012018190, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 0.00001
+      objectReference: {fileID: 0}
+    - target: {fileID: 7953403546012018190, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: 379.0923
+      objectReference: {fileID: 0}
+    - target: {fileID: 7953403546012018190, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 7953403546012018190, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
+      propertyPath: m_LocalRotation.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 7953403546012018190, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
+      propertyPath: m_LocalRotation.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 7953403546012018190, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
+      propertyPath: m_LocalRotation.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 7953403546012018190, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 7953403546012018190, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 7953403546012018190, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 4380352413285918650, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 2119884486}
+  m_SourcePrefab: {fileID: 100100000, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
+--- !u!1 &2119884485 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 4380352413285918650, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
+  m_PrefabInstance: {fileID: 2119884484}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &2119884486
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2119884485}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 474bcb49853aa07438625e644c072ee6, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Unity.RenderPipelines.Universal.Runtime::UnityEngine.Rendering.Universal.UniversalAdditionalLightData
+  m_UsePipelineSettings: 1
+  m_AdditionalLightsShadowResolutionTier: 2
+  m_CustomShadowLayers: 0
+  m_LightCookieSize: {x: 1, y: 1}
+  m_LightCookieOffset: {x: 0, y: 0}
+  m_SoftShadowQuality: 0
+  m_RenderingLayersMask:
+    serializedVersion: 0
+    m_Bits: 1
+  m_ShadowRenderingLayersMask:
+    serializedVersion: 0
+    m_Bits: 1
+  m_Version: 4
+  m_LightLayerMask: 1
+  m_ShadowLayerMask: 1
+  m_RenderingLayers: 1
+  m_ShadowRenderingLayers: 1
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
@@ -1323,5 +1094,5 @@ SceneRoots:
   - {fileID: 1298388477}
   - {fileID: 1517188426}
   - {fileID: 515115132}
-  - {fileID: 844205374}
   - {fileID: 1026888081}
+  - {fileID: 2119884484}

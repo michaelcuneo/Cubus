@@ -776,15 +776,6 @@ Shader "Cubus/DensityBiomeURP"
           roughness,
           _DensityTerrainShadowStrength);
 
-        if (_Azure_GlobalFogDistance > 0.0)
-        {
-          lit = CubusApplyAzureFog(lit, IN.positionWS);
-        }
-        else if (_UseSceneFog > 0.5)
-        {
-          lit = MixFog(lit, IN.fogCoord);
-        }
-
         return half4(lit, 1.0);
       }
 
