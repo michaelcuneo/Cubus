@@ -17,9 +17,9 @@ MonoBehaviour:
     Enabled: 1
     Prefabs:
     - {fileID: 100100000, guid: 3459eb48dfefbbe4384fa0f7f5e3ca20, type: 3}
-    SpawnChance: 0.08
+    SpawnChance: 1
     TriangleStride: 28
-    MinimumPerChunk: 0
+    MinimumPerChunk: 1
     MaximumPerChunk: 2
     MinimumSpacing: 10
     MinimumUpwardNormal: 0.5
@@ -37,9 +37,9 @@ MonoBehaviour:
       Enabled: 1
       Prefabs:
       - {fileID: 100100000, guid: 3459eb48dfefbbe4384fa0f7f5e3ca20, type: 3}
-      SpawnChance: 0.22
+      SpawnChance: 1
       TriangleStride: 14
-      MinimumPerChunk: 0
+      MinimumPerChunk: 1
       MaximumPerChunk: 6
       MinimumSpacing: 5
       MinimumUpwardNormal: 0.35
