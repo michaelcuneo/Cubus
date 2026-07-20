@@ -120,6 +120,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
 
     public event Action<Vector3Int> BlockChunkRendered;
     public event Action<Vector3Int> BlockChunkRemoved;
+    public event Action<Vector3Int> DensityChunkRendered;
+    public event Action<Vector3Int> DensityChunkRemoved;
     public event Action ChunksCleared;
 
     public WorldCollisionMode CollisionMode
@@ -288,6 +290,8 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
       chunkView.ApplyMesh(unityMesh, generateCollision && collisionMode != WorldCollisionMode.None);
       ApplyCollisionStateToChunk(chunkView);
 
+      DensityChunkRendered?.Invoke(chunkCoord);
+
       if (logRenderedChunkMeshes)
       {
         Debug.Log($"Rendered density mesh chunk {chunkCoord}. Verts={unityMesh.vertexCount}, Indices={unityMesh.GetIndexCount(0)}, Material={(chunkView.MeshRenderer != null ? chunkView.MeshRenderer.sharedMaterial : null)}");
@@ -407,7 +411,22 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
 
     public bool RemoveDensityChunkMesh(Vector3Int chunkCoord)
     {
-      return RemoveLayerChunk(chunkCoord, activeDensityChunkViews);
+      bool removed = RemoveLayerChunk(chunkCoord, activeDensityChunkViews);
+
+      if (removed)
+      {
+        DensityChunkRemoved?.Invoke(chunkCoord);
+      }
+
+      return removed;
+    }
+
+    public bool TryGetDensityChunkView(
+      Vector3Int chunkCoord,
+      out ChunkView chunkView)
+    {
+      return activeDensityChunkViews.TryGetValue(chunkCoord, out chunkView) &&
+             chunkView != null;
     }
 
     [ContextMenu("Clear Rendered Chunks")]

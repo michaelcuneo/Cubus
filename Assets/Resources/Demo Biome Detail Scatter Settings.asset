@@ -15,4 +15,7 @@ MonoBehaviour:
   FoliageAtlas: {fileID: 2800000, guid: a602752a009550d41859240878c382af, type: 3}
   AtlasColumns: 4
   AtlasRows: 4
-  BiomeRules: []
+  BiomeRules:
+  - BiomeId: 0
+    BiomeName: 
+    Profiles: []
