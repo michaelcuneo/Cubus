@@ -14,7 +14,7 @@ OcclusionCullingSettings:
 RenderSettings:
   m_ObjectHideFlags: 0
   serializedVersion: 10
-  m_Fog: 1
+  m_Fog: 0
   m_FogColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
   m_FogMode: 3
   m_FogDensity: 0.2
@@ -478,6 +478,7 @@ GameObject:
   - component: {fileID: 1298388488}
   - component: {fileID: 1298388489}
   - component: {fileID: 1298388490}
+  - component: {fileID: 1298388491}
   m_Layer: 0
   m_Name: VoxelWorld
   m_TagString: Untagged
@@ -809,19 +810,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ec86df3a723b6d44c9e5047848376a4a, type: 3}
   m_Name: 
   m_EditorClassIdentifier: CubusCore.Runtime::CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering.WorldDetailRenderer
-  enableFoliage: 1
-  scatterDatabase: {fileID: 11400000, guid: b7c4e91a2d6f4a3b8c1e5f9a0d2b7e64, type: 2}
-  foliageAtlas: {fileID: 2800000, guid: a602752a009550d41859240878c382af, type: 3}
-  foliageShaderName: Cubus/FoliageURP
-  densityMultiplier: 1
-  castShadows: 1
-  tint: {r: 1, g: 1, b: 1, a: 1}
-  alphaCutoff: 0.4
-  ambientBoost: 1
-  windStrength: 0.12
-  windSpeed: 1.5
-  windFrequency: 0.15
-  windDirection: {x: 1, y: 0.35}
 --- !u!114 &1298388490
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -841,6 +829,28 @@ MonoBehaviour:
   normalArray: {fileID: 0}
   maskArray: {fileID: 0}
   materialSliceLookup: {fileID: 0}
+--- !u!114 &1298388491
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1298388476}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 86ed84a6d71d5654dbb36406ca34741f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Assets.Demo.Scripts.Rendering.DemoDensityBiomeObjectScatterRenderer
+  scatterObject: {fileID: 919132149155446097, guid: 3459eb48dfefbbe4384fa0f7f5e3ca20, type: 3}
+  disableSpawnedColliders: 1
+  enableTestScatter: 1
+  maximumTrianglesCheckedPerChunk: 256
+  minimumUpwardNormal: 0.35
+  objectScale: 1
+  surfaceOffset: 0.5
+  alignToSurface: 1
+  randomiseYaw: 1
+  logDiagnostics: 1
 --- !u!1 &1453617040
 GameObject:
   m_ObjectHideFlags: 0
