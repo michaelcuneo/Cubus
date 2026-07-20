@@ -1,11 +1,12 @@
+using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
 namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Water
 {
   /// <summary>
-  /// Keeps the first-pass water system disabled while water rendering is being
-  /// reworked. This prevents runtime auto-installation from affecting startup.
+  /// Adds the first-pass water system to streamed Cubus worlds without requiring
+  /// scene or prefab edits. A manually added VoxelWaterSystem is preserved.
   /// </summary>
   internal static class VoxelWaterAutoInstaller
   {
@@ -24,19 +25,28 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Water
 
     private static void InstallInLoadedScenes()
     {
-      VoxelWaterSystem[] waterSystems = Object.FindObjectsByType<VoxelWaterSystem>(
-          FindObjectsInactive.Include);
+      WorldStreamer[] streamers = Object.FindObjectsByType<WorldStreamer>(
+          FindObjectsInactive.Include,
+          FindObjectsSortMode.None);
 
-      for (int i = 0; i < waterSystems.Length; i++)
+      for (int i = 0; i < streamers.Length; i++)
       {
-        VoxelWaterSystem water = waterSystems[i];
-        if (water == null)
+        WorldStreamer streamer = streamers[i];
+        if (streamer == null)
         {
           continue;
         }
 
-        water.GenerateWater = false;
-        water.enabled = false;
+        VoxelWaterSystem water = streamer.GetComponent<VoxelWaterSystem>();
+        if (water == null)
+        {
+          water = streamer.gameObject.AddComponent<VoxelWaterSystem>();
+        }
+
+        if (streamer.GetComponent<VoxelWaterStartupGate>() == null)
+        {
+          streamer.gameObject.AddComponent<VoxelWaterStartupGate>();
+        }
       }
     }
   }
