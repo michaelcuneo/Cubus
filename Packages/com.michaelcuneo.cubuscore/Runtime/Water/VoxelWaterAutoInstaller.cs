@@ -32,12 +32,21 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Water
       for (int i = 0; i < streamers.Length; i++)
       {
         WorldStreamer streamer = streamers[i];
-        if (streamer == null || streamer.GetComponent<VoxelWaterSystem>() != null)
+        if (streamer == null)
         {
           continue;
         }
 
-        streamer.gameObject.AddComponent<VoxelWaterSystem>();
+        VoxelWaterSystem water = streamer.GetComponent<VoxelWaterSystem>();
+        if (water == null)
+        {
+          water = streamer.gameObject.AddComponent<VoxelWaterSystem>();
+        }
+
+        if (streamer.GetComponent<VoxelWaterStartupGate>() == null)
+        {
+          streamer.gameObject.AddComponent<VoxelWaterStartupGate>();
+        }
       }
     }
   }
