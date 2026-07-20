@@ -35,19 +35,21 @@ namespace UnityEngine.AzureSky
             m_camera = GetComponent<Camera>();
             m_commandBuffer = new CommandBuffer();
             m_commandBuffer.name = "Azure Volumetric Light Command Buffer";
-            m_camera.AddCommandBuffer(CameraEvent.BeforeForwardAlpha, m_commandBuffer);
+            m_camera.AddCommandBuffer(CameraEvent.AfterSkybox, m_commandBuffer);
         }
 
         private void OnEnable()
         {
+            RenderPipelineManager.beginCameraRendering += CustomOnPreRender;
             if (m_commandBuffer == null || m_camera == null) return;
-            m_camera.AddCommandBuffer(CameraEvent.BeforeForwardAlpha, m_commandBuffer);
+            m_camera.AddCommandBuffer(CameraEvent.AfterSkybox, m_commandBuffer);
         }
 
         private void OnDisable()
         {
+            RenderPipelineManager.beginCameraRendering -= CustomOnPreRender;
             if (m_commandBuffer == null || m_camera == null) return;
-            m_camera.RemoveCommandBuffer(CameraEvent.BeforeForwardAlpha, m_commandBuffer);
+            m_camera.RemoveCommandBuffer(CameraEvent.AfterSkybox, m_commandBuffer);
         }
 
         /// <summary>We need to remove the command buffer from the scene view camera in case of loading another scene in editor.</summary>
@@ -65,7 +67,7 @@ namespace UnityEngine.AzureSky
         }
         #endif
 
-        private void OnPreRender()
+        private void CustomOnPreRender(ScriptableRenderContext context, Camera camera)
         {
             if (m_commandBuffer == null || m_camera == null) return;
 
@@ -77,6 +79,9 @@ namespace UnityEngine.AzureSky
 
             // Trigger the OnVolumetricLightPreRender callback to notify all the volumetric lights that this camera is ready to render
             AzureNotificationCenter.Invoke.OnVolumetricLightPreRenderCallback(this);
+
+            //context.ExecuteCommandBuffer(m_commandBuffer);
+            //Debug.Log("Rendered!!!");
         }
     }
 }

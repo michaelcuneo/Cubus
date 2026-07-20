@@ -321,6 +321,142 @@ PrefabInstance:
       propertyPath: m_eventSystem.m_onMinuteChangeEvent.m_PersistentCalls.m_Calls.Array.data[0].m_CallState
       value: 2
       objectReference: {fileID: 0}
+    - target: {fileID: 4055571998922016943, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
+      propertyPath: m_mie
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 4055571998922016943, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
+      propertyPath: m_rayleigh
+      value: 1.5
+      objectReference: {fileID: 0}
+    - target: {fileID: 4055571998922016943, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
+      propertyPath: m_mieColor.b
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 4055571998922016943, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
+      propertyPath: m_mieColor.g
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 4055571998922016943, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
+      propertyPath: m_mieColor.r
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 4055571998922016943, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
+      propertyPath: m_sunTexture
+      value: 
+      objectReference: {fileID: 0}
+    - target: {fileID: 4055571998922016943, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
+      propertyPath: m_updateMode
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4055571998922016943, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
+      propertyPath: m_mieDistance
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 4055571998922016943, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
+      propertyPath: m_moonTexture
+      value: 
+      objectReference: {fileID: 0}
+    - target: {fileID: 4055571998922016943, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
+      propertyPath: m_sunTransform
+      value: 
+      objectReference: {fileID: 0}
+    - target: {fileID: 4055571998922016943, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
+      propertyPath: m_moonTransform
+      value: 
+      objectReference: {fileID: 0}
+    - target: {fileID: 4055571998922016943, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
+      propertyPath: m_starsIntensity
+      value: 0.5
+      objectReference: {fileID: 0}
+    - target: {fileID: 4055571998922016943, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
+      propertyPath: m_rayleighColor.g
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 4055571998922016943, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
+      propertyPath: m_rayleighColor.r
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 4055571998922016943, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
+      propertyPath: m_heightFogDensity
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4055571998922016943, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
+      propertyPath: m_molecularDensity
+      value: 2.545
+      objectReference: {fileID: 0}
+    - target: {fileID: 4055571998922016943, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
+      propertyPath: m_globalFogDistance
+      value: 1000
+      objectReference: {fileID: 0}
+    - target: {fileID: 4055571998922016943, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
+      propertyPath: m_heightFogDistance
+      value: 100
+      objectReference: {fileID: 0}
+    - target: {fileID: 4055571998922016943, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
+      propertyPath: m_dynamicCloudShader
+      value: 
+      objectReference: {fileID: 0}
+    - target: {fileID: 4055571998922016943, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
+      propertyPath: m_starfieldTransform
+      value: 
+      objectReference: {fileID: 0}
+    - target: {fileID: 4055571998922016943, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
+      propertyPath: m_dynamicCloudTexture
+      value: 
+      objectReference: {fileID: 0}
+    - target: {fileID: 4055571998922016943, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
+      propertyPath: m_heightFogSmoothStep
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 4055571998922016943, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
+      propertyPath: m_constellationColor.g
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 4055571998922016943, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
+      propertyPath: m_constellationColor.r
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 4055571998922016943, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
+      propertyPath: m_constellationTexture
+      value: 
+      objectReference: {fileID: 0}
+    - target: {fileID: 4055571998922016943, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
+      propertyPath: m_dynamicCloudColor1.b
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 4055571998922016943, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
+      propertyPath: m_dynamicCloudColor1.g
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 4055571998922016943, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
+      propertyPath: m_dynamicCloudColor1.r
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 4055571998922016943, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
+      propertyPath: m_dynamicCloudColor2.b
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 4055571998922016943, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
+      propertyPath: m_dynamicCloudColor2.g
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 4055571998922016943, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
+      propertyPath: m_heightFogEndAltitude
+      value: 100
+      objectReference: {fileID: 0}
+    - target: {fileID: 4055571998922016943, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
+      propertyPath: m_EditorClassIdentifier
+      value: Assembly-CSharp-firstpass::UnityEngine.AzureSky.AzureSkyRenderer
+      objectReference: {fileID: 0}
+    - target: {fileID: 4055571998922016943, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
+      propertyPath: m_starfieldRotationOffset.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4055571998922016943, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
+      propertyPath: m_heightFogScatteringMultiplier
+      value: 0.5
+      objectReference: {fileID: 0}
     - target: {fileID: 7953403546012018190, guid: baab2c6cc48d21b47bc6c4965fcefccd, type: 3}
       propertyPath: m_LocalPosition.x
       value: 46.16227
@@ -898,17 +1034,17 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Unity.RenderPipelines.Universal.Runtime::UnityEngine.Rendering.Universal.UniversalAdditionalCameraData
   m_RenderShadows: 1
-  m_RequiresDepthTextureOption: 2
+  m_RequiresDepthTextureOption: 1
   m_RequiresOpaqueTextureOption: 2
   m_CameraType: 0
   m_Cameras: []
-  m_RendererIndex: -1
+  m_RendererIndex: 1
   m_VolumeLayerMask:
     serializedVersion: 2
     m_Bits: 1
   m_VolumeTrigger: {fileID: 0}
   m_VolumeFrameworkUpdateModeOption: 2
-  m_RenderPostProcessing: 0
+  m_RenderPostProcessing: 1
   m_Antialiasing: 0
   m_AntialiasingQuality: 2
   m_StopNaN: 0
