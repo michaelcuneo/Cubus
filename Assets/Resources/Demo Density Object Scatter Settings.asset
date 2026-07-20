@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   DefaultGroups:
   - DisplayName: Granite Rocks
-    Enabled: 1
+    Enabled: 0
     Prefabs:
     - {fileID: 100100000, guid: 3459eb48dfefbbe4384fa0f7f5e3ca20, type: 3}
     SpawnChance: 1
@@ -34,7 +34,7 @@ MonoBehaviour:
     BiomeName: Rocky Hills
     Groups:
     - DisplayName: Granite Boulders
-      Enabled: 1
+      Enabled: 0
       Prefabs:
       - {fileID: 100100000, guid: 3459eb48dfefbbe4384fa0f7f5e3ca20, type: 3}
       SpawnChance: 1
