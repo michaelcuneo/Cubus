@@ -22,11 +22,12 @@ namespace Assets.Demo.Scripts.Multiplayer
   public sealed class CubusLoadingController : MonoBehaviour
   {
     [SerializeField] private string gameplaySceneName = "CubusGame";
-    [SerializeField] private string launcherSceneName = "CubusLauncher";
+    [SerializeField] private string launcherSceneName = "DemoLauncher";
     [SerializeField] private int sortingOrder = 1200;
     [SerializeField] private float readyHoldSeconds = 0.35f;
     [SerializeField] private float preparationTimeoutSeconds = 180.0f;
     [SerializeField] private float settledTerrainFallbackSeconds = 2.0f;
+    [SerializeField][Min(1)] private int fallbackRequiredRenderedChunks = 9;
     [SerializeField] private float fallbackSpawnClearance = 2.0f;
     [SerializeField] private float consoleDiagnosticsIntervalSeconds = 2.0f;
     [SerializeField] private bool unloadLoadingSceneWhenReady = true;
@@ -48,12 +49,15 @@ namespace Assets.Demo.Scripts.Multiplayer
     private bool failed;
     private bool forceReleaseRequested;
     private bool wasEnterDown;
+
+    private bool hasObservedTerrainWork;
     private Scene loadingScene;
 
     private CubusWorld world;
     private WorldStreamer streamer;
     private DemoNetworkManager network;
     private DemoPlayerInitialSpawn playerSpawn;
+    private DemoGameplayLaunchBootstrap gameplayBootstrap;
 
     private CanvasGroup canvasGroup;
     private Text statusText;
@@ -199,12 +203,35 @@ namespace Assets.Demo.Scripts.Multiplayer
         yield break;
       }
 
+      operation.allowSceneActivation = false;
+
+      while (operation.progress < 0.9f)
+      {
+        // Asset loading occupies 0-9% of the overall loading bar.
+        sceneLoadProgress = Mathf.Clamp01(operation.progress / 0.9f) * 0.9f;
+
+        status = "Loading gameplay scene";
+        detail = $"Loading scene assets... {sceneLoadProgress * 100.0f:0}%";
+
+        UpdateLoadingUi();
+        yield return null;
+      }
+
+      // The scene assets are loaded, but Unity has not yet activated the scene.
+      // Show the correct status before allowing the potentially expensive
+      // activation frame to begin.
+      sceneLoadProgress = 0.9f;
+      status = "Activating gameplay scene";
+      detail = "Initialising gameplay objects and runtime systems...";
+      UpdateLoadingUi();
+
+      // Ensure the activation message is actually rendered.
+      yield return new WaitForEndOfFrame();
+
       operation.allowSceneActivation = true;
+
       while (!operation.isDone)
       {
-        sceneLoadProgress = Mathf.Clamp01(operation.progress / 0.9f);
-        detail = $"Scene load {sceneLoadProgress * 100.0f:0}%";
-        UpdateLoadingUi();
         yield return null;
       }
 
@@ -344,6 +371,36 @@ namespace Assets.Demo.Scripts.Multiplayer
         return;
       }
 
+      if (
+        gameplayBootstrap != null &&
+        gameplayBootstrap.IsPreparingWorld &&
+        (
+          streamer == null ||
+          (
+            streamer.DesiredChunkCount <= 0 &&
+            streamer.PendingLoadCount <= 0 &&
+            streamer.PendingRenderCount <= 0 &&
+            streamer.ActiveChunkLoadTaskCount <= 0 &&
+            streamer.ActiveBlockBuildTaskCount <= 0 &&
+            streamer.ActiveDensityBuildTaskCount <= 0
+          )
+        )
+      )
+      {
+        status = gameplayBootstrap.LoadingStage;
+
+        detail = string.IsNullOrWhiteSpace(
+          gameplayBootstrap.LoadingDetail
+        )
+            ? "Initialising gameplay systems..."
+            : gameplayBootstrap.LoadingDetail;
+
+        // Keep bootstrap preparation between 10% and 15%. Actual terrain
+        // progress takes over once the streamer exposes work.
+        terrainProgress = Mathf.Max(terrainProgress, 0.05f);
+        return;
+      }
+
       if (streamer == null)
       {
         terrainProgress = Mathf.Clamp01(world.GenerationProgress);
@@ -369,6 +426,28 @@ namespace Assets.Demo.Scripts.Multiplayer
         streamer.ActiveDensityBuildTaskCount;
 
       float remainingWork = pending + active;
+
+      if (remainingWork > 0.0f)
+      {
+        hasObservedTerrainWork = true;
+      }
+
+      if (!hasObservedTerrainWork)
+      {
+        terrainProgress = Mathf.Max(terrainProgress, 0.05f);
+
+        status = gameplayBootstrap != null
+            ? gameplayBootstrap.LoadingStage
+            : "Initialising terrain streamer";
+
+        detail =
+            gameplayBootstrap != null &&
+            !string.IsNullOrWhiteSpace(gameplayBootstrap.LoadingDetail)
+                ? gameplayBootstrap.LoadingDetail
+                : "Waiting for the initial chunk queue...";
+
+        return;
+      }
 
       // Record the largest amount of current work observed during this load.
       // Unlike TotalBlockMeshApplies and TotalDensityMeshApplies, this is scoped
@@ -438,11 +517,11 @@ namespace Assets.Demo.Scripts.Multiplayer
       bool hasUsefulTerrain = applied > 0.0f || loaded > 0.0f;
       bool workersSettled = active <= 0.0f;
       bool loadsSettled = streamer.PendingLoadCount == 0;
+      bool renderedCoverageReady = streamer.IsInitialTerrainCoverageRendered(fallbackRequiredRenderedChunks, true);
       bool enoughChunksApplied = desired <= 0.0f || applied >= Mathf.Min(requiredApplied, desired);
-      bool longEnoughToTrustVisibleTerrain = elapsed >= 5.0f && hasUsefulTerrain && workersSettled && loadsSettled;
-      bool fullySettled = hasUsefulTerrain && workersSettled && loadsSettled && enoughChunksApplied;
+      bool fullySettled = hasUsefulTerrain && workersSettled && loadsSettled && enoughChunksApplied && renderedCoverageReady;
 
-      if (!fullySettled && !longEnoughToTrustVisibleTerrain)
+      if (!fullySettled)
       {
         settledTerrainFallbackStartedAt = -1.0f;
         return;
@@ -452,7 +531,7 @@ namespace Assets.Demo.Scripts.Multiplayer
       {
         settledTerrainFallbackStartedAt = Time.realtimeSinceStartup;
         detail = "Terrain ready. Entering shortly...";
-        LogDiagnosticsSnapshot(fullySettled ? "Streamer settled" : "Visible terrain fallback armed", true);
+        LogDiagnosticsSnapshot("Streamer rendered coverage settled", true);
         return;
       }
 
@@ -461,7 +540,7 @@ namespace Assets.Demo.Scripts.Multiplayer
         return;
       }
 
-      ForceBroadcastInitialTerrainReady(fullySettled ? "settled streamer fallback" : "visible terrain fallback");
+      ForceBroadcastInitialTerrainReady("settled rendered terrain fallback");
     }
 
     private void ForceBroadcastInitialTerrainReady(string reason)
@@ -652,6 +731,12 @@ namespace Assets.Demo.Scripts.Multiplayer
       if (playerSpawn == null)
       {
         playerSpawn = FindAnyObjectByType<DemoPlayerInitialSpawn>();
+      }
+
+      if (gameplayBootstrap == null)
+      {
+        gameplayBootstrap =
+          FindAnyObjectByType<DemoGameplayLaunchBootstrap>();
       }
 
       if (network == null)

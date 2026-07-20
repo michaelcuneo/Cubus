@@ -166,9 +166,9 @@ namespace Assets.Demo.Scripts.Player
         {
           Debug.LogWarning(
             $"DemoPlayerInitialSpawn timed out waiting for a terrain collider below {requestedSpawnLocation}. " +
-            "Keeping the player controller disabled to avoid falling through the world.");
-          spawnRoutine = null;
-          yield break;
+            "Continuing to wait; player remains disabled to avoid falling through the world.");
+
+          startTime = Time.realtimeSinceStartup;
         }
 
         yield return new WaitForSecondsRealtime(retryDelay);

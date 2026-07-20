@@ -204,8 +204,16 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 
     private static readonly Vector3Int[] DensityMeshSampleChunkOffsets =
     {
-      new(0, 0, 0), new(1, 0, 0), new(0, 1, 0), new(0, 0, 1),
-      new(1, 1, 0), new(1, 0, 1), new(0, 1, 1), new(1, 1, 1)
+      new(0, 0, 0),
+      new(-1, -1, -1), new(0, -1, -1), new(1, -1, -1),
+      new(-1, 0, -1), new(0, 0, -1), new(1, 0, -1),
+      new(-1, 1, -1), new(0, 1, -1), new(1, 1, -1),
+      new(-1, -1, 0), new(0, -1, 0), new(1, -1, 0),
+      new(-1, 0, 0), new(1, 0, 0),
+      new(-1, 1, 0), new(0, 1, 0), new(1, 1, 0),
+      new(-1, -1, 1), new(0, -1, 1), new(1, -1, 1),
+      new(-1, 0, 1), new(0, 0, 1), new(1, 0, 1),
+      new(-1, 1, 1), new(0, 1, 1), new(1, 1, 1)
     };
 
     private static readonly Vector3Int[] DensityEditAffectedChunkOffsets =
@@ -278,6 +286,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     {
       if (!EnsureRuntimeReferences()) return;
       if (viewer == null && Camera.main != null) viewer = Camera.main.transform;
+      worldRenderer.SetCollisionViewer(viewer);
       if (!world.Settings.TryValidateConfiguration(out string configError))
       {
         Debug.LogError($"WorldStreamer disabled due to invalid world settings: {configError}");

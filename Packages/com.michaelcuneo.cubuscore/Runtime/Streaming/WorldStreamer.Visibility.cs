@@ -16,6 +16,7 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
     private const float VisibilityRefreshPositionEpsilon = 0.25f;
     private const float VisibilityRefreshDotThreshold = 0.9975f;
     private const int VisibilityRefreshMaxFrameInterval = 6;
+    private const int SecondaryVerticalCoveragePriorityPenalty = 500000;
 
     // How long a chunk keeps drawing after it leaves the camera view before it is
     // hidden. Prevents show/hide popping when the camera flicks across a chunk edge.
@@ -227,6 +228,11 @@ namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
       if (IsChunkNearViewerForImmediateMesh(chunkCoord))
       {
         score -= 250000;
+      }
+
+      if (IsSecondaryVerticalCoverageChunk(chunkCoord))
+      {
+        score += SecondaryVerticalCoveragePriorityPenalty;
       }
 
       Camera camera = ResolveVisibilityCamera();
