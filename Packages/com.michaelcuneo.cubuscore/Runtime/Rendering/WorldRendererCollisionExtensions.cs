@@ -1,6 +1,7 @@
+using CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering;
 using UnityEngine;
 
-namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Rendering
+namespace CubusCore.Packages.com.michaelcuneo.cubuscore.Runtime.Streaming
 {
   /// <summary>
   /// Compatibility helpers used by WorldStreamer terrain readiness and spawn
