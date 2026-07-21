@@ -5,14 +5,14 @@ namespace UnityEngine.AzureSky
     [AddComponentMenu("Azure[Sky] Dynamic Skybox/Azure Sky Renderer")]
     public sealed class AzureSkyRenderer : MonoBehaviour
     {
-#if UNITY_EDITOR
+        #if UNITY_EDITOR
         [SerializeField] private bool m_showReferencesTab;
         [SerializeField] private bool m_showScatteringTab;
         [SerializeField] private bool m_showOutterSpaceTab;
         [SerializeField] private bool m_showFogScatteringTab;
         [SerializeField] private bool m_showDynamicCloudTab;
         [SerializeField] private bool m_showOptionsTab;
-#endif
+        #endif
 
         ////////////////////
         // References Tab //
@@ -239,7 +239,7 @@ namespace UnityEngine.AzureSky
         ////////////////////
         // Dynamic Clouds //
         ////////////////////
-
+        
         /// <summary>The altitude of the dynamic clouds in the sky.</summary>
         public float dynamicCloudAltitude { get => m_dynamicCloudAltitude; set => m_dynamicCloudAltitude = value; }
         [SerializeField] private float m_dynamicCloudAltitude = 7.5f;
@@ -267,7 +267,6 @@ namespace UnityEngine.AzureSky
         /// <summary>The dynamic cloud uv.</summary>
         public Vector2 dynamicCloudUV => m_dynamicCloudUV;
         private Vector2 m_dynamicCloudUV = Vector2.zero;
-        private bool m_loggedMissingReferenceWarning;
 
         /////////////////
         // Options Tab //
@@ -317,13 +316,13 @@ namespace UnityEngine.AzureSky
                 }
             }
 
-#if UNITY_EDITOR
+            #if UNITY_EDITOR
             if (!Application.isPlaying)
             {
                 InitializeSkySystem();
                 UpdateSkySystem();
             }
-#endif
+            #endif
         }
 
         private void OnEnable()
@@ -345,11 +344,6 @@ namespace UnityEngine.AzureSky
         /// <summary>Sets the shader uniforms that requires constantly update.</summary>
         public void UpdateSkySystem()
         {
-            if (!EnsureCelestialReferences())
-            {
-                return;
-            }
-
             m_moonRotation = Quaternion.Euler(m_moonRotationOffset);
             m_moonRotationMatrix = Matrix4x4.TRS(Vector3.zero, m_moonRotation, Vector3.one);
 
@@ -403,82 +397,6 @@ namespace UnityEngine.AzureSky
             Shader.SetGlobalFloat(AzureShaderUniforms.DynamicCloudDensity, Mathf.Lerp(25.0f, 0.0f, m_dynamicCloudDensity));
             Shader.SetGlobalVector(AzureShaderUniforms.DynamicCloudColor1, m_dynamicCloudColor1);
             Shader.SetGlobalVector(AzureShaderUniforms.DynamicCloudColor2, m_dynamicCloudColor2);
-        }
-
-        private bool EnsureCelestialReferences()
-        {
-            if (m_sunTransform == null)
-            {
-                Light sunLight = RenderSettings.sun;
-
-                if (sunLight == null)
-                {
-                    sunLight = FindPrimaryDirectionalLight();
-                }
-
-                if (sunLight != null)
-                {
-                    m_sunTransform = sunLight.transform;
-                }
-            }
-
-            if (m_moonTransform == null)
-            {
-                m_moonTransform = transform;
-            }
-
-            if (m_starfieldTransform == null)
-            {
-                m_starfieldTransform = transform;
-            }
-
-            bool hasAllReferences =
-                m_sunTransform != null &&
-                m_moonTransform != null &&
-                m_starfieldTransform != null;
-
-            if (!hasAllReferences)
-            {
-                if (!m_loggedMissingReferenceWarning)
-                {
-                    Debug.LogWarning(
-                        "AzureSkyRenderer is missing celestial transform references. Assign Sun/Moon/Starfield transforms in the inspector.",
-                        this);
-
-                    m_loggedMissingReferenceWarning = true;
-                }
-
-                return false;
-            }
-
-            m_loggedMissingReferenceWarning = false;
-            return true;
-        }
-
-        private static Light FindPrimaryDirectionalLight()
-        {
-            Light[] lights = FindObjectsOfType<Light>();
-            Light best = null;
-            float bestScore = float.MinValue;
-
-            for (int i = 0; i < lights.Length; i++)
-            {
-                Light light = lights[i];
-
-                if (light == null || !light.isActiveAndEnabled || light.type != LightType.Directional)
-                {
-                    continue;
-                }
-
-                float score = light.intensity;
-                if (score > bestScore)
-                {
-                    best = light;
-                    bestScore = score;
-                }
-            }
-
-            return best;
         }
 
         /// <summary>Total rayleigh computation.</summary>
