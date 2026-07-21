@@ -93,13 +93,24 @@ Material:
     - _ClearCoatSmoothness: 0
     - _Cull: 2
     - _Cutoff: 0.5
+    - _DensityDebugView: 0
+    - _DensityTerrainLightingNormalMapStrength: 1
+    - _DensityTerrainNormalMapStrength: 1
+    - _DensityTerrainShadowStrength: 1
     - _DetailAlbedoMapScale: 1
     - _DetailNormalMapScale: 1
-    - _DirectLightStrength: 1.15
+    - _DirectLightStrength: 1.5
+    - _DistanceNormalFade: 0.85
+    - _DistanceTextureEnd: 240
+    - _DistanceTextureScaleMultiplier: 0.18
+    - _DistanceTextureStart: 80
+    - _DistanceTextureVariationStrength: 0.12
+    - _DistanceTextureWarpScale: 0.012
+    - _DistanceTextureWarpStrength: 22
     - _DstBlend: 0
     - _DstBlendAlpha: 0
     - _EnvironmentReflections: 1
-    - _FresnelStrength: 0.15
+    - _FresnelStrength: 0.03
     - _GlossMapScale: 0
     - _Glossiness: 0
     - _GlossyReflections: 0
@@ -111,16 +122,19 @@ Material:
     - _Parallax: 0.005
     - _QueueOffset: 0
     - _ReceiveShadows: 1
-    - _Smoothness: 0.5
+    - _Smoothness: 0.12
     - _SmoothnessTextureChannel: 0
     - _SpecularHighlights: 1
-    - _SpecularStrength: 0.25
+    - _SpecularStrength: 0.12
     - _SrcBlend: 1
     - _SrcBlendAlpha: 1
     - _Surface: 0
+    - _TerrainTextureDetileStrength: 0.42
+    - _TerrainTextureNoiseScale: 0.23
+    - _TerrainTextureNoiseStrength: 0.025
     - _TextureScale: 0.25
     - _TriplanarSharpness: 4
-    - _UseSceneFog: 0.294
+    - _UseSceneFog: 0
     - _WorkflowMode: 1
     - _XRMotionVectorsPass: 1
     - _ZWrite: 1
