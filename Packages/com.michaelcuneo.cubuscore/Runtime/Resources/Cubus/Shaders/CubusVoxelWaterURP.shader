@@ -42,7 +42,6 @@ Shader "Cubus/Voxel Water URP"
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
-            #include "Packages/com.michaelcuneo.cubuscore/Runtime/Resources/Cubus/Shaders/CubusAzureWeather.hlsl"
 
             CBUFFER_START(UnityPerMaterial)
                 half4 _BaseColor;
@@ -135,14 +134,7 @@ Shader "Cubus/Voxel Water URP"
                 half surfaceSheen = saturate(fresnel * 0.65h + specular * 0.22h + shore * 0.08h);
                 color = lerp(color, color + half3(0.10h, 0.16h, 0.17h), surfaceSheen * (1.0h - foam * 0.5h));
 
-                if (_Azure_GlobalFogDistance > 0.0)
-                {
-                    color = CubusApplyAzureFog(color, input.positionWS);
-                }
-                else
-                {
-                    color = MixFog(color, input.fogFactor);
-                }
+                color = MixFog(color, input.fogFactor);
 
                 half alpha = saturate(lerp(_BaseColor.a, _DeepColor.a, depth) + fresnel * 0.07h + foam * 0.12h);
                 return half4(color, alpha);

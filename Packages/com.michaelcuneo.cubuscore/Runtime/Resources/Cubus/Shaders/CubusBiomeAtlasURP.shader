@@ -53,7 +53,6 @@ Shader "Cubus/BiomeAtlasURP"
 
       #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
       #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
-      #include "Packages/com.michaelcuneo.cubuscore/Runtime/Resources/Cubus/Shaders/CubusAzureWeather.hlsl"
 
       TEXTURE2D(_Atlas);
       SAMPLER(sampler_Atlas);
@@ -268,21 +267,19 @@ Shader "Cubus/BiomeAtlasURP"
 
         float atten = mainLight.shadowAttenuation;
         float ndl = saturate(dot(n, mainLight.direction));
-        float cloudShadow = CubusCloudShadow(positionWS, n);
-        float3 direct = CubusAzureDirectLightColor(mainLight.color) * ndl * atten * _DirectLightStrength * cloudShadow * CubusAzureLightFlashMultiplier();
+        float3 direct = mainLight.color * ndl * atten * _DirectLightStrength;
 
         // Keep a small sky/base ambient so unlit faces are readable, but do not let
         // it wash out the directional sun contrast like the old block shader did.
         float3 skyAmbient = SampleSH(n) * _AmbientStrength;
         float3 floorAmbient = 0.06.xxx;
-        float3 ambient = CubusAzureAmbientLight(max(skyAmbient, floorAmbient));
+        float3 ambient = max(skyAmbient, floorAmbient);
 
         float3 halfVec = SafeNormalize(mainLight.direction + viewDir);
         float ndh = saturate(dot(n, halfVec));
         float shininess = exp2(lerp(3.0, 11.0, saturate(_Smoothness)));
-        float specTerm = pow(ndh, shininess) * _SpecularStrength * ndl * atten * cloudShadow;
-        specTerm *= CubusWeatherSpecularMultiplier(positionWS, n);
-        float3 specular = CubusAzureDirectLightColor(mainLight.color) * specTerm * CubusAzureLightFlashMultiplier();
+        float specTerm = pow(ndh, shininess) * _SpecularStrength * ndl * atten;
+        float3 specular = mainLight.color * specTerm;
 
         float fresnel = pow(1.0 - saturate(dot(n, viewDir)), 5.0) * _FresnelStrength;
         float3 rim = skyAmbient * fresnel;
@@ -363,17 +360,11 @@ Shader "Cubus/BiomeAtlasURP"
   float terrainTextureNoise = TerrainTextureNoise(IN.positionWS) * _TerrainTextureNoiseStrength;
   albedo.rgb *= max(0.0, 1.0 + terrainTextureNoise);
 
-        float roughness = saturate(1.0 - _Smoothness);
         float3 shadedAlbedo = albedo.rgb * _Tint.rgb;
-        CubusApplyGroundWeather(shadedAlbedo, roughness, IN.positionWS, perturbedNormalWS);
 
         float3 lit = ApplyLighting(shadedAlbedo, IN.positionWS, perturbedNormalWS);
 
-        if (_Azure_GlobalFogDistance > 0.0)
-        {
-          lit = CubusApplyAzureFog(lit, IN.positionWS);
-        }
-        else if (_UseSceneFog > 0.5)
+        if (_UseSceneFog > 0.5)
         {
           lit = MixFog(lit, IN.fogCoord);
         }
@@ -479,6 +470,48 @@ Shader "Cubus/BiomeAtlasURP"
       half DepthFrag(DepthVaryings IN) : SV_Target
       {
         return 0;
+      }
+      ENDHLSL
+    }
+
+    Pass
+    {
+      Name "DepthNormals"
+      Tags { "LightMode" = "DepthNormals" }
+      ZWrite On
+      ZTest LEqual
+      Cull Back
+
+      HLSLPROGRAM
+      #pragma vertex DepthNormalsVert
+      #pragma fragment DepthNormalsFrag
+      #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+
+      struct DepthNormalsAttributes
+      {
+        float4 positionOS : POSITION;
+        float3 normalOS : NORMAL;
+      };
+
+      struct DepthNormalsVaryings
+      {
+        float4 positionCS : SV_POSITION;
+        float3 normalWS : TEXCOORD0;
+      };
+
+      DepthNormalsVaryings DepthNormalsVert(DepthNormalsAttributes IN)
+      {
+        DepthNormalsVaryings OUT;
+        VertexPositionInputs pos = GetVertexPositionInputs(IN.positionOS.xyz);
+        VertexNormalInputs nrm = GetVertexNormalInputs(IN.normalOS);
+        OUT.positionCS = pos.positionCS;
+        OUT.normalWS = nrm.normalWS;
+        return OUT;
+      }
+
+      half4 DepthNormalsFrag(DepthNormalsVaryings IN) : SV_Target
+      {
+        return half4(normalize(IN.normalWS), 0.0);
       }
       ENDHLSL
     }

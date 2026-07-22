@@ -63,7 +63,6 @@ Shader "Cubus/DensityBiomeURP"
 
       #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
       #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
-      #include "Packages/com.michaelcuneo.cubuscore/Runtime/Resources/Cubus/Shaders/CubusAzureWeather.hlsl"
 
       TEXTURE2D_ARRAY(_TerrainAlbedoArray);
       SAMPLER(sampler_TerrainAlbedoArray);
@@ -526,15 +525,14 @@ Shader "Cubus/DensityBiomeURP"
 
         float atten = lerp(1.0, mainLight.shadowAttenuation, saturate(shadowStrength));
         float ndl = saturate(dot(n, mainLight.direction));
-        float cloudShadow = CubusCloudShadow(positionWS, n);
-        float3 direct = CubusAzureDirectLightColor(mainLight.color) * ndl * atten * _DirectLightStrength * cloudShadow * CubusAzureLightFlashMultiplier();
+        float3 direct = mainLight.color * ndl * atten * _DirectLightStrength;
 
         // Real sky ambient (spherical harmonics) so the terrain reacts to the scene
         // and sky lighting instead of a flat constant. A small floor keeps shaded
         // faces readable.
         float3 skyAmbient = SampleSH(n) * _AmbientStrength;
         float3 floorAmbient = 0.06.xxx;
-        float3 ambient = CubusAzureAmbientLight(max(skyAmbient, floorAmbient));
+        float3 ambient = max(skyAmbient, floorAmbient);
 
         // Terrain is matte: drive the highlight from the low uniform smoothness (the
         // material mask roughness is often unauthored/zero, which would otherwise make
@@ -544,9 +542,8 @@ Shader "Cubus/DensityBiomeURP"
         float3 halfVec = SafeNormalize(mainLight.direction + viewDir);
         float ndh = saturate(dot(n, halfVec));
         float shininess = exp2(lerp(3.0, 11.0, smoothness));
-        float specTerm = pow(ndh, shininess) * _SpecularStrength * smoothness * ndl * atten * cloudShadow;
-        specTerm *= CubusWeatherSpecularMultiplier(positionWS, n);
-        float3 specular = CubusAzureDirectLightColor(mainLight.color) * specTerm * CubusAzureLightFlashMultiplier();
+        float specTerm = pow(ndh, shininess) * _SpecularStrength * smoothness * ndl * atten;
+        float3 specular = mainLight.color * specTerm;
 
         float fresnel = pow(1.0 - saturate(dot(n, viewDir)), 5.0) * _FresnelStrength * smoothness;
         float3 rim = skyAmbient * fresnel;
@@ -661,7 +658,6 @@ Shader "Cubus/DensityBiomeURP"
           GetMaterialRoughnessFallback(material3) * weights.w;
         float roughness = max(saturate(mask.g), saturate(fallbackRoughness));
         float3 shadedAlbedo = albedo.rgb * _Tint.rgb;
-        CubusApplyGroundWeather(shadedAlbedo, roughness, IN.positionWS, lightingNormalWS);
 
         int debugView = (int)round(_DensityDebugView);
 
@@ -877,6 +873,48 @@ Shader "Cubus/DensityBiomeURP"
       half DepthFrag(DepthVaryings IN) : SV_Target
       {
         return 0;
+      }
+      ENDHLSL
+    }
+
+    Pass
+    {
+      Name "DepthNormals"
+      Tags { "LightMode" = "DepthNormals" }
+      ZWrite On
+      ZTest LEqual
+      Cull Back
+
+      HLSLPROGRAM
+      #pragma vertex DepthNormalsVert
+      #pragma fragment DepthNormalsFrag
+      #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+
+      struct DepthNormalsAttributes
+      {
+        float4 positionOS : POSITION;
+        float3 normalOS : NORMAL;
+      };
+
+      struct DepthNormalsVaryings
+      {
+        float4 positionCS : SV_POSITION;
+        float3 normalWS : TEXCOORD0;
+      };
+
+      DepthNormalsVaryings DepthNormalsVert(DepthNormalsAttributes IN)
+      {
+        DepthNormalsVaryings OUT;
+        VertexPositionInputs pos = GetVertexPositionInputs(IN.positionOS.xyz);
+        VertexNormalInputs nrm = GetVertexNormalInputs(IN.normalOS);
+        OUT.positionCS = pos.positionCS;
+        OUT.normalWS = nrm.normalWS;
+        return OUT;
+      }
+
+      half4 DepthNormalsFrag(DepthNormalsVaryings IN) : SV_Target
+      {
+        return half4(normalize(IN.normalWS), 0.0);
       }
       ENDHLSL
     }
